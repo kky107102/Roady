@@ -1,0 +1,10 @@
+# 대용량 원천 데이터와 모델 파일은 저장소에 커밋하지 않는다.
+data/
+*.zip
+*.jpg
+*.jpeg
+*.png
+*.pt
+*.onnx
+*.engine
+
