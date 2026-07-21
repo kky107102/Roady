@@ -4,7 +4,7 @@ import com.blockai.roadbuddy.security.AuthenticatedUser;
 import com.blockai.roadbuddy.user.domain.UserRole;
 
 public record MeResponse(
-        String id,
+        Long id,
         String username,
         UserRole role
 ) {

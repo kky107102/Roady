@@ -8,15 +8,15 @@ import java.util.Optional;
 
 public interface UserAccountService {
 
-    UserAccount create(String username, String rawPassword, String name, UserRole role);
+    UserAccount create(String username, String rawPassword, String email, String name, UserRole role);
 
-    Optional<UserAccount> findById(String id);
+    Optional<UserAccount> findById(Long id);
 
     Optional<UserAccount> findByUsername(String username);
 
     List<UserAccount> findAll();
 
-    UserAccount updateRole(String id, UserRole role);
+    UserAccount updateRole(Long id, UserRole role);
 
-    UserAccount updateActive(String id, boolean active);
+    UserAccount updateActive(Long id, boolean active);
 }

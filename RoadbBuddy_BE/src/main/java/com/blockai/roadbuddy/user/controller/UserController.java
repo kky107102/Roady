@@ -41,6 +41,7 @@ public class UserController {
         UserAccount user = userAccountService.create(
                 request.username(),
                 request.password(),
+                request.email(),
                 request.name(),
                 request.role()
         );
@@ -49,7 +50,7 @@ public class UserController {
 
     @PatchMapping("/{userId}/role")
     public UserResponse updateRole(
-            @PathVariable String userId,
+            @PathVariable Long userId,
             @Valid @RequestBody UpdateUserRoleRequest request
     ) {
         return UserResponse.from(userAccountService.updateRole(userId, request.role()));
@@ -57,7 +58,7 @@ public class UserController {
 
     @PatchMapping("/{userId}/active")
     public UserResponse updateActive(
-            @PathVariable String userId,
+            @PathVariable Long userId,
             @Valid @RequestBody UpdateUserActiveRequest request
     ) {
         return UserResponse.from(userAccountService.updateActive(userId, request.active()));

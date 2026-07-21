@@ -6,8 +6,9 @@ import com.blockai.roadbuddy.user.domain.UserRole;
 import java.time.LocalDateTime;
 
 public record UserResponse(
-        String id,
+        Long id,
         String username,
+        String email,
         String name,
         UserRole role,
         boolean active,
@@ -18,6 +19,7 @@ public record UserResponse(
         return new UserResponse(
                 user.id(),
                 user.username(),
+                user.email(),
                 user.name(),
                 user.role(),
                 user.active(),

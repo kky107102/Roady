@@ -17,20 +17,20 @@ public class RefreshTokenService {
         this.redisTemplate = redisTemplate;
     }
 
-    public void save(String userId, String refreshToken, Duration ttl) {
+    public void save(Long userId, String refreshToken, Duration ttl) {
         redisTemplate.opsForValue().set(key(userId), refreshToken, ttl);
     }
 
-    public boolean matches(String userId, String refreshToken) {
+    public boolean matches(Long userId, String refreshToken) {
         String savedToken = redisTemplate.opsForValue().get(key(userId));
         return Objects.equals(savedToken, refreshToken);
     }
 
-    public void delete(String userId) {
+    public void delete(Long userId) {
         redisTemplate.delete(key(userId));
     }
 
-    private String key(String userId) {
+    private String key(Long userId) {
         return KEY_PREFIX + userId;
     }
 }

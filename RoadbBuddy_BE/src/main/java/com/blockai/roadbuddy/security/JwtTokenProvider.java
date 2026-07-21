@@ -48,7 +48,7 @@ public class JwtTokenProvider {
     public AuthenticatedUser getAuthenticatedUser(String token) {
         Claims claims = parseClaims(token);
         return new AuthenticatedUser(
-                claims.getSubject(),
+                Long.valueOf(claims.getSubject()),
                 claims.get(CLAIM_USERNAME, String.class),
                 UserRole.valueOf(claims.get(CLAIM_ROLE, String.class))
         );
@@ -79,7 +79,7 @@ public class JwtTokenProvider {
         Instant expiresAt = now.plus(validity);
 
         return Jwts.builder()
-                .subject(user.id())
+                .subject(String.valueOf(user.id()))
                 .claim(CLAIM_USERNAME, user.username())
                 .claim(CLAIM_ROLE, user.role().name())
                 .claim(CLAIM_TOKEN_TYPE, tokenType.name())

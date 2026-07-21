@@ -53,7 +53,7 @@ public class AuthService {
     public TokenResponse refresh(String refreshToken) {
         jwtTokenProvider.validateTokenType(refreshToken, TokenType.REFRESH);
         Claims claims = jwtTokenProvider.parseClaims(refreshToken);
-        String userId = claims.getSubject();
+        Long userId = Long.valueOf(claims.getSubject());
 
         if (!refreshTokenService.matches(userId, refreshToken)) {
             throw new IllegalArgumentException("Refresh Token이 유효하지 않습니다.");
