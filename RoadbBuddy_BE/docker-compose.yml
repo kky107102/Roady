@@ -3,10 +3,10 @@ services:
     image: mysql:8.4
     container_name: roadbuddy-mysql
     environment:
-      MYSQL_DATABASE: roadbuddy
-      MYSQL_USER: roadbuddy
-      MYSQL_PASSWORD: roadbuddy1234
-      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?MYSQL_DATABASE is required}
+      MYSQL_USER: ${MYSQL_USER:?MYSQL_USER is required}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       TZ: Asia/Seoul
     command:
       - --character-set-server=utf8mb4
@@ -16,7 +16,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot1234"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 10
