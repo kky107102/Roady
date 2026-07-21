@@ -1,0 +1,39 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: roadbuddy-mysql
+    environment:
+      MYSQL_DATABASE: roadbuddy
+      MYSQL_USER: roadbuddy
+      MYSQL_PASSWORD: roadbuddy1234
+      MYSQL_ROOT_PASSWORD: root1234
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: roadbuddy-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:
+  redis-data:
