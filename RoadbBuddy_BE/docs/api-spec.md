@@ -1,0 +1,1152 @@
+# RoadBuddy API 명세서
+
+## 1. 문서 개요
+
+- 서비스명: RoadBuddy
+- API 버전: v1
+- 기본 경로: `/api`
+- 데이터 형식: JSON
+- 인증 방식: JWT Bearer Token
+- Swagger UI: `/swagger-ui/index.html`
+- OpenAPI JSON: `/v3/api-docs`
+
+이 문서는 현재 백엔드 코드에 구현된 API와 서버 요구사항 명세를 함께 기준으로 작성한다. 3~5장은 현재 구현된 API 명세이며, 6장 이후는 요구사항을 반영한 전체 API 설계안이다.
+
+### 1.1 전체 API 목록
+
+| 구분 | Method | URL | 상태 | 설명 |
+| --- | --- | --- | --- | --- |
+| 인증 | `POST` | `/api/auth/login` | 구현됨 | 로그인 및 토큰 발급 |
+| 인증 | `POST` | `/api/auth/refresh` | 구현됨 | Access Token 재발급 |
+| 인증 | `POST` | `/api/auth/logout` | 구현됨 | Refresh Token 삭제 |
+| 인증 | `GET` | `/api/auth/me` | 구현됨 | 내 정보 조회 |
+| 사용자 | `GET` | `/api/users` | 구현됨 | 사용자 목록 조회 |
+| 사용자 | `POST` | `/api/users` | 구현됨 | 사용자 생성 |
+| 사용자 | `PATCH` | `/api/users/{userId}/role` | 구현됨 | 사용자 권한 변경 |
+| 사용자 | `PATCH` | `/api/users/{userId}/active` | 구현됨 | 사용자 활성 상태 변경 |
+| 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
+| 파손 | `GET` | `/api/damages` | 구현됨/확장 설계 | 파손 목록 조회 및 검색 |
+| 파손 | `GET` | `/api/damages/{damageId}` | 구현됨/확장 설계 | 파손 상세 조회 |
+| 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
+| 파손 | `GET` | `/api/damages/map-markers` | 설계안 | 지도 표시용 파손 마커 조회 |
+| 파손 | `GET` | `/api/damages/{damageId}/duplicates` | 설계안 | 동일/인접 위치 중복 후보 조회 |
+| 파손 | `POST` | `/api/damages/{damageId}/reviews` | 설계안 | 점검 담당자 검토 의견 등록 |
+| 파손 | `GET` | `/api/damages/{damageId}/reviews` | 설계안 | 검토 의견 이력 조회 |
+| 로봇 | `POST` | `/api/robots` | 설계안 | 로봇 등록 |
+| 로봇 | `GET` | `/api/robots` | 설계안 | 로봇 목록 및 현재 상태 조회 |
+| 로봇 | `GET` | `/api/robots/{robotId}` | 설계안 | 로봇 상세 조회 |
+| 로봇 | `PATCH` | `/api/robots/{robotId}` | 설계안 | 로봇 정보 수정 |
+| 로봇 | `PATCH` | `/api/robots/{robotId}/active` | 설계안 | 로봇 활성 상태 변경 |
+| 로봇 상태 | `POST` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 위치, 배터리, 운행 상태 등록 |
+| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs/latest` | 설계안 | 로봇 최신 상태 조회 |
+| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 상태 로그 조회 |
+| 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 전송 |
+| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 이력 조회 |
+| 로봇 명령 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/result` | 설계안 | 로봇 명령 처리 결과 등록 |
+| 로봇 경로 | `POST` | `/api/robot-routes` | 설계안 | 점검 경로 생성 |
+| 로봇 경로 | `GET` | `/api/robot-routes` | 설계안 | 점검 경로 목록 조회 |
+| 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 상세 조회 |
+| 로봇 경로 | `PUT` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 수정 |
+| 로봇 경로 | `DELETE` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 삭제 |
+| 로봇 경로 | `POST` | `/api/robot-routes/{routeId}/dispatch` | 설계안 | 점검 경로 로봇 전송 |
+| 로봇 경로 | `GET` | `/api/robot-routes/{routeId}/actual-path` | 설계안 | 실제 이동 경로 조회 |
+| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 요청 |
+| AI 분석 | `GET` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 조회 |
+| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | 설계안 | AI 분석 재시도 |
+| AI 분석 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 수정 |
+| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | 설계안 | AI 분석 결과 확정 |
+| 처리 상태 | `PATCH` | `/api/damages/{damageId}/status` | 설계안 | 파손 처리 상태 변경 |
+| 처리 상태 | `GET` | `/api/damages/{damageId}/status-histories` | 설계안 | 파손 처리 상태 이력 조회 |
+| 보수 배정 | `POST` | `/api/repair-assignments` | 설계안 | 보수 담당자와 예정일 배정 |
+| 보수 배정 | `GET` | `/api/repair-assignments` | 설계안 | 보수 배정 목록 조회 |
+| 보수 배정 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 상세 조회 |
+| 보수 배정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 수정 |
+| 보수 결과 | `POST` | `/api/repair-results` | 설계안 | 보수 결과 등록 |
+| 보수 결과 | `GET` | `/api/repair-results/{resultId}` | 설계안 | 보수 결과 상세 조회 |
+| 보수 결과 | `GET` | `/api/damages/{damageId}/repair-result` | 설계안 | 파손별 보수 결과 조회 |
+| 통계 | `GET` | `/api/statistics/damages/time-series` | 설계안 | 기간별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-region` | 설계안 | 지역별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-severity` | 설계안 | 파손 정도별 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-status` | 설계안 | 처리 상태별 통계 조회 |
+| 통계 | `GET` | `/api/statistics/repair/completion-rate` | 설계안 | 보수 완료율 조회 |
+| 통계 | `GET` | `/api/statistics/export` | 설계안 | 통계 CSV/Excel 다운로드 |
+| 행정문서 | `POST` | `/api/documents` | 설계안 | 행정문서 초안 생성 |
+| 행정문서 | `GET` | `/api/documents` | 설계안 | 행정문서 목록 조회 |
+| 행정문서 | `GET` | `/api/documents/{documentId}` | 설계안 | 행정문서 상세 조회 |
+| 행정문서 | `PATCH` | `/api/documents/{documentId}` | 설계안 | 행정문서 초안 수정 |
+| 행정문서 | `GET` | `/api/documents/{documentId}/download` | 설계안 | 행정문서 파일 다운로드 |
+| 감사 로그 | `GET` | `/api/audit-logs` | 설계안 | 주요 작업 이력 조회 |
+
+## 2. API 구성 원칙
+
+### 2.1 현재 구현 도메인
+
+| 구분 | 경로 | 설명 |
+| --- | --- | --- |
+| 인증 | `/api/auth` | 로그인, 토큰 재발급, 로그아웃, 내 정보 조회 |
+| 사용자 관리 | `/api/users` | 사용자 목록 조회, 생성, 권한 변경, 활성 상태 변경 |
+| 도로 파손 | `/api/damages` | 파손 정보 등록, 목록/상세 조회, 이미지 조회 |
+
+### 2.2 권한 구성
+
+| 권한 | 설명 |
+| --- | --- |
+| `ADMIN` | 관리자 |
+| `INSPECTOR` | 점검 담당자 |
+| `REPAIRER` | 보수 담당자 |
+| `VIEWER` | 조회 사용자 |
+
+현재 구현 기준 권한 규칙은 다음과 같다.
+
+| 대상 | 인증 필요 | 권한 |
+| --- | --- | --- |
+| `POST /api/auth/login` | 아니오 | 전체 허용 |
+| `POST /api/auth/refresh` | 아니오 | 전체 허용 |
+| `/api/users/**` | 예 | `ADMIN` |
+| 그 외 `/api/**` | 예 | 로그인 사용자 |
+| Swagger/OpenAPI | 아니오 | 전체 허용 |
+
+### 2.3 인증 헤더
+
+로그인 또는 토큰 재발급 API에서 받은 `accessToken`을 다음 형식으로 전달한다.
+
+```http
+Authorization: Bearer {accessToken}
+```
+
+### 2.4 날짜/시간 형식
+
+- 요청/응답의 날짜와 시간은 ISO-8601 형식을 사용한다.
+- 예시: `2026-07-22T14:30:00`
+
+### 2.5 공통 에러 응답
+
+일반 예외와 검증 실패는 다음 형식으로 반환된다.
+
+```json
+{
+  "timestamp": "2026-07-22T14:30:00",
+  "status": 400,
+  "message": "요청 값이 올바르지 않습니다.",
+  "errors": [
+    "password: size must be between 8 and 100"
+  ]
+}
+```
+
+인증 실패와 권한 실패는 현재 구현상 다음처럼 `message`만 포함하는 JSON을 반환한다.
+
+```json
+{
+  "message": "로그인이 필요합니다."
+}
+```
+
+### 2.6 주요 상태 코드
+
+| 상태 코드 | 의미 |
+| --- | --- |
+| `200 OK` | 요청 성공 |
+| `201 Created` | 리소스 생성 성공 |
+| `400 Bad Request` | 요청 값 오류, 유효하지 않은 토큰, 존재하지 않는 리소스 등 |
+| `401 Unauthorized` | 인증 실패 또는 인증 정보 없음 |
+| `403 Forbidden` | 권한 없음 또는 비활성 계정 |
+
+## 3. 인증 API
+
+### 3.1 로그인
+
+사용자명과 비밀번호로 로그인하고 access token과 refresh token을 발급한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/auth/login` |
+| 인증 | 불필요 |
+| Content-Type | `application/json` |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `username` | string | 예 | 빈 값 불가 | 사용자 아이디 |
+| `password` | string | 예 | 빈 값 불가 | 비밀번호 |
+
+```json
+{
+  "username": "admin",
+  "password": "password123"
+}
+```
+
+#### Response `200 OK`
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `tokenType` | string | 토큰 타입. 현재 `Bearer` |
+| `accessToken` | string | API 인증용 JWT |
+| `refreshToken` | string | access token 재발급용 JWT |
+| `expiresInSeconds` | number | access token 만료 시간. 기본 1800초 |
+
+```json
+{
+  "tokenType": "Bearer",
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "expiresInSeconds": 1800
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패 |
+| `401` | 아이디 또는 비밀번호 불일치 |
+| `403` | 비활성 계정 |
+
+### 3.2 토큰 재발급
+
+refresh token으로 새 access token을 발급한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/auth/refresh` |
+| 인증 | 불필요 |
+| Content-Type | `application/json` |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `refreshToken` | string | 예 | 빈 값 불가 | 로그인 또는 이전 재발급에서 받은 refresh token |
+
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "tokenType": "Bearer",
+  "accessToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9...",
+  "expiresInSeconds": 1800
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | refresh token이 비어 있음, 유효하지 않음, 저장된 토큰과 불일치, 활성 사용자를 찾을 수 없음 |
+
+### 3.3 로그아웃
+
+refresh token을 삭제하여 재발급을 막는다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/auth/logout` |
+| 인증 | 필요 |
+| Content-Type | `application/json` |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `refreshToken` | string | 예 | 빈 값 불가 | 삭제할 refresh token |
+
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
+}
+```
+
+#### Response `200 OK`
+
+응답 본문 없음.
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | refresh token이 비어 있음 또는 유효하지 않음 |
+| `401` | access token 없음 또는 인증 실패 |
+
+### 3.4 내 정보 조회
+
+현재 로그인한 사용자의 기본 정보를 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/auth/me` |
+| 인증 | 필요 |
+
+#### Response `200 OK`
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 사용자 ID |
+| `username` | string | 사용자 아이디 |
+| `role` | string | 사용자 권한 |
+
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "role": "ADMIN"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `401` | access token 없음 또는 인증 실패 |
+
+## 4. 사용자 관리 API
+
+사용자 관리 API는 모두 `ADMIN` 권한이 필요하다.
+
+### 4.1 사용자 목록 조회
+
+등록된 사용자 목록을 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/users` |
+| 인증 | 필요 |
+| 권한 | `ADMIN` |
+
+#### Response `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "email": "admin@example.com",
+    "name": "관리자",
+    "role": "ADMIN",
+    "active": true,
+    "createdAt": "2026-07-22T14:30:00"
+  }
+]
+```
+
+#### UserResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 사용자 ID |
+| `username` | string | 사용자 아이디 |
+| `email` | string | 이메일 |
+| `name` | string | 이름 |
+| `role` | string | 사용자 권한 |
+| `active` | boolean | 계정 활성 여부 |
+| `createdAt` | string | 생성 일시 |
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `401` | 인증 실패 |
+| `403` | 관리자 권한 없음 |
+
+### 4.2 사용자 생성
+
+새 사용자를 생성한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/users` |
+| 인증 | 필요 |
+| 권한 | `ADMIN` |
+| Content-Type | `application/json` |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `username` | string | 예 | 빈 값 불가 | 사용자 아이디 |
+| `password` | string | 예 | 8~100자 | 비밀번호 |
+| `email` | string | 예 | 이메일 형식 | 이메일 |
+| `name` | string | 예 | 빈 값 불가 | 이름 |
+| `role` | string | 예 | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 사용자 권한 |
+
+```json
+{
+  "username": "inspector01",
+  "password": "password123",
+  "email": "inspector01@example.com",
+  "name": "점검 담당자",
+  "role": "INSPECTOR"
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "id": 2,
+  "username": "inspector01",
+  "email": "inspector01@example.com",
+  "name": "점검 담당자",
+  "role": "INSPECTOR",
+  "active": true,
+  "createdAt": "2026-07-22T14:30:00"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패, 중복 username/email |
+| `401` | 인증 실패 |
+| `403` | 관리자 권한 없음 |
+
+### 4.3 사용자 권한 변경
+
+특정 사용자의 권한을 변경한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `PATCH` |
+| URL | `/api/users/{userId}/role` |
+| 인증 | 필요 |
+| 권한 | `ADMIN` |
+| Content-Type | `application/json` |
+
+#### Path Parameter
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `userId` | number | 사용자 ID |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `role` | string | 예 | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 변경할 권한 |
+
+```json
+{
+  "role": "REPAIRER"
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "id": 2,
+  "username": "inspector01",
+  "email": "inspector01@example.com",
+  "name": "점검 담당자",
+  "role": "REPAIRER",
+  "active": true,
+  "createdAt": "2026-07-22T14:30:00"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패, 존재하지 않는 사용자 |
+| `401` | 인증 실패 |
+| `403` | 관리자 권한 없음 |
+
+### 4.4 사용자 활성 상태 변경
+
+특정 사용자의 계정 활성 여부를 변경한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `PATCH` |
+| URL | `/api/users/{userId}/active` |
+| 인증 | 필요 |
+| 권한 | `ADMIN` |
+| Content-Type | `application/json` |
+
+#### Path Parameter
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `userId` | number | 사용자 ID |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `active` | boolean | 예 | null 불가 | 활성 여부 |
+
+```json
+{
+  "active": false
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "id": 2,
+  "username": "inspector01",
+  "email": "inspector01@example.com",
+  "name": "점검 담당자",
+  "role": "REPAIRER",
+  "active": false,
+  "createdAt": "2026-07-22T14:30:00"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패, 존재하지 않는 사용자 |
+| `401` | 인증 실패 |
+| `403` | 관리자 권한 없음 |
+
+## 5. 도로 파손 API
+
+도로 파손 API는 로그인한 사용자가 사용할 수 있다. 등록 API의 `reportedBy`는 요청 사용자의 ID로 자동 설정된다.
+
+### 5.1 도로 파손 등록
+
+도로 파손 정보와 이미지를 등록한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/damages` |
+| 인증 | 필요 |
+| Content-Type | `multipart/form-data` |
+
+#### Form Data
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `robotId` | number | 아니오 | 존재하는 로봇 ID | 파손을 촬영한 로봇 ID |
+| `assignedTo` | number | 아니오 | 존재하는 사용자 ID | 처리 담당 사용자 ID |
+| `description` | string | 아니오 | - | 파손 설명 |
+| `latitude` | decimal | 아니오 | DB 기준 `DECIMAL(10,7)` | 위도 |
+| `longitude` | decimal | 아니오 | DB 기준 `DECIMAL(10,7)` | 경도 |
+| `capturedAt` | string | 아니오 | ISO-8601 | 촬영 일시 |
+| `images` | file[] | 예 | 1~50개, `image/*`, 빈 파일 불가 | 파손 이미지 목록 |
+
+#### Request Example
+
+```bash
+curl -X POST "http://localhost:8080/api/damages" \
+  -H "Authorization: Bearer {accessToken}" \
+  -F "robotId=1" \
+  -F "description=도로 균열 감지" \
+  -F "latitude=37.5665000" \
+  -F "longitude=126.9780000" \
+  -F "capturedAt=2026-07-22T14:30:00" \
+  -F "images=@damage-1.jpg" \
+  -F "images=@damage-2.jpg"
+```
+
+#### Response `201 Created`
+
+```json
+{
+  "id": 1,
+  "robotId": 1,
+  "reportedBy": 2,
+  "assignedTo": null,
+  "description": "도로 균열 감지",
+  "latitude": 37.5665000,
+  "longitude": 126.9780000,
+  "capturedAt": "2026-07-22T14:30:00",
+  "currentStatus": "COLLECTED",
+  "imageCount": 2,
+  "images": [
+    {
+      "id": 1,
+      "damageId": 1,
+      "sortOrder": 1,
+      "originalFilename": "damage-1.jpg",
+      "contentType": "image/jpeg",
+      "sizeBytes": 123456,
+      "createdAt": "2026-07-22T14:30:01"
+    }
+  ],
+  "createdAt": "2026-07-22T14:30:01",
+  "updatedAt": "2026-07-22T14:30:01"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 이미지 없음, 이미지 50개 초과, 빈 파일, 이미지가 아닌 파일, 존재하지 않는 `robotId` 또는 `assignedTo` |
+| `401` | 인증 실패 |
+
+### 5.2 도로 파손 목록 조회
+
+등록된 도로 파손 목록을 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/damages` |
+| 인증 | 필요 |
+
+#### Response `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "robotId": 1,
+    "reportedBy": 2,
+    "assignedTo": null,
+    "description": "도로 균열 감지",
+    "latitude": 37.5665000,
+    "longitude": 126.9780000,
+    "capturedAt": "2026-07-22T14:30:00",
+    "currentStatus": "COLLECTED",
+    "imageCount": 2,
+    "createdAt": "2026-07-22T14:30:01",
+    "updatedAt": "2026-07-22T14:30:01"
+  }
+]
+```
+
+#### DamageSummaryResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 파손 ID |
+| `robotId` | number, null | 촬영 로봇 ID |
+| `reportedBy` | number | 등록 사용자 ID |
+| `assignedTo` | number, null | 처리 담당 사용자 ID |
+| `description` | string, null | 파손 설명 |
+| `latitude` | decimal, null | 위도 |
+| `longitude` | decimal, null | 경도 |
+| `capturedAt` | string, null | 촬영 일시 |
+| `currentStatus` | string | 현재 처리 상태 |
+| `imageCount` | number | 연결된 이미지 수 |
+| `createdAt` | string | 생성 일시 |
+| `updatedAt` | string | 수정 일시 |
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `401` | 인증 실패 |
+
+### 5.3 도로 파손 상세 조회
+
+특정 도로 파손의 상세 정보와 이미지 메타데이터를 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/damages/{damageId}` |
+| 인증 | 필요 |
+
+#### Path Parameter
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `damageId` | number | 파손 ID |
+
+#### Response `200 OK`
+
+```json
+{
+  "id": 1,
+  "robotId": 1,
+  "reportedBy": 2,
+  "assignedTo": null,
+  "description": "도로 균열 감지",
+  "latitude": 37.5665000,
+  "longitude": 126.9780000,
+  "capturedAt": "2026-07-22T14:30:00",
+  "currentStatus": "COLLECTED",
+  "imageCount": 2,
+  "images": [
+    {
+      "id": 1,
+      "damageId": 1,
+      "sortOrder": 1,
+      "originalFilename": "damage-1.jpg",
+      "contentType": "image/jpeg",
+      "sizeBytes": 123456,
+      "createdAt": "2026-07-22T14:30:01"
+    }
+  ],
+  "createdAt": "2026-07-22T14:30:01",
+  "updatedAt": "2026-07-22T14:30:01"
+}
+```
+
+#### DamageImageResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 이미지 ID |
+| `damageId` | number | 파손 ID |
+| `sortOrder` | number | 이미지 정렬 순서. 1부터 시작 |
+| `originalFilename` | string | 원본 파일명 |
+| `contentType` | string | 이미지 MIME 타입 |
+| `sizeBytes` | number | 파일 크기 |
+| `createdAt` | string | 생성 일시 |
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 존재하지 않는 파손 ID |
+| `401` | 인증 실패 |
+
+### 5.4 도로 파손 이미지 조회
+
+특정 파손에 연결된 이미지 바이너리를 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/damages/{damageId}/images/{imageId}/content` |
+| 인증 | 필요 |
+
+#### Path Parameter
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `damageId` | number | 파손 ID |
+| `imageId` | number | 이미지 ID |
+
+#### Response `200 OK`
+
+- Body: 이미지 바이너리
+- `Content-Type`: 저장된 이미지 MIME 타입
+- `Content-Length`: 이미지 크기
+- `Content-Disposition`: `inline; filename="{originalFilename}"`
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 존재하지 않는 파손 ID 또는 이미지 ID |
+| `401` | 인증 실패 |
+
+## 6. 요구사항 기반 전체 API 구성안
+
+요구사항 명세 기준으로 서버 API는 다음 도메인으로 구성한다. 현재 구현된 API는 인증, 사용자 관리, 파손 등록/조회 일부이며 나머지는 설계 대상이다.
+
+| 도메인 | 기본 경로 | 요구사항 |
+| --- | --- | --- |
+| 인증/권한 | `/api/auth`, `/api/users`, `/api/audit-logs` | FR-AUTH |
+| 로봇 관제 | `/api/robots` | FR-ROBOT |
+| 로봇 경로 | `/api/robot-routes` | FR-ROBOT |
+| 파손 데이터 | `/api/damages` | FR-DAMAGE, FR-MAP, FR-DETAIL |
+| AI 분석 | `/api/damages/{damageId}/ai-analysis` | FR-AI |
+| 처리 상태 | `/api/damages/{damageId}/status` | FR-STATUS |
+| 보수 배정/결과 | `/api/repair-assignments`, `/api/repair-results` | FR-STATUS |
+| 통계 | `/api/statistics` | FR-STAT |
+| 행정문서 | `/api/documents` | FR-DOC |
+
+### 6.1 권한 매트릭스
+
+| 기능 | ADMIN | INSPECTOR | REPAIRER | VIEWER | ROBOT/DEVICE |
+| --- | --- | --- | --- | --- | --- |
+| 로그인/토큰 재발급 | 예 | 예 | 예 | 예 | 별도 장치 인증 필요 |
+| 사용자 관리 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
+| 로봇 등록/수정/삭제 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
+| 로봇 상태 전송 | 아니오 | 아니오 | 아니오 | 아니오 | 예 |
+| 로봇 관제 조회 | 예 | 예 | 아니오 | 조회 가능 | 아니오 |
+| 경로 생성/전송 | 예 | 예 | 아니오 | 아니오 | 수신 |
+| 파손 등록 | 예 | 예 | 아니오 | 아니오 | 예 |
+| 파손 목록/상세 조회 | 예 | 예 | 예 | 조회 가능 | 아니오 |
+| AI 분석 요청/수정/확정 | 예 | 예 | 아니오 | 아니오 | 아니오 |
+| 처리 상태 변경 | 예 | 예 | 예 | 아니오 | 아니오 |
+| 보수 배정 | 예 | 예 | 아니오 | 아니오 | 아니오 |
+| 보수 결과 등록 | 예 | 아니오 | 예 | 아니오 | 아니오 |
+| 통계 조회/다운로드 | 예 | 예 | 예 | 조회 가능 | 아니오 |
+| 행정문서 생성/수정/다운로드 | 예 | 예 | 예 | 아니오 | 아니오 |
+
+장치 인증은 현재 코드에 구현되어 있지 않다. 추후 로봇 또는 IoT 장치가 직접 API를 호출한다면 `X-Device-Token` 또는 장치용 JWT를 별도로 설계한다.
+
+### 6.2 공통 검색 조건
+
+파손 목록, 지도, 통계 API는 가능한 한 동일한 검색 조건을 공유한다.
+
+| Query | 타입 | 설명 |
+| --- | --- | --- |
+| `from` | string | 시작 일시 또는 시작일 |
+| `to` | string | 종료 일시 또는 종료일 |
+| `regionCode` | string | 행정구역 코드 |
+| `severity` | string | 파손 정도 |
+| `status` | string | 처리 상태 |
+| `robotId` | number | 로봇 ID |
+| `assignedTo` | number | 담당자 ID |
+| `page` | number | 페이지 번호. 0부터 시작 |
+| `size` | number | 페이지 크기 |
+
+## 7. 로봇 관제 API 설계
+
+### 7.1 로봇 관리
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 로봇 등록 | `POST` | `/api/robots` | `ADMIN` | 로봇 기본 정보와 담당자를 등록한다. |
+| 로봇 목록 조회 | `GET` | `/api/robots` | `ADMIN`, `INSPECTOR`, `VIEWER` | 로봇 목록과 현재 상태 요약을 조회한다. |
+| 로봇 상세 조회 | `GET` | `/api/robots/{robotId}` | `ADMIN`, `INSPECTOR`, `VIEWER` | 로봇 기본 정보, 최근 위치, 배터리, 통신 상태를 조회한다. |
+| 로봇 정보 수정 | `PATCH` | `/api/robots/{robotId}` | `ADMIN` | 이름, 담당자, 활성 여부를 수정한다. |
+| 로봇 비활성화 | `PATCH` | `/api/robots/{robotId}/active` | `ADMIN` | 로봇 사용 여부를 변경한다. |
+
+#### RobotResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 로봇 ID |
+| `userId` | number | 담당 사용자 ID |
+| `name` | string | 로봇 이름 |
+| `serialNumber` | string | 장치 시리얼 번호 |
+| `status` | string | `STANDBY`, `MOVING`, `INSPECTING`, `CHARGING`, `STOPPED`, `ERROR` |
+| `active` | boolean | 활성 여부 |
+| `latestStatus` | object | 최근 상태 로그 요약 |
+| `createdAt` | string | 생성 일시 |
+| `updatedAt` | string | 수정 일시 |
+
+### 7.2 로봇 상태 로그
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 상태 로그 등록 | `POST` | `/api/robots/{robotId}/status-logs` | `ROBOT/DEVICE` | 로봇이 위치, 배터리, 운행 상태, 통신 상태, 오류 정보를 전송한다. |
+| 최근 상태 조회 | `GET` | `/api/robots/{robotId}/status-logs/latest` | `ADMIN`, `INSPECTOR`, `VIEWER` | 지도 표시용 최신 상태를 조회한다. |
+| 상태 로그 목록 조회 | `GET` | `/api/robots/{robotId}/status-logs` | `ADMIN`, `INSPECTOR` | 최근 위치, 배터리 상태, 오류 이력을 조회한다. |
+
+#### CreateRobotStatusLogRequest
+
+```json
+{
+  "latitude": 37.5665,
+  "longitude": 126.978,
+  "batteryLevel": 72,
+  "operationStatus": "INSPECTING",
+  "connectionStatus": "CONNECTED",
+  "errorCode": null,
+  "errorMessage": null,
+  "recordedAt": "2026-07-22T14:30:00"
+}
+```
+
+### 7.3 로봇 제어 명령
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 제어 명령 전송 | `POST` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 경로 시작, 정지, 복귀 등 명령을 전송한다. |
+| 제어 명령 이력 조회 | `GET` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 명령 처리 결과를 조회한다. |
+| 명령 처리 결과 등록 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/result` | `ROBOT/DEVICE` | 로봇이 명령 성공/실패 결과를 기록한다. |
+
+## 8. 로봇 경로 API 설계
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 경로 생성 | `POST` | `/api/robot-routes` | `ADMIN`, `INSPECTOR` | 시작 지점, 도착 지점, 경유 지점을 기반으로 점검 경로를 생성한다. |
+| 경로 목록 조회 | `GET` | `/api/robot-routes` | `ADMIN`, `INSPECTOR`, `VIEWER` | 로봇별 또는 상태별 경로를 조회한다. |
+| 경로 상세 조회 | `GET` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR`, `VIEWER` | 경로와 경로점 목록을 조회한다. |
+| 경로 수정 | `PUT` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR` | 경로명, 경로점, 상태를 수정한다. |
+| 경로 삭제 | `DELETE` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR` | 전송 전 또는 미사용 경로를 삭제한다. |
+| 경로 로봇 전송 | `POST` | `/api/robot-routes/{routeId}/dispatch` | `ADMIN`, `INSPECTOR` | 생성된 경로를 로봇에 전송한다. |
+| 실제 이동 경로 조회 | `GET` | `/api/robot-routes/{routeId}/actual-path` | `ADMIN`, `INSPECTOR`, `VIEWER` | 상태 로그 기반 실제 이동 좌표를 조회한다. |
+
+#### CreateRobotRouteRequest
+
+```json
+{
+  "robotId": 1,
+  "name": "서초구 보행로 1구역",
+  "points": [
+    {
+      "pointOrder": 1,
+      "latitude": 37.5665,
+      "longitude": 126.978,
+      "pointType": "START"
+    },
+    {
+      "pointOrder": 2,
+      "latitude": 37.5651,
+      "longitude": 126.9792,
+      "pointType": "DESTINATION"
+    }
+  ]
+}
+```
+
+## 9. 파손 데이터 API 확장 설계
+
+현재 구현된 `/api/damages` API에 검색, 지도, 중복 후보, 검토 의견 기능을 추가한다.
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 파손 등록 | `POST` | `/api/damages` | `ADMIN`, `INSPECTOR`, `ROBOT/DEVICE` | 이미지, 위치, 촬영 일시, 장치 정보를 저장한다. |
+| 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 지역, 파손 정도, 처리 상태로 검색한다. |
+| 지도 마커 조회 | `GET` | `/api/damages/map-markers` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 지도 표시용 좌표와 상태 요약을 조회한다. |
+| 파손 상세 조회 | `GET` | `/api/damages/{damageId}` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 이미지, AI 분석, 상태 이력, 보수 정보를 함께 조회한다. |
+| 파손 이미지 조회 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 로그인 사용자 | 이미지 바이너리를 조회한다. |
+| 중복 후보 조회 | `GET` | `/api/damages/{damageId}/duplicates` | `ADMIN`, `INSPECTOR` | 동일 또는 인접 위치의 유사 파손 후보를 조회한다. |
+| 검토 의견 등록 | `POST` | `/api/damages/{damageId}/reviews` | `ADMIN`, `INSPECTOR` | 담당자 검토 의견을 등록한다. |
+| 검토 의견 조회 | `GET` | `/api/damages/{damageId}/reviews` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 파손 데이터의 검토 이력을 조회한다. |
+
+#### DamageSearchResponse
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "robotId": 1,
+      "reportedBy": 2,
+      "assignedTo": 5,
+      "description": "점자블록 균열",
+      "latitude": 37.5665,
+      "longitude": 126.978,
+      "regionCode": "11650101",
+      "address": "서울특별시 서초구 ...",
+      "capturedAt": "2026-07-22T14:30:00",
+      "currentStatus": "REVIEW_REQUIRED",
+      "severity": "HIGH",
+      "repairRequired": true,
+      "repairPriority": "URGENT",
+      "confidenceScore": 0.82,
+      "imageCount": 2,
+      "duplicateSuspected": false,
+      "delayed": false,
+      "createdAt": "2026-07-22T14:30:01",
+      "updatedAt": "2026-07-22T14:30:01"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+## 10. AI 분석 API 설계
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| AI 분석 요청 | `POST` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 저장된 이미지를 AI 분석 서비스에 전달하고 분석을 시작한다. |
+| AI 분석 결과 조회 | `GET` | `/api/damages/{damageId}/ai-analysis` | 로그인 사용자 | 파손 여부, 점수, 보수 필요성, 우선순위, 신뢰도를 조회한다. |
+| AI 분석 재시도 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | `ADMIN`, `INSPECTOR` | 실패한 분석을 재시도한다. |
+| AI 분석 결과 수정 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 담당자가 AI 분석 결과를 수정한다. |
+| AI 분석 결과 확정 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | `ADMIN`, `INSPECTOR` | 검토 완료 처리한다. |
+
+#### AiAnalysisResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 분석 결과 ID |
+| `damageId` | number | 파손 ID |
+| `damaged` | boolean | 파손 여부 |
+| `damageScore` | number | 파손 점수. 0~100 |
+| `severity` | string | `NONE`, `LOW`, `MEDIUM`, `HIGH` |
+| `repairRequired` | boolean | 보수 필요 여부 |
+| `repairPriority` | string | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `confidenceScore` | number | 분석 신뢰도. 0~1 |
+| `analysisStatus` | string | `PENDING`, `SUCCESS`, `FAILED`, `REVIEW_REQUIRED`, `CONFIRMED` |
+| `reviewComment` | string | 담당자 검토 의견 |
+| `analyzedAt` | string | 분석 일시 |
+
+## 11. 처리 상태 및 보수 API 설계
+
+### 11.1 처리 상태
+
+| 상태 | 설명 |
+| --- | --- |
+| `COLLECTED` | 수집 완료 |
+| `REVIEW_REQUIRED` | 검토 필요 |
+| `RECEIVED` | 접수 완료 |
+| `REPAIR_SCHEDULED` | 보수 예정 |
+| `REPAIRING` | 보수 진행 중 |
+| `REPAIR_COMPLETED` | 보수 완료 |
+| `REPAIR_NOT_REQUIRED` | 보수 불필요 |
+
+권장 상태 전이는 다음과 같다.
+
+```text
+COLLECTED -> REVIEW_REQUIRED -> RECEIVED -> REPAIR_SCHEDULED -> REPAIRING -> REPAIR_COMPLETED
+COLLECTED -> RECEIVED
+REVIEW_REQUIRED -> REPAIR_NOT_REQUIRED
+RECEIVED -> REPAIR_NOT_REQUIRED
+```
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 처리 상태 변경 | `PATCH` | `/api/damages/{damageId}/status` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 정의된 절차에 따라 상태를 변경한다. |
+| 처리 상태 이력 조회 | `GET` | `/api/damages/{damageId}/status-histories` | 로그인 사용자 | 변경 전/후 상태, 변경자, 변경 일시, 의견을 조회한다. |
+
+#### UpdateDamageStatusRequest
+
+```json
+{
+  "status": "RECEIVED",
+  "comment": "현장 확인 후 접수 완료"
+}
+```
+
+### 11.2 보수 배정
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 보수 배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자와 예정일을 배정한다. |
+| 보수 배정 목록 조회 | `GET` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 담당자, 기간, 상태 기준으로 배정 목록을 조회한다. |
+| 보수 배정 상세 조회 | `GET` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 배정 상세 정보를 조회한다. |
+| 보수 배정 수정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR` | 담당자, 예정일, 메모를 수정한다. |
+
+#### CreateRepairAssignmentRequest
+
+```json
+{
+  "damageId": 1,
+  "repairerId": 5,
+  "scheduledDate": "2026-07-30",
+  "note": "보행량이 적은 오전 시간대 작업 권장"
+}
+```
+
+### 11.3 보수 결과
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 보수 결과 등록 | `POST` | `/api/repair-results` | `ADMIN`, `REPAIRER` | 보수 완료 이미지와 결과 내용을 등록한다. |
+| 보수 결과 조회 | `GET` | `/api/repair-results/{resultId}` | 로그인 사용자 | 보수 결과 상세를 조회한다. |
+| 파손별 보수 결과 조회 | `GET` | `/api/damages/{damageId}/repair-result` | 로그인 사용자 | 특정 파손의 보수 결과를 조회한다. |
+
+#### CreateRepairResultRequest
+
+`multipart/form-data`를 사용한다.
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `damageId` | number | 예 | 파손 ID |
+| `resultContent` | string | 예 | 보수 결과 내용 |
+| `completedAt` | string | 예 | 완료 일시 |
+| `images` | file[] | 아니오 | 보수 완료 이미지 |
+
+## 12. 통계 API 설계
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 기간별 통계 | `GET` | `/api/statistics/damages/time-series` | 로그인 사용자 | 일별, 주별, 월별, 연도별 파손 발생 건수를 조회한다. |
+| 지역별 통계 | `GET` | `/api/statistics/damages/by-region` | 로그인 사용자 | 행정구역별 파손 발생 건수를 조회한다. |
+| 파손 정도별 통계 | `GET` | `/api/statistics/damages/by-severity` | 로그인 사용자 | 파손 정도별 건수를 조회한다. |
+| 처리 상태별 통계 | `GET` | `/api/statistics/damages/by-status` | 로그인 사용자 | 처리 상태별 건수를 조회한다. |
+| 보수 완료율 조회 | `GET` | `/api/statistics/repair/completion-rate` | 로그인 사용자 | 전체 파손 대비 보수 완료율을 조회한다. |
+| 통계 다운로드 | `GET` | `/api/statistics/export` | `ADMIN`, `INSPECTOR` | 통계 결과를 CSV 또는 Excel로 다운로드한다. |
+
+#### Statistics Query
+
+| Query | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `from` | string | 예 | 시작일 |
+| `to` | string | 예 | 종료일 |
+| `unit` | string | 조건부 | `DAY`, `WEEK`, `MONTH`, `YEAR` |
+| `regionCode` | string | 아니오 | 행정구역 코드 |
+| `format` | string | 다운로드 시 예 | `CSV`, `XLSX` |
+
+#### TimeSeriesStatisticsResponse
+
+```json
+{
+  "unit": "MONTH",
+  "items": [
+    {
+      "period": "2026-07",
+      "totalCount": 38,
+      "repairCompletedCount": 12,
+      "repairCompletionRate": 31.58
+    }
+  ]
+}
+```
+
+## 13. 행정문서 API 설계
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 문서 초안 생성 | `POST` | `/api/documents` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 선택한 파손 데이터로 문서 초안을 생성한다. |
+| 문서 목록 조회 | `GET` | `/api/documents` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 이전에 생성한 문서 목록을 조회한다. |
+| 문서 상세 조회 | `GET` | `/api/documents/{documentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 문서 내용과 연결 파손 데이터를 조회한다. |
+| 문서 초안 수정 | `PATCH` | `/api/documents/{documentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 생성된 초안 내용을 수정한다. |
+| 문서 다운로드 | `GET` | `/api/documents/{documentId}/download` | `ADMIN`, `INSPECTOR`, `REPAIRER` | PDF 또는 HWP 형식으로 다운로드한다. |
+
+#### CreateDocumentRequest
+
+```json
+{
+  "documentType": "REPAIR_REQUEST",
+  "damageIds": [1, 2, 3],
+  "title": "서초구 점자블록 보수 요청서",
+  "departmentName": "도로관리과",
+  "managerName": "홍길동"
+}
+```
+
+#### DocumentResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 문서 ID |
+| `documentType` | string | `INSPECTION_REPORT`, `REPAIR_REQUEST`, `REPAIR_COMPLETION_REPORT` |
+| `title` | string | 문서 제목 |
+| `content` | string | 초안 내용 |
+| `draft` | boolean | 검토 필요 초안 여부 |
+| `createdBy` | number | 생성자 ID |
+| `createdAt` | string | 생성 일시 |
+| `updatedAt` | string | 수정 일시 |
+
+## 14. 감사 로그 API 설계
+
+FR-AUTH-19, FR-AUTH-20 요구사항을 위해 주요 작업 이력을 별도 API로 조회할 수 있게 한다.
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 감사 로그 조회 | `GET` | `/api/audit-logs` | `ADMIN` | 로그인, 로그아웃, 사용자 관리, 상태 변경, 문서 생성 등 주요 작업 기록을 조회한다. |
+
+#### AuditLogResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 로그 ID |
+| `actorId` | number | 수행 사용자 ID |
+| `action` | string | 작업 유형 |
+| `targetType` | string | 대상 도메인 |
+| `targetId` | number | 대상 ID |
+| `success` | boolean | 성공 여부 |
+| `message` | string | 상세 메시지 |
+| `createdAt` | string | 기록 일시 |
+
+## 15. 구현 우선순위
+
+요구사항의 필수 항목과 현재 구현 상태를 기준으로 다음 순서로 구현하는 것을 권장한다.
+
+| 순서 | 범위 | 이유 |
+| --- | --- | --- |
+| 1 | 인증/사용자 관리 보완 | 모든 API의 권한 기반이 된다. |
+| 2 | 파손 데이터 검색/상세 확장 | 현재 구현된 핵심 도메인이며 지도/AI/상태 관리의 기준 데이터다. |
+| 3 | 로봇 상태 로그와 지도 마커 | 로봇 관제와 지도 표시 요구사항의 최소 기능이다. |
+| 4 | AI 분석 결과 저장/수정/확정 | 파손 정도, 보수 필요성, 우선순위 판단에 필요하다. |
+| 5 | 처리 상태 이력과 보수 배정/결과 | 파손 접수부터 보수 완료까지의 업무 흐름을 완성한다. |
+| 6 | 통계와 문서 생성 | 누적 데이터 기반의 관리 기능이다. |
+| 7 | 감사 로그 | 운영 추적성과 보안 요구사항을 보완한다. |
