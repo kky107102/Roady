@@ -10,7 +10,7 @@
 | `robot_routes` | 로봇에게 할당된 점검 경로의 기본 정보를 저장한다. |
 | `robot_route_points` | 점검 경로를 구성하는 좌표 목록을 순서대로 저장한다. |
 | `damages` | 점자블록 파손 1건의 중심 정보를 저장한다. 위도, 경도, 촬영 시각, 현재 처리 상태 등이 들어간다. |
-| `damage_files` | 파손 데이터에 연결된 이미지 또는 영상 파일 정보를 저장한다. |
+| `damage_images` | 파손 데이터에 연결된 이미지 파일 여러 장의 정보를 저장한다. |
 | `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
 | `damage_status_histories` | 파손 데이터의 처리 상태 변경 이력을 저장한다. |
 | `repair_assignments` | 파손 건에 대한 보수 담당자 배정과 보수 예정일을 저장한다. |
@@ -22,6 +22,9 @@
 users 1:N damage_status_histories
 users 1:N repair_assignments
 users 1:N repair_results
+users 1:N robots (responsible)
+users 1:N damages (reports)
+users 1:N damages (assigned)
 
 robots 1:N robot_status_logs
 robots 1:N robot_routes
@@ -29,7 +32,7 @@ robots 1:N damages
 
 robot_routes 1:N robot_route_points
 
-damages 1:N damage_files
+damages 1:N damage_images
 damages 1:N damage_ai_analysis_results
 damages 1:N damage_status_histories
 damages 0:1 repair_assignments
@@ -53,6 +56,7 @@ erDiagram
 
     robots {
         bigint id PK
+        bigint user_id FK "NOT NULL"
         varchar name
         varchar serial_number UK
         varchar status
@@ -96,7 +100,9 @@ erDiagram
 
     damages {
         bigint id PK
-        bigint robot_id FK
+        bigint robot_id FK "NULL"
+        bigint reported_by FK "NOT NULL"
+        bigint assigned_to FK "NULL"
         decimal latitude
         decimal longitude
         datetime captured_at
@@ -105,15 +111,14 @@ erDiagram
         datetime updated_at
     }
 
-    damage_files {
+    damage_images {
         bigint id PK
         bigint damage_id FK
-        varchar file_type
-        varchar file_url
-        varchar thumbnail_url
-        varchar original_file_name
+        int sort_order
+        varchar original_filename
         varchar content_type
-        bigint file_size
+        bigint size_bytes
+        longblob data
         datetime created_at
     }
 
@@ -167,14 +172,17 @@ erDiagram
     users ||--o{ repair_assignments : assigns
     users ||--o{ repair_assignments : repairs
     users ||--o{ repair_results : completes
+    users ||--o{ robots : responsible_for
+    users ||--o{ damages : reports
+    users ||--o{ damages : assigned_to
 
     robots ||--o{ robot_status_logs : records
     robots ||--o{ robot_routes : has
-    robots ||--o{ damages : detects
+    robots ||--o{ damages : captures
 
     robot_routes ||--o{ robot_route_points : contains
 
-    damages ||--o{ damage_files : has
+    damages ||--o{ damage_images : has
     damages ||--o{ damage_ai_analysis_results : analyzed_by
     damages ||--o{ damage_status_histories : tracks
     damages ||--o| repair_assignments : assigned_to
@@ -238,4 +246,12 @@ erDiagram
 | 값 | 의미 |
 | --- | --- |
 | `IMAGE` | 이미지 |
-| `VIDEO` | 영상 |
+
+### 파손 등록 주체와 담당자
+
+| 컬럼 | 의미 |
+| --- | --- |
+| `robots.user_id` | 로봇 책임자 사용자 ID |
+| `damages.robot_id` | 사진을 촬영한 로봇 ID. 사람이 직접 등록한 경우 `NULL` 가능 |
+| `damages.reported_by` | 파손을 시스템에 등록한 사용자 ID. 로봇 자동 업로드 시 로봇 책임자 ID를 사용하며 `NOT NULL` |
+| `damages.assigned_to` | 파손 처리 담당자 ID. 담당자 배정 전에는 `NULL` 가능 |
