@@ -191,4 +191,22 @@ public interface DamageMapper {
             @Arg(column = "created_at", javaType = LocalDateTime.class)
     })
     DamageImage findImageById(@Param("damageId") Long damageId, @Param("imageId") Long imageId);
+
+    @Select("""
+            SELECT id, damage_id, sort_order, original_filename, content_type, size_bytes, data, created_at
+            FROM damage_images
+            WHERE damage_id = #{damageId}
+            ORDER BY sort_order ASC, id ASC
+            """)
+    @ConstructorArgs({
+            @Arg(column = "id", javaType = Long.class, id = true),
+            @Arg(column = "damage_id", javaType = Long.class),
+            @Arg(column = "sort_order", javaType = int.class),
+            @Arg(column = "original_filename", javaType = String.class),
+            @Arg(column = "content_type", javaType = String.class),
+            @Arg(column = "size_bytes", javaType = long.class),
+            @Arg(column = "data", javaType = byte[].class),
+            @Arg(column = "created_at", javaType = LocalDateTime.class)
+    })
+    List<DamageImage> findImagesByDamageId(@Param("damageId") Long damageId);
 }
