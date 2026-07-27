@@ -44,6 +44,28 @@ class AuthFlowTest {
     }
 
     @Test
+    void signupCreatesViewerUser() throws Exception {
+        String username = "signup" + System.nanoTime();
+        String password = "password123";
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupRequest(username, password, username + "@roadbuddy.local", "Signup User")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.username").value(username))
+                .andExpect(jsonPath("$.email").value(username + "@roadbuddy.local"))
+                .andExpect(jsonPath("$.name").value("Signup User"))
+                .andExpect(jsonPath("$.role").value("VIEWER"))
+                .andExpect(jsonPath("$.active").value(true));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest(username, password)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").exists());
+    }
+
+    @Test
     void meReturnsAuthenticatedUser() throws Exception {
         String accessToken = login("admin", "admin1234");
 
@@ -90,6 +112,17 @@ class AuthFlowTest {
                   "password": "%s"
                 }
                 """.formatted(username, password);
+    }
+
+    private String signupRequest(String username, String password, String email, String name) {
+        return """
+                {
+                  "username": "%s",
+                  "password": "%s",
+                  "email": "%s",
+                  "name": "%s"
+                }
+                """.formatted(username, password, email, name);
     }
 
     private String bearer(String accessToken) {

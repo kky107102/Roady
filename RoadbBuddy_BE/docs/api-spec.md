@@ -16,6 +16,7 @@
 
 | 구분 | Method | URL | 상태 | 설명 |
 | --- | --- | --- | --- | --- |
+| 인증 | `POST` | `/api/auth/signup` | 구현됨 | 회원가입 |
 | 인증 | `POST` | `/api/auth/login` | 구현됨 | 로그인 및 토큰 발급 |
 | 인증 | `POST` | `/api/auth/refresh` | 구현됨 | Access Token 재발급 |
 | 인증 | `POST` | `/api/auth/logout` | 구현됨 | Refresh Token 삭제 |
@@ -100,6 +101,7 @@
 
 | 대상 | 인증 필요 | 권한 |
 | --- | --- | --- |
+| `POST /api/auth/signup` | 아니오 | 전체 허용. 기본 `VIEWER` 생성 |
 | `POST /api/auth/login` | 아니오 | 전체 허용 |
 | `POST /api/auth/refresh` | 아니오 | 전체 허용 |
 | `/api/users/**` | 예 | `ADMIN` |
@@ -154,7 +156,56 @@ Authorization: Bearer {accessToken}
 
 ## 3. 인증 API
 
-### 3.1 로그인
+### 3.1 회원가입
+
+일반 사용자가 계정을 생성한다. 가입한 사용자는 기본 `VIEWER` 권한으로 생성된다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/api/auth/signup` |
+| 인증 | 불필요 |
+| Content-Type | `application/json` |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `username` | string | 예 | 빈 값 불가 | 사용자 아이디 |
+| `password` | string | 예 | 8~100자 | 비밀번호 |
+| `email` | string | 예 | 이메일 형식 | 이메일 |
+| `name` | string | 예 | 빈 값 불가 | 이름 |
+
+```json
+{
+  "username": "viewer01",
+  "password": "password123",
+  "email": "viewer01@example.com",
+  "name": "조회 사용자"
+}
+```
+
+#### Response `201 Created`
+
+```json
+{
+  "id": 5,
+  "username": "viewer01",
+  "email": "viewer01@example.com",
+  "name": "조회 사용자",
+  "role": "VIEWER",
+  "active": true,
+  "createdAt": "2026-07-27T13:45:00"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패, 중복 username/email |
+
+### 3.2 로그인
 
 사용자명과 비밀번호로 로그인하고 access token과 refresh token을 발급한다.
 
@@ -205,7 +256,7 @@ Authorization: Bearer {accessToken}
 | `401` | 아이디 또는 비밀번호 불일치 |
 | `403` | 비활성 계정 |
 
-### 3.2 토큰 재발급
+### 3.3 토큰 재발급
 
 refresh token으로 새 access token을 발급한다.
 
@@ -245,7 +296,7 @@ refresh token으로 새 access token을 발급한다.
 | --- | --- |
 | `400` | refresh token이 비어 있음, 유효하지 않음, 저장된 토큰과 불일치, 활성 사용자를 찾을 수 없음 |
 
-### 3.3 로그아웃
+### 3.4 로그아웃
 
 refresh token을 삭제하여 재발급을 막는다.
 
@@ -279,7 +330,7 @@ refresh token을 삭제하여 재발급을 막는다.
 | `400` | refresh token이 비어 있음 또는 유효하지 않음 |
 | `401` | access token 없음 또는 인증 실패 |
 
-### 3.4 내 정보 조회
+### 3.5 내 정보 조회
 
 현재 로그인한 사용자의 기본 정보를 조회한다.
 

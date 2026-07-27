@@ -5,6 +5,7 @@ import com.blockai.roadbuddy.security.AuthenticatedUser;
 import com.blockai.roadbuddy.security.JwtTokenProvider;
 import com.blockai.roadbuddy.security.TokenType;
 import com.blockai.roadbuddy.user.domain.UserAccount;
+import com.blockai.roadbuddy.user.domain.UserRole;
 import com.blockai.roadbuddy.user.service.UserAccountService;
 import io.jsonwebtoken.Claims;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -48,6 +49,10 @@ public class AuthService {
                 refreshToken,
                 jwtTokenProvider.accessTokenValidity().toSeconds()
         );
+    }
+
+    public UserAccount signup(String username, String rawPassword, String email, String name) {
+        return userAccountService.create(username, rawPassword, email, name, UserRole.VIEWER);
     }
 
     public TokenResponse refresh(String refreshToken) {
