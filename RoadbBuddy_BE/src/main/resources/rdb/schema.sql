@@ -62,3 +62,21 @@ CREATE TABLE IF NOT EXISTS damage_images (
     INDEX idx_damage_images_damage_sort_order (damage_id, sort_order),
     CONSTRAINT fk_damage_images_damage FOREIGN KEY (damage_id) REFERENCES damages (id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS damage_ai_analysis_results (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    damage_id BIGINT NOT NULL,
+    damaged BOOLEAN NULL,
+    damage_score INT NULL,
+    repair_required BOOLEAN NULL,
+    repair_priority VARCHAR(30) NULL,
+    confidence_score DECIMAL(5, 4) NULL,
+    analysis_status VARCHAR(30) NOT NULL DEFAULT 'QUEUED',
+    raw_result LONGTEXT NULL,
+    analyzed_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_damage_ai_analysis_results_damage_created_at (damage_id, created_at),
+    INDEX idx_damage_ai_analysis_results_status_created_at (analysis_status, created_at),
+    CONSTRAINT fk_damage_ai_analysis_results_damage FOREIGN KEY (damage_id) REFERENCES damages (id) ON DELETE CASCADE
+);

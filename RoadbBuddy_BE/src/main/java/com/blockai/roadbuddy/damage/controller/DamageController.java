@@ -1,9 +1,12 @@
 package com.blockai.roadbuddy.damage.controller;
 
 import com.blockai.roadbuddy.damage.domain.DamageImage;
+import com.blockai.roadbuddy.damage.dto.CreateDamageAiAnalysisResponse;
+import com.blockai.roadbuddy.damage.dto.DamageAiAnalysisResponse;
 import com.blockai.roadbuddy.damage.dto.DamageImageResponse;
 import com.blockai.roadbuddy.damage.dto.DamageResponse;
 import com.blockai.roadbuddy.damage.dto.DamageSummaryResponse;
+import com.blockai.roadbuddy.damage.service.DamageAiAnalysisService;
 import com.blockai.roadbuddy.damage.service.DamageService;
 import com.blockai.roadbuddy.security.AuthenticatedUser;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -32,9 +35,11 @@ import java.util.List;
 public class DamageController {
 
     private final DamageService damageService;
+    private final DamageAiAnalysisService aiAnalysisService;
 
-    public DamageController(DamageService damageService) {
+    public DamageController(DamageService damageService, DamageAiAnalysisService aiAnalysisService) {
         this.damageService = damageService;
+        this.aiAnalysisService = aiAnalysisService;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -81,6 +86,20 @@ public class DamageController {
                 .map(DamageImageResponse::from)
                 .toList();
         return DamageResponse.from(damage, imageResponses);
+    }
+
+    @PostMapping("/{damageId}/analysis-jobs")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public CreateDamageAiAnalysisResponse createDamageAnalysisJob(@PathVariable Long damageId) {
+        var analysisResult = aiAnalysisService.createAndEnqueue(damageId);
+        return new CreateDamageAiAnalysisResponse(DamageAiAnalysisResponse.from(analysisResult));
+    }
+
+    @GetMapping("/{damageId}/analysis-jobs")
+    public List<DamageAiAnalysisResponse> getDamageAnalysisJobs(@PathVariable Long damageId) {
+        return aiAnalysisService.getAnalysisResultsByDamageId(damageId).stream()
+                .map(DamageAiAnalysisResponse::from)
+                .toList();
     }
 
     @GetMapping("/{damageId}/images/{imageId}/content")
