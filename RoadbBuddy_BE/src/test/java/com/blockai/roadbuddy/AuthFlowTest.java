@@ -66,6 +66,40 @@ class AuthFlowTest {
     }
 
     @Test
+    void signupFailsWithDuplicateUsername() throws Exception {
+        String username = "duplicate" + System.nanoTime();
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupRequest(username, "password123", username + "@roadbuddy.local", "Signup User")))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(signupRequest(username, "password123", username + "2@roadbuddy.local", "Signup User")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    @Test
+    void signupRejectsInvalidRequest() throws Exception {
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "username": "",
+                                  "password": "short",
+                                  "email": "invalid-email",
+                                  "name": ""
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors.length()", greaterThanOrEqualTo(4)));
+    }
+
+    @Test
     void meReturnsAuthenticatedUser() throws Exception {
         String accessToken = login("admin", "admin1234");
 
