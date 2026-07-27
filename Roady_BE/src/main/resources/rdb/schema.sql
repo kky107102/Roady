@@ -28,6 +28,43 @@ CREATE TABLE IF NOT EXISTS robots (
     CONSTRAINT fk_robots_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
 
+CREATE TABLE IF NOT EXISTS robot_status_logs (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    robot_id BIGINT NOT NULL,
+    latitude DECIMAL(10, 7) NOT NULL,
+    longitude DECIMAL(10, 7) NOT NULL,
+    battery_level INT NOT NULL,
+    operation_status VARCHAR(30) NOT NULL,
+    connection_status VARCHAR(30) NOT NULL,
+    error_code VARCHAR(100) NULL,
+    error_message VARCHAR(500) NULL,
+    recorded_at DATETIME(6) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_robot_status_logs_robot_recorded_at (robot_id, recorded_at),
+    INDEX idx_robot_status_logs_connection_recorded_at (connection_status, recorded_at),
+    CONSTRAINT fk_robot_status_logs_robot FOREIGN KEY (robot_id) REFERENCES robots (id)
+);
+
+CREATE TABLE IF NOT EXISTS robot_commands (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    robot_id BIGINT NOT NULL,
+    requested_by BIGINT NOT NULL,
+    command_type VARCHAR(30) NOT NULL,
+    command_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    command_payload LONGTEXT NULL,
+    result_message TEXT NULL,
+    requested_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    completed_at DATETIME(6) NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_robot_commands_robot_created_at (robot_id, created_at),
+    INDEX idx_robot_commands_status_created_at (command_status, created_at),
+    CONSTRAINT fk_robot_commands_robot FOREIGN KEY (robot_id) REFERENCES robots (id),
+    CONSTRAINT fk_robot_commands_requested_by FOREIGN KEY (requested_by) REFERENCES users (id)
+);
+
 CREATE TABLE IF NOT EXISTS damages (
     id BIGINT NOT NULL AUTO_INCREMENT,
     robot_id BIGINT NULL,
