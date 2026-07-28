@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import { tokenStorage } from '@/utils/tokenStorage'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -23,16 +25,16 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const isAuthenticated = Boolean(localStorage.getItem('accessToken'))
+  const hasSession = tokenStorage.hasSession()
 
-  if (to.meta.requiresAuth && !isAuthenticated) {
+  if (to.meta.requiresAuth && !hasSession) {
     return {
       name: 'login',
       query: { redirect: to.fullPath },
     }
   }
 
-  if (to.meta.guestOnly && isAuthenticated) {
+  if (to.meta.guestOnly && hasSession) {
     return { name: 'dashboard' }
   }
 })

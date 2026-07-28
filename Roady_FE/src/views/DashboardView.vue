@@ -27,14 +27,14 @@ async function handleLogout() {
   min-height: 100dvh;
   display: grid;
   padding: 24px;
-  color: #172235;
-  background: #f4f7fa;
+  color: var(--roady-text-primary);
+  background: var(--roady-surface-background);
   place-items: center;
   text-align: center;
 }
 
 .dashboard-placeholder p {
-  color: #456483;
+  color: var(--roady-brand-secondary);
   font-weight: 700;
 }
 
@@ -43,8 +43,8 @@ async function handleLogout() {
   padding: 11px 22px;
   border: 0;
   border-radius: 6px;
-  color: #fff;
-  background: #1c4770;
+  color: var(--roady-surface-default);
+  background: var(--roady-brand-primary);
   cursor: pointer;
 }
 </style>
