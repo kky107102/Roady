@@ -24,7 +24,7 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
-      meta: { requiresAuth: true },  // 로그인 필요 여부 변환(기본: true)
+      meta: { requiresAuth: false },  // 로그인 필요 여부 변환(기본: true)
       children: [
         {
           path: '',
