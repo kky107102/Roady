@@ -24,7 +24,7 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true },  // 로그인 필요 여부 변환(기본: true)
       children: [
         {
           path: '',
@@ -58,6 +58,22 @@ const router = createRouter({
         },
       ],
     },
+    ...(import.meta.env.DEV
+      ? [
+          {
+            path: '/dev',
+            component: () => import('@/layouts/MainLayout.vue'),
+            children: [
+              {
+                path: 'showcase',
+                name: 'dev-showcase',
+                component: () => import('@/views/dev/ShowcaseView.vue'),
+                meta: { title: '컴포넌트 쇼케이스' },
+              },
+            ],
+          },
+        ]
+      : []),
     {
       path: '/:pathMatch(.*)*',
       redirect: '/',
