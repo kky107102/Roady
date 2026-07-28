@@ -61,6 +61,34 @@ CREATE TABLE IF NOT EXISTS robot_commands (
     CONSTRAINT fk_robot_commands_requested_by FOREIGN KEY (requested_by) REFERENCES users (id)
 );
 
+CREATE TABLE IF NOT EXISTS robot_routes (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    robot_id BIGINT NOT NULL,
+    created_by BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    route_status VARCHAR(30) NOT NULL DEFAULT 'CREATED',
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_robot_routes_robot_status (robot_id, route_status),
+    INDEX idx_robot_routes_created_by_created_at (created_by, created_at),
+    CONSTRAINT fk_robot_routes_robot FOREIGN KEY (robot_id) REFERENCES robots (id),
+    CONSTRAINT fk_robot_routes_created_by FOREIGN KEY (created_by) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS robot_route_points (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    route_id BIGINT NOT NULL,
+    point_order INT NOT NULL,
+    latitude DECIMAL(10, 7) NOT NULL,
+    longitude DECIMAL(10, 7) NOT NULL,
+    point_type VARCHAR(30) NOT NULL,
+    created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_robot_route_points_route_order (route_id, point_order),
+    CONSTRAINT fk_robot_route_points_route FOREIGN KEY (route_id) REFERENCES robot_routes (id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS damages (
     id BIGINT NOT NULL AUTO_INCREMENT,
     robot_id BIGINT NULL,

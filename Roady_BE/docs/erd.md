@@ -254,6 +254,23 @@ erDiagram
 | `FAILED` | 명령 처리 실패 |
 | `CANCELED` | 명령 취소 |
 
+### 로봇 경로 상태
+
+| 값 | 의미 |
+| --- | --- |
+| `CREATED` | 경로 생성 완료 |
+| `DISPATCHED` | 로봇 전송 완료 |
+| `COMPLETED` | 경로 수행 완료 |
+| `CANCELED` | 경로 취소 |
+
+### 로봇 경로점 유형
+
+| 값 | 의미 |
+| --- | --- |
+| `START` | 시작 지점 |
+| `WAYPOINT` | 경유 지점 |
+| `DESTINATION` | 도착 지점 |
+
 ### 파손 처리 상태
 
 | 값 | 의미 |

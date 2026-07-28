@@ -33,23 +33,23 @@
 | 파손 | `GET` | `/api/damages/{damageId}/duplicates` | 설계안 | 동일/인접 위치 중복 후보 조회 |
 | 파손 | `POST` | `/api/damages/{damageId}/reviews` | 설계안 | 점검 담당자 검토 의견 등록 |
 | 파손 | `GET` | `/api/damages/{damageId}/reviews` | 설계안 | 검토 의견 이력 조회 |
-| 로봇 | `POST` | `/api/robots` | 설계안 | 로봇 등록 |
-| 로봇 | `GET` | `/api/robots` | 설계안 | 로봇 목록 및 현재 상태 조회 |
-| 로봇 | `GET` | `/api/robots/{robotId}` | 설계안 | 로봇 상세 조회 |
-| 로봇 | `PATCH` | `/api/robots/{robotId}` | 설계안 | 로봇 정보 수정 |
-| 로봇 | `PATCH` | `/api/robots/{robotId}/active` | 설계안 | 로봇 활성 상태 변경 |
-| 로봇 상태 | `POST` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 위치, 배터리, 운행 상태 등록 |
-| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs/latest` | 설계안 | 로봇 최신 상태 조회 |
-| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 상태 로그 조회 |
-| 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 생성 |
-| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 이력 조회 |
-| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands/pending` | 설계안 | 로봇 미처리 명령 조회 |
-| 로봇 명령 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/status` | 설계안 | 로봇 제어 명령 상태 변경 |
-| 로봇 경로 | `POST` | `/api/robot-routes` | 설계안 | 점검 경로 생성 |
-| 로봇 경로 | `GET` | `/api/robot-routes` | 설계안 | 점검 경로 목록 조회 |
-| 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 상세 조회 |
-| 로봇 경로 | `PUT` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 수정 |
-| 로봇 경로 | `DELETE` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 삭제 |
+| 로봇 | `POST` | `/api/robots` | 구현됨 | 로봇 등록 |
+| 로봇 | `GET` | `/api/robots` | 구현됨 | 로봇 목록 및 현재 상태 조회 |
+| 로봇 | `GET` | `/api/robots/{robotId}` | 구현됨 | 로봇 상세 조회 |
+| 로봇 | `PATCH` | `/api/robots/{robotId}` | 구현됨 | 로봇 정보 수정 |
+| 로봇 | `PATCH` | `/api/robots/{robotId}/active` | 구현됨 | 로봇 활성 상태 변경 |
+| 로봇 상태 | `POST` | `/api/robots/{robotId}/status-logs` | 구현됨 | 로봇 위치, 배터리, 운행 상태 등록 |
+| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs/latest` | 구현됨 | 로봇 최신 상태 조회 |
+| 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 구현됨 | 로봇 상태 로그 조회 |
+| 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 구현됨 | 로봇 제어 명령 생성 |
+| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 구현됨 | 로봇 제어 명령 이력 조회 |
+| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands/pending` | 구현됨 | 로봇 미처리 명령 조회 |
+| 로봇 명령 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/status` | 구현됨 | 로봇 제어 명령 상태 변경 |
+| 로봇 경로 | `POST` | `/api/robot-routes` | 구현됨 | 점검 경로 생성 |
+| 로봇 경로 | `GET` | `/api/robot-routes` | 구현됨 | 점검 경로 목록 조회 |
+| 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 상세 조회 |
+| 로봇 경로 | `PUT` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 수정 |
+| 로봇 경로 | `DELETE` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 삭제 |
 | 로봇 경로 | `POST` | `/api/robot-routes/{routeId}/dispatch` | 설계안 | 점검 경로 로봇 전송 |
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}/actual-path` | 설계안 | 실제 이동 경로 조회 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 요청 |
@@ -1014,6 +1014,62 @@ curl -X POST "http://localhost:8080/api/damages" \
   ]
 }
 ```
+
+#### UpdateRobotRouteRequest
+
+```json
+{
+  "name": "서초구 보행로 1구역 수정",
+  "routeStatus": "CREATED",
+  "points": [
+    {
+      "pointOrder": 1,
+      "latitude": 37.5665,
+      "longitude": 126.978,
+      "pointType": "START"
+    },
+    {
+      "pointOrder": 2,
+      "latitude": 37.5658,
+      "longitude": 126.9786,
+      "pointType": "WAYPOINT"
+    },
+    {
+      "pointOrder": 3,
+      "latitude": 37.5651,
+      "longitude": 126.9792,
+      "pointType": "DESTINATION"
+    }
+  ]
+}
+```
+
+#### RobotRouteResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 경로 ID |
+| `robotId` | number | 경로 대상 로봇 ID |
+| `createdBy` | number | 경로 생성 사용자 ID |
+| `name` | string | 경로명 |
+| `routeStatus` | string | `CREATED`, `DISPATCHED`, `COMPLETED`, `CANCELED` |
+| `points` | array | 경로점 목록. 상세 조회/생성/수정 응답에 포함 |
+| `createdAt` | string | 생성 일시 |
+| `updatedAt` | string | 수정 일시 |
+
+#### RobotRoutePoint
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 경로점 ID |
+| `routeId` | number | 경로 ID |
+| `pointOrder` | number | 경로점 순서. 경로 안에서 중복 불가 |
+| `latitude` | number | 위도 |
+| `longitude` | number | 경도 |
+| `pointType` | string | `START`, `WAYPOINT`, `DESTINATION` |
+| `createdAt` | string | 생성 일시 |
+
+경로점은 최소 2개 이상이어야 하며, `START`와 `DESTINATION`은 각각 정확히 1개씩 포함되어야 한다. 경로 삭제는 `CREATED` 상태에서만 가능하다.
 
 ## 9. 파손 데이터 API 확장 설계
 
