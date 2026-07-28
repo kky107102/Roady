@@ -11,6 +11,7 @@ import jakarta.validation.Validator;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -49,6 +50,13 @@ public class RobotLocationService {
         RobotLocationState state = RobotLocationState.from(robotId, request, LocalDateTime.now());
         robotLocationCache.saveLatest(state);
         return state;
+    }
+
+    public Optional<RobotLocationState> findLatest(Long robotId) {
+        if (robotId == null || robotId <= 0) {
+            throw new IllegalArgumentException("Robot id must be positive.");
+        }
+        return robotLocationCache.findLatest(robotId);
     }
 
     private CreateRobotStatusLogRequest deserialize(String payload) {

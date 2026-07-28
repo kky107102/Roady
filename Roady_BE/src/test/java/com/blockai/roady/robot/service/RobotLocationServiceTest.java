@@ -18,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class RobotLocationServiceTest {
 
@@ -75,5 +76,24 @@ class RobotLocationServiceTest {
 
         assertThatThrownBy(() -> service.saveLatest(10L, payload))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void findLatestReturnsCachedLocationState() {
+        RobotLocationState state = new RobotLocationState(
+                10L,
+                BigDecimal.valueOf(37.501),
+                BigDecimal.valueOf(127.039),
+                82,
+                RobotStatus.MOVING,
+                RobotConnectionStatus.CONNECTED,
+                null,
+                null,
+                null,
+                null
+        );
+        when(robotLocationCache.findLatest(10L)).thenReturn(java.util.Optional.of(state));
+
+        assertThat(service.findLatest(10L)).contains(state);
     }
 }
