@@ -4,6 +4,7 @@ import com.blockai.roady.robot.domain.RobotConnectionStatus;
 import com.blockai.roady.robot.domain.RobotStatus;
 import com.blockai.roady.robot.dto.RobotLocationState;
 import com.blockai.roady.robot.redis.RobotLocationCache;
+import com.blockai.roady.robot.websocket.RobotLocationPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import jakarta.validation.Validation;
@@ -18,10 +19,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class RobotLocationServiceTest {
 
     private RobotLocationCache robotLocationCache;
+    private RobotLocationPublisher robotLocationPublisher;
     private RobotLocationService service;
 
     @BeforeEach
@@ -31,7 +34,8 @@ class RobotLocationServiceTest {
                 .build();
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         robotLocationCache = mock(RobotLocationCache.class);
-        service = new RobotLocationService(objectMapper, validator, robotLocationCache);
+        robotLocationPublisher = mock(RobotLocationPublisher.class);
+        service = new RobotLocationService(objectMapper, validator, robotLocationCache, robotLocationPublisher);
     }
 
     @Test
@@ -51,6 +55,7 @@ class RobotLocationServiceTest {
 
         ArgumentCaptor<RobotLocationState> captor = ArgumentCaptor.forClass(RobotLocationState.class);
         verify(robotLocationCache).saveLatest(captor.capture());
+        verify(robotLocationPublisher).publish(captor.getValue());
 
         assertThat(state).isEqualTo(captor.getValue());
         assertThat(state.robotId()).isEqualTo(10L);
@@ -75,5 +80,24 @@ class RobotLocationServiceTest {
 
         assertThatThrownBy(() -> service.saveLatest(10L, payload))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void findLatestReturnsCachedLocationState() {
+        RobotLocationState state = new RobotLocationState(
+                10L,
+                BigDecimal.valueOf(37.501),
+                BigDecimal.valueOf(127.039),
+                82,
+                RobotStatus.MOVING,
+                RobotConnectionStatus.CONNECTED,
+                null,
+                null,
+                null,
+                null
+        );
+        when(robotLocationCache.findLatest(10L)).thenReturn(java.util.Optional.of(state));
+
+        assertThat(service.findLatest(10L)).contains(state);
     }
 }

@@ -1,6 +1,7 @@
 package com.blockai.roady.robot;
 
 import com.blockai.roady.user.service.UserAccountService;
+import com.blockai.roady.robot.service.RobotLocationService;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +28,9 @@ class RobotApiTest {
 
     @Autowired
     private UserAccountService userAccountService;
+
+    @Autowired
+    private RobotLocationService robotLocationService;
 
     @Test
     void adminCanCreateReadAndUpdateRobot() throws Exception {
@@ -326,6 +330,35 @@ class RobotApiTest {
         mockMvc.perform(get("/api/robots/{robotId}/status-logs", robotId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void viewerCanReadLatestRobotLocationFromRedis() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String viewerToken = login("viewer", "viewer1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Latest Location Robot", uniqueSerialNumber());
+
+        robotLocationService.saveLatest(robotId, """
+                {
+                  "latitude": 37.501,
+                  "longitude": 127.039,
+                  "batteryLevel": 82,
+                  "operationStatus": "MOVING",
+                  "connectionStatus": "CONNECTED",
+                  "recordedAt": "2026-07-28T14:30:00"
+                }
+                """);
+
+        mockMvc.perform(get("/api/robots/{robotId}/location/latest", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.robotId").value(robotId))
+                .andExpect(jsonPath("$.latitude").value(37.501))
+                .andExpect(jsonPath("$.longitude").value(127.039))
+                .andExpect(jsonPath("$.batteryLevel").value(82))
+                .andExpect(jsonPath("$.operationStatus").value("MOVING"))
+                .andExpect(jsonPath("$.connectionStatus").value("CONNECTED"));
     }
 
     private Long createRobot(String accessToken, Long userId, String name, String serialNumber) throws Exception {
