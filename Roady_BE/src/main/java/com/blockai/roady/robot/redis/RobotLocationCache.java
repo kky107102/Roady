@@ -8,6 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Optional;
 
 @Component
 public class RobotLocationCache {
@@ -36,11 +37,27 @@ public class RobotLocationCache {
         redisTemplate.opsForValue().set(properties.redisKey(state.robotId()), payload, ttl);
     }
 
+    public Optional<RobotLocationState> findLatest(Long robotId) {
+        String payload = redisTemplate.opsForValue().get(properties.redisKey(robotId));
+        if (payload == null) {
+            return Optional.empty();
+        }
+        return Optional.of(deserialize(payload));
+    }
+
     private String serialize(RobotLocationState state) {
         try {
             return objectMapper.writeValueAsString(state);
         } catch (JsonProcessingException ex) {
             throw new IllegalArgumentException("Failed to serialize robot location state.", ex);
+        }
+    }
+
+    private RobotLocationState deserialize(String payload) {
+        try {
+            return objectMapper.readValue(payload, RobotLocationState.class);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalArgumentException("Failed to deserialize robot location state.", ex);
         }
     }
 }
