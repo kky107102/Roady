@@ -41,9 +41,6 @@
 | 로봇 상태 | `POST` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 위치, 배터리, 운행 상태 등록 |
 | 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs/latest` | 설계안 | 로봇 최신 상태 조회 |
 | 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 상태 로그 조회 |
-| 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 전송 |
-| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 이력 조회 |
-| 로봇 명령 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/result` | 설계안 | 로봇 명령 처리 결과 등록 |
 | 로봇 경로 | `POST` | `/api/robot-routes` | 설계안 | 점검 경로 생성 |
 | 로봇 경로 | `GET` | `/api/robot-routes` | 설계안 | 점검 경로 목록 조회 |
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 상세 조회 |
@@ -899,14 +896,6 @@ curl -X POST "http://localhost:8080/api/damages" \
   "recordedAt": "2026-07-22T14:30:00"
 }
 ```
-
-### 7.3 로봇 제어 명령
-
-| 기능 | Method | URL | 권한 | 설명 |
-| --- | --- | --- | --- | --- |
-| 제어 명령 전송 | `POST` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 경로 시작, 정지, 복귀 등 명령을 전송한다. |
-| 제어 명령 이력 조회 | `GET` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 명령 처리 결과를 조회한다. |
-| 명령 처리 결과 등록 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/result` | `ROBOT/DEVICE` | 로봇이 명령 성공/실패 결과를 기록한다. |
 
 ## 8. 로봇 경로 API 설계
 
