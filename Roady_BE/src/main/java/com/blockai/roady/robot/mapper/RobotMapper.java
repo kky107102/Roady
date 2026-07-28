@@ -82,4 +82,11 @@ public interface RobotMapper {
             WHERE id = #{id}
             """)
     int updateActive(@Param("id") Long id, @Param("active") boolean active);
+
+    @Update("""
+            UPDATE robots
+            SET status = #{status}
+            WHERE id = #{id}
+            """)
+    int updateStatus(@Param("id") Long id, @Param("status") RobotStatus status);
 }

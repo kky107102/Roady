@@ -225,6 +225,29 @@ erDiagram
 | `STOPPED` | 정지 |
 | `ERROR` | 오류 |
 
+### 로봇 통신 상태
+
+| 값 | 의미 |
+| --- | --- |
+| `CONNECTED` | 연결됨 |
+| `DISCONNECTED` | 연결 끊김 |
+
+### 로봇 제어 명령
+
+| 값 | 의미 |
+| --- | --- |
+| `START_PATROL` | 순찰 시작 |
+| `STOP_PATROL` | 순찰 종료 및 정지 |
+| `EMERGENCY_STOP` | 즉시 긴급 정지 |
+| `RETURN_HOME` | 스테이션 복귀 |
+| `GET_STATUS` | 현재 상태 요청 |
+
+### 로봇 명령 상태
+
+| 값 | 의미 |
+| --- | --- |
+| `PENDING` | 명령 생성 후 로봇 처리 대기 |
+
 ### 파손 처리 상태
 
 | 값 | 의미 |

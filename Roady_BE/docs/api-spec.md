@@ -820,7 +820,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | 로그인/토큰 재발급 | 예 | 예 | 예 | 예 | 별도 장치 인증 필요 |
 | 사용자 관리 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
 | 로봇 등록/수정/삭제 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
-| 로봇 상태 전송 | 아니오 | 아니오 | 아니오 | 아니오 | 예 |
+| 로봇 상태 로그 등록 | 예 | 예 | 아니오 | 아니오 | 추후 장치 인증 |
 | 로봇 관제 조회 | 예 | 예 | 아니오 | 조회 가능 | 아니오 |
 | 경로 생성/전송 | 예 | 예 | 아니오 | 아니오 | 수신 |
 | 파손 등록 | 예 | 예 | 아니오 | 아니오 | 예 |
@@ -880,9 +880,11 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 상태 로그 등록 | `POST` | `/api/robots/{robotId}/status-logs` | `ROBOT/DEVICE` | 로봇이 위치, 배터리, 운행 상태, 통신 상태, 오류 정보를 전송한다. |
+| 상태 로그 등록 | `POST` | `/api/robots/{robotId}/status-logs` | `ADMIN`, `INSPECTOR` | 로봇 위치, 배터리, 운행 상태, 통신 상태, 오류 정보를 등록한다. |
 | 최근 상태 조회 | `GET` | `/api/robots/{robotId}/status-logs/latest` | `ADMIN`, `INSPECTOR`, `VIEWER` | 지도 표시용 최신 상태를 조회한다. |
 | 상태 로그 목록 조회 | `GET` | `/api/robots/{robotId}/status-logs` | `ADMIN`, `INSPECTOR` | 최근 위치, 배터리 상태, 오류 이력을 조회한다. |
+
+장치 인증은 아직 구현하지 않는다. 로봇 또는 IoT 장치가 직접 상태 로그를 전송하는 방식은 추후 `X-Device-Token` 또는 장치용 JWT 기반으로 별도 설계한다.
 
 #### CreateRobotStatusLogRequest
 
@@ -898,6 +900,21 @@ curl -X POST "http://localhost:8080/api/damages" \
   "recordedAt": "2026-07-22T14:30:00"
 }
 ```
+
+#### RobotStatusLogResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 상태 로그 ID |
+| `robotId` | number | 로봇 ID |
+| `latitude` | number | 위도 |
+| `longitude` | number | 경도 |
+| `batteryLevel` | number | 배터리 잔량. 0~100 |
+| `operationStatus` | string | `STANDBY`, `MOVING`, `INSPECTING`, `CHARGING`, `STOPPED`, `ERROR` |
+| `connectionStatus` | string | `CONNECTED`, `DISCONNECTED` |
+| `errorCode` | string, null | 오류 코드 |
+| `errorMessage` | string, null | 오류 메시지 |
+| `recordedAt` | string | 상태 기록 일시 |
 
 ### 7.3 로봇 제어 명령
 

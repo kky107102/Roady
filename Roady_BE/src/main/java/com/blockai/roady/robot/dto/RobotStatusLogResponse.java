@@ -5,8 +5,9 @@ import com.blockai.roady.robot.domain.RobotStatusLog;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-public record RobotLatestStatusResponse(
+public record RobotStatusLogResponse(
         Long id,
+        Long robotId,
         BigDecimal latitude,
         BigDecimal longitude,
         Integer batteryLevel,
@@ -17,9 +18,10 @@ public record RobotLatestStatusResponse(
         LocalDateTime recordedAt
 ) {
 
-    public static RobotLatestStatusResponse from(RobotStatusLog statusLog) {
-        return new RobotLatestStatusResponse(
+    public static RobotStatusLogResponse from(RobotStatusLog statusLog) {
+        return new RobotStatusLogResponse(
                 statusLog.getId(),
+                statusLog.getRobotId(),
                 statusLog.getLatitude(),
                 statusLog.getLongitude(),
                 statusLog.getBatteryLevel(),

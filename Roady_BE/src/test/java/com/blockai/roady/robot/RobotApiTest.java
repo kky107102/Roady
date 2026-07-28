@@ -163,6 +163,83 @@ class RobotApiTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void inspectorCanCreateAndReadRobotStatusLogs() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String inspectorToken = login("inspector", "inspector1234");
+        String viewerToken = login("viewer", "viewer1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Status Robot", uniqueSerialNumber());
+
+        mockMvc.perform(post("/api/robots/{robotId}/status-logs", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "latitude": 37.5665,
+                                  "longitude": 126.978,
+                                  "batteryLevel": 72,
+                                  "operationStatus": "INSPECTING",
+                                  "connectionStatus": "CONNECTED",
+                                  "errorCode": null,
+                                  "errorMessage": null,
+                                  "recordedAt": "2026-07-22T14:30:00"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.robotId").value(robotId))
+                .andExpect(jsonPath("$.batteryLevel").value(72))
+                .andExpect(jsonPath("$.operationStatus").value("INSPECTING"))
+                .andExpect(jsonPath("$.connectionStatus").value("CONNECTED"))
+                .andExpect(jsonPath("$.recordedAt").value("2026-07-22T14:30:00"));
+
+        mockMvc.perform(get("/api/robots/{robotId}/status-logs/latest", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.robotId").value(robotId))
+                .andExpect(jsonPath("$.operationStatus").value("INSPECTING"));
+
+        mockMvc.perform(get("/api/robots/{robotId}/status-logs", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].robotId").value(robotId))
+                .andExpect(jsonPath("$[0].operationStatus").value("INSPECTING"));
+
+        mockMvc.perform(get("/api/robots/{robotId}", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("INSPECTING"))
+                .andExpect(jsonPath("$.latestStatus.robotId").doesNotExist())
+                .andExpect(jsonPath("$.latestStatus.batteryLevel").value(72))
+                .andExpect(jsonPath("$.latestStatus.operationStatus").value("INSPECTING"));
+    }
+
+    @Test
+    void viewerCannotCreateOrReadRobotStatusLogList() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String viewerToken = login("viewer", "viewer1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Forbidden Status Robot", uniqueSerialNumber());
+
+        mockMvc.perform(post("/api/robots/{robotId}/status-logs", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "latitude": 37.5665,
+                                  "longitude": 126.978,
+                                  "batteryLevel": 72,
+                                  "operationStatus": "INSPECTING",
+                                  "connectionStatus": "CONNECTED"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/robots/{robotId}/status-logs", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isForbidden());
+    }
+
     private Long createRobot(String accessToken, Long userId, String name, String serialNumber) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/robots")
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
