@@ -7,6 +7,7 @@ import com.blockai.roady.robot.mapper.RobotCommandMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -40,5 +41,66 @@ public class RobotCommandService {
     public List<RobotCommand> findByRobotId(Long robotId) {
         robotService.get(robotId);
         return robotCommandMapper.findByRobotId(robotId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RobotCommand> findPendingByRobotId(Long robotId) {
+        robotService.get(robotId);
+        return robotCommandMapper.findPendingByRobotId(robotId);
+    }
+
+    @Transactional
+    public RobotCommand updateStatus(
+            Long robotId,
+            Long commandId,
+            RobotCommandStatus commandStatus,
+            String resultMessage
+    ) {
+        robotService.get(robotId);
+        RobotCommand command = getByRobotId(robotId, commandId);
+        validateStatusTransition(command.getCommandStatus(), commandStatus);
+
+        LocalDateTime completedAt = isTerminal(commandStatus) ? LocalDateTime.now() : null;
+        int updatedRows = robotCommandMapper.updateStatus(
+                commandId,
+                robotId,
+                commandStatus,
+                resultMessage,
+                completedAt
+        );
+        if (updatedRows == 0) {
+            throw new IllegalArgumentException("Robot command not found.");
+        }
+
+        return getByRobotId(robotId, commandId);
+    }
+
+    private RobotCommand getByRobotId(Long robotId, Long commandId) {
+        RobotCommand command = Optional.ofNullable(robotCommandMapper.findById(commandId))
+                .orElseThrow(() -> new IllegalArgumentException("Robot command not found."));
+        if (!command.getRobotId().equals(robotId)) {
+            throw new IllegalArgumentException("Robot command not found.");
+        }
+        return command;
+    }
+
+    private boolean isTerminal(RobotCommandStatus commandStatus) {
+        return commandStatus == RobotCommandStatus.SUCCEEDED
+                || commandStatus == RobotCommandStatus.FAILED
+                || commandStatus == RobotCommandStatus.CANCELED;
+    }
+
+    private void validateStatusTransition(RobotCommandStatus currentStatus, RobotCommandStatus nextStatus) {
+        if (currentStatus == RobotCommandStatus.PENDING) {
+            if (nextStatus == RobotCommandStatus.IN_PROGRESS || nextStatus == RobotCommandStatus.CANCELED) {
+                return;
+            }
+        }
+        if (currentStatus == RobotCommandStatus.IN_PROGRESS) {
+            if (isTerminal(nextStatus)) {
+                return;
+            }
+        }
+        throw new IllegalArgumentException("Invalid robot command status transition.");
     }
 }

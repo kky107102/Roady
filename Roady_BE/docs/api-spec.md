@@ -43,6 +43,8 @@
 | 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 상태 로그 조회 |
 | 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 생성 |
 | 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 이력 조회 |
+| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands/pending` | 설계안 | 로봇 미처리 명령 조회 |
+| 로봇 명령 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/status` | 설계안 | 로봇 제어 명령 상태 변경 |
 | 로봇 경로 | `POST` | `/api/robot-routes` | 설계안 | 점검 경로 생성 |
 | 로봇 경로 | `GET` | `/api/robot-routes` | 설계안 | 점검 경로 목록 조회 |
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 상세 조회 |
@@ -821,6 +823,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | 사용자 관리 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
 | 로봇 등록/수정/삭제 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
 | 로봇 상태 로그 등록 | 예 | 예 | 아니오 | 아니오 | 추후 장치 인증 |
+| 로봇 제어 명령 | 예 | 예 | 아니오 | 아니오 | 추후 장치 인증 |
 | 로봇 관제 조회 | 예 | 예 | 아니오 | 조회 가능 | 아니오 |
 | 경로 생성/전송 | 예 | 예 | 아니오 | 아니오 | 수신 |
 | 파손 등록 | 예 | 예 | 아니오 | 아니오 | 예 |
@@ -922,12 +925,23 @@ curl -X POST "http://localhost:8080/api/damages" \
 | --- | --- | --- | --- | --- |
 | 제어 명령 생성 | `POST` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 관제 서버가 로봇에 수행할 명령을 생성한다. |
 | 제어 명령 이력 조회 | `GET` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 로봇별 명령 생성 이력을 조회한다. |
+| 미처리 명령 조회 | `GET` | `/api/robots/{robotId}/commands/pending` | `ADMIN`, `INSPECTOR` | 아직 처리되지 않은 명령을 오래된 순서로 조회한다. |
+| 명령 상태 변경 | `PATCH` | `/api/robots/{robotId}/commands/{commandId}/status` | `ADMIN`, `INSPECTOR` | 명령 처리 상태와 결과 메시지를 갱신한다. |
 
 #### CreateRobotCommandRequest
 
 ```json
 {
   "commandType": "START_PATROL"
+}
+```
+
+#### UpdateRobotCommandStatusRequest
+
+```json
+{
+  "commandStatus": "SUCCEEDED",
+  "resultMessage": "순찰을 시작했습니다."
 }
 ```
 
@@ -939,8 +953,10 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `robotId` | number | 명령 대상 로봇 ID |
 | `requestedBy` | number | 명령 요청 사용자 ID |
 | `commandType` | string | 명령 종류 |
-| `commandStatus` | string | 명령 상태. 최초 생성 시 `PENDING` |
+| `commandStatus` | string | `PENDING`, `IN_PROGRESS`, `SUCCEEDED`, `FAILED`, `CANCELED` |
+| `resultMessage` | string, null | 명령 처리 결과 메시지 |
 | `requestedAt` | string | 명령 요청 일시 |
+| `completedAt` | string, null | 명령 완료 일시. `SUCCEEDED`, `FAILED`, `CANCELED` 상태에서 기록 |
 
 #### RobotCommandType
 
@@ -951,6 +967,18 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `EMERGENCY_STOP` | 즉시 긴급 정지 |
 | `RETURN_HOME` | 스테이션 복귀 |
 | `GET_STATUS` | 현재 상태 요청 |
+
+#### RobotCommandStatus
+
+| 상태 | 설명 |
+| --- | --- |
+| `PENDING` | 명령 생성 후 처리 대기 |
+| `IN_PROGRESS` | 로봇이 명령 처리 중 |
+| `SUCCEEDED` | 명령 처리 성공 |
+| `FAILED` | 명령 처리 실패 |
+| `CANCELED` | 명령 취소 |
+
+허용 상태 전이는 `PENDING -> IN_PROGRESS`, `PENDING -> CANCELED`, `IN_PROGRESS -> SUCCEEDED`, `IN_PROGRESS -> FAILED`, `IN_PROGRESS -> CANCELED`이다.
 
 ## 8. 로봇 경로 API 설계
 

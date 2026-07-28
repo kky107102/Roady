@@ -9,7 +9,9 @@ public class RobotCommand {
     private Long requestedBy;
     private RobotCommandType commandType;
     private RobotCommandStatus commandStatus;
+    private String resultMessage;
     private LocalDateTime requestedAt;
+    private LocalDateTime completedAt;
 
     public RobotCommand() {
     }
@@ -20,14 +22,18 @@ public class RobotCommand {
             Long requestedBy,
             RobotCommandType commandType,
             RobotCommandStatus commandStatus,
-            LocalDateTime requestedAt
+            String resultMessage,
+            LocalDateTime requestedAt,
+            LocalDateTime completedAt
     ) {
         this.id = id;
         this.robotId = robotId;
         this.requestedBy = requestedBy;
         this.commandType = commandType;
         this.commandStatus = commandStatus;
+        this.resultMessage = resultMessage;
         this.requestedAt = requestedAt;
+        this.completedAt = completedAt;
     }
 
     public Long getId() {
@@ -70,11 +76,27 @@ public class RobotCommand {
         this.commandStatus = commandStatus;
     }
 
+    public String getResultMessage() {
+        return resultMessage;
+    }
+
+    public void setResultMessage(String resultMessage) {
+        this.resultMessage = resultMessage;
+    }
+
     public LocalDateTime getRequestedAt() {
         return requestedAt;
     }
 
     public void setRequestedAt(LocalDateTime requestedAt) {
         this.requestedAt = requestedAt;
+    }
+
+    public LocalDateTime getCompletedAt() {
+        return completedAt;
+    }
+
+    public void setCompletedAt(LocalDateTime completedAt) {
+        this.completedAt = completedAt;
     }
 }

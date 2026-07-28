@@ -1,5 +1,9 @@
 package com.blockai.roady.robot.domain;
 
 public enum RobotCommandStatus {
-    PENDING
+    PENDING,
+    IN_PROGRESS,
+    SUCCEEDED,
+    FAILED,
+    CANCELED
 }

@@ -87,7 +87,9 @@ erDiagram
         bigint requested_by FK
         varchar command_type
         varchar command_status
+        text result_message
         datetime requested_at
+        datetime completed_at
     }
 
     robot_routes {
@@ -246,7 +248,11 @@ erDiagram
 
 | 값 | 의미 |
 | --- | --- |
-| `PENDING` | 명령 생성 후 로봇 처리 대기 |
+| `PENDING` | 명령 생성 후 처리 대기 |
+| `IN_PROGRESS` | 로봇이 명령 처리 중 |
+| `SUCCEEDED` | 명령 처리 성공 |
+| `FAILED` | 명령 처리 실패 |
+| `CANCELED` | 명령 취소 |
 
 ### 파손 처리 상태
 

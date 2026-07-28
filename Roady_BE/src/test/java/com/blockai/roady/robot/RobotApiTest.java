@@ -142,11 +142,85 @@ class RobotApiTest {
     }
 
     @Test
+    void inspectorCanReadPendingCommandsAndUpdateCommandStatus() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String inspectorToken = login("inspector", "inspector1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Command Status Robot", uniqueSerialNumber());
+        Long commandId = createRobotCommand(inspectorToken, robotId, "RETURN_HOME");
+
+        mockMvc.perform(get("/api/robots/{robotId}/commands/pending", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(commandId))
+                .andExpect(jsonPath("$[0].requestedBy").value(inspectorId))
+                .andExpect(jsonPath("$[0].commandType").value("RETURN_HOME"))
+                .andExpect(jsonPath("$[0].commandStatus").value("PENDING"));
+
+        mockMvc.perform(patch("/api/robots/{robotId}/commands/{commandId}/status", robotId, commandId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandStatus": "IN_PROGRESS",
+                                  "resultMessage": "스테이션 복귀를 시작했습니다."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(commandId))
+                .andExpect(jsonPath("$.commandStatus").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.resultMessage").value("스테이션 복귀를 시작했습니다."))
+                .andExpect(jsonPath("$.completedAt").value(nullValue()));
+
+        mockMvc.perform(get("/api/robots/{robotId}/commands/pending", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(patch("/api/robots/{robotId}/commands/{commandId}/status", robotId, commandId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandStatus": "SUCCEEDED",
+                                  "resultMessage": "스테이션 복귀를 완료했습니다."
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commandStatus").value("SUCCEEDED"))
+                .andExpect(jsonPath("$.resultMessage").value("스테이션 복귀를 완료했습니다."))
+                .andExpect(jsonPath("$.completedAt").exists());
+    }
+
+    @Test
+    void commandStatusRejectsInvalidTransition() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String inspectorToken = login("inspector", "inspector1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Invalid Transition Robot", uniqueSerialNumber());
+        Long commandId = createRobotCommand(inspectorToken, robotId, "GET_STATUS");
+
+        mockMvc.perform(patch("/api/robots/{robotId}/commands/{commandId}/status", robotId, commandId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandStatus": "SUCCEEDED",
+                                  "resultMessage": "바로 완료 처리"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid robot command status transition."));
+    }
+
+    @Test
     void viewerCannotCreateOrReadRobotCommands() throws Exception {
         String adminToken = login("admin", "admin1234");
+        String inspectorToken = login("inspector", "inspector1234");
         String viewerToken = login("viewer", "viewer1234");
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Forbidden Command Robot", uniqueSerialNumber());
+        Long commandId = createRobotCommand(inspectorToken, robotId, "EMERGENCY_STOP");
 
         mockMvc.perform(post("/api/robots/{robotId}/commands", robotId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken))
@@ -160,6 +234,20 @@ class RobotApiTest {
 
         mockMvc.perform(get("/api/robots/{robotId}/commands", robotId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/robots/{robotId}/commands/pending", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(patch("/api/robots/{robotId}/commands/{commandId}/status", robotId, commandId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandStatus": "IN_PROGRESS"
+                                }
+                                """))
                 .andExpect(status().isForbidden());
     }
 
@@ -245,6 +333,22 @@ class RobotApiTest {
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createRobotRequest(userId, name, serialNumber)))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        Number id = JsonPath.read(result.getResponse().getContentAsString(), "$.id");
+        return id.longValue();
+    }
+
+    private Long createRobotCommand(String accessToken, Long robotId, String commandType) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/robots/{robotId}/commands", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandType": "%s"
+                                }
+                                """.formatted(commandType)))
                 .andExpect(status().isCreated())
                 .andReturn();
 

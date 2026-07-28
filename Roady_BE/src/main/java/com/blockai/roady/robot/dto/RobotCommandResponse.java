@@ -10,7 +10,9 @@ public record RobotCommandResponse(
         Long requestedBy,
         String commandType,
         String commandStatus,
-        LocalDateTime requestedAt
+        String resultMessage,
+        LocalDateTime requestedAt,
+        LocalDateTime completedAt
 ) {
 
     public static RobotCommandResponse from(RobotCommand command) {
@@ -20,7 +22,9 @@ public record RobotCommandResponse(
                 command.getRequestedBy(),
                 command.getCommandType().name(),
                 command.getCommandStatus().name(),
-                command.getRequestedAt()
+                command.getResultMessage(),
+                command.getRequestedAt(),
+                command.getCompletedAt()
         );
     }
 }

@@ -6,6 +6,7 @@ import com.blockai.roady.robot.dto.CreateRobotStatusLogRequest;
 import com.blockai.roady.robot.dto.RobotCommandResponse;
 import com.blockai.roady.robot.dto.RobotResponse;
 import com.blockai.roady.robot.dto.RobotStatusLogResponse;
+import com.blockai.roady.robot.dto.UpdateRobotCommandStatusRequest;
 import com.blockai.roady.robot.dto.UpdateRobotActiveRequest;
 import com.blockai.roady.robot.dto.UpdateRobotRequest;
 import com.blockai.roady.robot.service.RobotCommandService;
@@ -160,5 +161,28 @@ public class RobotController {
         return robotCommandService.findByRobotId(robotId).stream()
                 .map(RobotCommandResponse::from)
                 .toList();
+    }
+
+    @GetMapping("/{robotId}/commands/pending")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public List<RobotCommandResponse> getPendingRobotCommands(@PathVariable Long robotId) {
+        return robotCommandService.findPendingByRobotId(robotId).stream()
+                .map(RobotCommandResponse::from)
+                .toList();
+    }
+
+    @PatchMapping("/{robotId}/commands/{commandId}/status")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public RobotCommandResponse updateRobotCommandStatus(
+            @PathVariable Long robotId,
+            @PathVariable Long commandId,
+            @Valid @RequestBody UpdateRobotCommandStatusRequest request
+    ) {
+        return RobotCommandResponse.from(robotCommandService.updateStatus(
+                robotId,
+                commandId,
+                request.commandStatus(),
+                request.resultMessage()
+        ));
     }
 }
