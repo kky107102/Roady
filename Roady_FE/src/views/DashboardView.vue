@@ -1,50 +1,21 @@
-<script setup lang="ts">
-import { useRouter } from 'vue-router'
-
-import { useAuthStore } from '@/stores/auth'
-
-const router = useRouter()
-const authStore = useAuthStore()
-
-async function handleLogout() {
-  await authStore.logout()
-  await router.replace('/login')
-}
-</script>
-
 <template>
-  <main class="dashboard-placeholder">
-    <div>
-      <p>Roady 관제 시스템</p>
-      <h1>로그인에 성공했습니다.</h1>
-      <button type="button" @click="handleLogout">로그아웃</button>
-    </div>
-  </main>
+  <div class="dashboard-view">
+    <p class="placeholder-text">대시보드 통계 화면은 별도 작업(S15P11A404-154)에서 구현됩니다.</p>
+  </div>
 </template>
 
 <style scoped>
-.dashboard-placeholder {
-  min-height: 100dvh;
-  display: grid;
-  padding: 24px;
-  color: var(--roady-text-primary);
-  background: var(--roady-surface-background);
-  place-items: center;
-  text-align: center;
+.dashboard-view {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40rem;
+  padding: 3.2rem;
 }
 
-.dashboard-placeholder p {
-  color: var(--roady-brand-secondary);
-  font-weight: 700;
-}
-
-.dashboard-placeholder button {
-  margin-top: 20px;
-  padding: 11px 22px;
-  border: 0;
-  border-radius: 6px;
-  color: var(--roady-surface-default);
-  background: var(--roady-brand-primary);
-  cursor: pointer;
+.placeholder-text {
+  margin: 0;
+  color: var(--roady-text-tertiary);
+  font-size: var(--krds-pc-font-size-body-medium);
 }
 </style>
