@@ -45,6 +45,20 @@ CREATE TABLE IF NOT EXISTS robot_status_logs (
     CONSTRAINT fk_robot_status_logs_robot FOREIGN KEY (robot_id) REFERENCES robots (id)
 );
 
+CREATE TABLE IF NOT EXISTS robot_commands (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    robot_id BIGINT NOT NULL,
+    requested_by BIGINT NOT NULL,
+    command_type ENUM('START_PATROL', 'STOP_PATROL', 'EMERGENCY_STOP', 'RETURN_HOME', 'GET_STATUS') NOT NULL,
+    command_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+    requested_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    PRIMARY KEY (id),
+    INDEX idx_robot_commands_robot_requested_at (robot_id, requested_at),
+    INDEX idx_robot_commands_status_requested_at (command_status, requested_at),
+    CONSTRAINT fk_robot_commands_robot FOREIGN KEY (robot_id) REFERENCES robots (id),
+    CONSTRAINT fk_robot_commands_requested_by FOREIGN KEY (requested_by) REFERENCES users (id)
+);
+
 CREATE TABLE IF NOT EXISTS damages (
     id BIGINT NOT NULL AUTO_INCREMENT,
     robot_id BIGINT NULL,

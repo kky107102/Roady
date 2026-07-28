@@ -112,6 +112,57 @@ class RobotApiTest {
                 .andExpect(jsonPath("$.message").value("Already used robot serial number."));
     }
 
+    @Test
+    void inspectorCanCreateAndReadRobotCommands() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String inspectorToken = login("inspector", "inspector1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Command Robot", uniqueSerialNumber());
+
+        mockMvc.perform(post("/api/robots/{robotId}/commands", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandType": "START_PATROL"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.robotId").value(robotId))
+                .andExpect(jsonPath("$.requestedBy").value(inspectorId))
+                .andExpect(jsonPath("$.commandType").value("START_PATROL"))
+                .andExpect(jsonPath("$.commandStatus").value("PENDING"))
+                .andExpect(jsonPath("$.requestedAt").exists());
+
+        mockMvc.perform(get("/api/robots/{robotId}/commands", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(inspectorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].robotId").value(robotId))
+                .andExpect(jsonPath("$[0].commandType").value("START_PATROL"));
+    }
+
+    @Test
+    void viewerCannotCreateOrReadRobotCommands() throws Exception {
+        String adminToken = login("admin", "admin1234");
+        String viewerToken = login("viewer", "viewer1234");
+        Long inspectorId = userId("inspector");
+        Long robotId = createRobot(adminToken, inspectorId, "Forbidden Command Robot", uniqueSerialNumber());
+
+        mockMvc.perform(post("/api/robots/{robotId}/commands", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "commandType": "EMERGENCY_STOP"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/robots/{robotId}/commands", robotId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(viewerToken)))
+                .andExpect(status().isForbidden());
+    }
+
     private Long createRobot(String accessToken, Long userId, String name, String serialNumber) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/robots")
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken))

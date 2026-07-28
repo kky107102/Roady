@@ -1,12 +1,17 @@
 package com.blockai.roady.robot.controller;
 
 import com.blockai.roady.robot.dto.CreateRobotRequest;
+import com.blockai.roady.robot.dto.CreateRobotCommandRequest;
+import com.blockai.roady.robot.dto.RobotCommandResponse;
 import com.blockai.roady.robot.dto.RobotResponse;
 import com.blockai.roady.robot.dto.UpdateRobotActiveRequest;
 import com.blockai.roady.robot.dto.UpdateRobotRequest;
+import com.blockai.roady.robot.service.RobotCommandService;
 import com.blockai.roady.robot.service.RobotService;
+import com.blockai.roady.security.AuthenticatedUser;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -24,9 +29,11 @@ import java.util.List;
 public class RobotController {
 
     private final RobotService robotService;
+    private final RobotCommandService robotCommandService;
 
-    public RobotController(RobotService robotService) {
+    public RobotController(RobotService robotService, RobotCommandService robotCommandService) {
         this.robotService = robotService;
+        this.robotCommandService = robotCommandService;
     }
 
     @PostMapping
@@ -75,5 +82,24 @@ public class RobotController {
             @Valid @RequestBody UpdateRobotActiveRequest request
     ) {
         return RobotResponse.from(robotService.updateActive(robotId, request.active()));
+    }
+
+    @PostMapping("/{robotId}/commands")
+    @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public RobotCommandResponse createRobotCommand(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long robotId,
+            @Valid @RequestBody CreateRobotCommandRequest request
+    ) {
+        return RobotCommandResponse.from(robotCommandService.create(robotId, user.id(), request.commandType()));
+    }
+
+    @GetMapping("/{robotId}/commands")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public List<RobotCommandResponse> getRobotCommands(@PathVariable Long robotId) {
+        return robotCommandService.findByRobotId(robotId).stream()
+                .map(RobotCommandResponse::from)
+                .toList();
     }
 }

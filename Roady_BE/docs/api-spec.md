@@ -41,6 +41,8 @@
 | 로봇 상태 | `POST` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 위치, 배터리, 운행 상태 등록 |
 | 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs/latest` | 설계안 | 로봇 최신 상태 조회 |
 | 로봇 상태 | `GET` | `/api/robots/{robotId}/status-logs` | 설계안 | 로봇 상태 로그 조회 |
+| 로봇 명령 | `POST` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 생성 |
+| 로봇 명령 | `GET` | `/api/robots/{robotId}/commands` | 설계안 | 로봇 제어 명령 이력 조회 |
 | 로봇 경로 | `POST` | `/api/robot-routes` | 설계안 | 점검 경로 생성 |
 | 로봇 경로 | `GET` | `/api/robot-routes` | 설계안 | 점검 경로 목록 조회 |
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 설계안 | 점검 경로 상세 조회 |
@@ -896,6 +898,42 @@ curl -X POST "http://localhost:8080/api/damages" \
   "recordedAt": "2026-07-22T14:30:00"
 }
 ```
+
+### 7.3 로봇 제어 명령
+
+| 기능 | Method | URL | 권한 | 설명 |
+| --- | --- | --- | --- | --- |
+| 제어 명령 생성 | `POST` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 관제 서버가 로봇에 수행할 명령을 생성한다. |
+| 제어 명령 이력 조회 | `GET` | `/api/robots/{robotId}/commands` | `ADMIN`, `INSPECTOR` | 로봇별 명령 생성 이력을 조회한다. |
+
+#### CreateRobotCommandRequest
+
+```json
+{
+  "commandType": "START_PATROL"
+}
+```
+
+#### RobotCommandResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 명령 ID |
+| `robotId` | number | 명령 대상 로봇 ID |
+| `requestedBy` | number | 명령 요청 사용자 ID |
+| `commandType` | string | 명령 종류 |
+| `commandStatus` | string | 명령 상태. 최초 생성 시 `PENDING` |
+| `requestedAt` | string | 명령 요청 일시 |
+
+#### RobotCommandType
+
+| 명령 | 설명 |
+| --- | --- |
+| `START_PATROL` | 순찰 시작 |
+| `STOP_PATROL` | 순찰 종료 및 정지 |
+| `EMERGENCY_STOP` | 즉시 긴급 정지 |
+| `RETURN_HOME` | 스테이션 복귀 |
+| `GET_STATUS` | 현재 상태 요청 |
 
 ## 8. 로봇 경로 API 설계
 

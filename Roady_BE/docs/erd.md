@@ -7,6 +7,7 @@
 | `users` | 관리자, 점검 담당자, 보수 담당자, 일반 조회 사용자의 계정 정보를 관리한다. |
 | `robots` | 로봇 또는 IoT 장치의 기본 정보를 관리한다. |
 | `robot_status_logs` | 로봇의 위치, 배터리, 운행 상태, 통신 상태, 오류 정보를 주기적으로 저장한다. |
+| `robot_commands` | 관제 서버에서 로봇에 내린 제어 명령과 처리 상태를 저장한다. |
 | `robot_routes` | 로봇에게 할당된 점검 경로의 기본 정보를 저장한다. |
 | `robot_route_points` | 점검 경로를 구성하는 좌표 목록을 순서대로 저장한다. |
 | `damages` | 점자블록 파손 1건의 중심 정보를 저장한다. 위도, 경도, 촬영 시각, 현재 처리 상태 등이 들어간다. |
@@ -23,10 +24,12 @@ users 1:N damage_status_histories
 users 1:N repair_assignments
 users 1:N repair_results
 users 1:N robots (responsible)
+users 1:N robot_commands (requests)
 users 1:N damages (reports)
 users 1:N damages (assigned)
 
 robots 1:N robot_status_logs
+robots 1:N robot_commands
 robots 1:N robot_routes
 robots 1:N damages
 
@@ -76,6 +79,15 @@ erDiagram
         varchar error_code
         varchar error_message
         datetime recorded_at
+    }
+
+    robot_commands {
+        bigint id PK
+        bigint robot_id FK
+        bigint requested_by FK
+        varchar command_type
+        varchar command_status
+        datetime requested_at
     }
 
     robot_routes {
@@ -173,10 +185,12 @@ erDiagram
     users ||--o{ repair_assignments : repairs
     users ||--o{ repair_results : completes
     users ||--o{ robots : responsible_for
+    users ||--o{ robot_commands : requests
     users ||--o{ damages : reports
     users ||--o{ damages : assigned_to
 
     robots ||--o{ robot_status_logs : records
+    robots ||--o{ robot_commands : receives
     robots ||--o{ robot_routes : has
     robots ||--o{ damages : captures
 
