@@ -3,6 +3,7 @@ package com.blockai.roady.robot.service;
 import com.blockai.roady.robot.dto.CreateRobotStatusLogRequest;
 import com.blockai.roady.robot.dto.RobotLocationState;
 import com.blockai.roady.robot.redis.RobotLocationCache;
+import com.blockai.roady.robot.websocket.RobotLocationPublisher;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.ConstraintViolation;
@@ -20,15 +21,18 @@ public class RobotLocationService {
     private final ObjectMapper objectMapper;
     private final Validator validator;
     private final RobotLocationCache robotLocationCache;
+    private final RobotLocationPublisher robotLocationPublisher;
 
     public RobotLocationService(
             ObjectMapper objectMapper,
             Validator validator,
-            RobotLocationCache robotLocationCache
+            RobotLocationCache robotLocationCache,
+            RobotLocationPublisher robotLocationPublisher
     ) {
         this.objectMapper = objectMapper;
         this.validator = validator;
         this.robotLocationCache = robotLocationCache;
+        this.robotLocationPublisher = robotLocationPublisher;
     }
 
     public RobotLocationState saveLatest(Long robotId, String payload) {
@@ -49,6 +53,7 @@ public class RobotLocationService {
 
         RobotLocationState state = RobotLocationState.from(robotId, request, LocalDateTime.now());
         robotLocationCache.saveLatest(state);
+        robotLocationPublisher.publish(state);
         return state;
     }
 
