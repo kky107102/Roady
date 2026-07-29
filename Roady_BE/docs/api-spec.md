@@ -26,10 +26,11 @@
 | 사용자 | `PATCH` | `/api/users/{userId}/role` | 구현됨 | 사용자 권한 변경 |
 | 사용자 | `PATCH` | `/api/users/{userId}/active` | 구현됨 | 사용자 활성 상태 변경 |
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
-| 파손 | `GET` | `/api/damages` | 구현됨/확장 설계 | 파손 목록 조회 및 검색 |
-| 파손 | `GET` | `/api/damages/{damageId}` | 구현됨/확장 설계 | 파손 상세 조회 |
+| 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색 및 페이지 조회 |
+| 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
-| 파손 | `GET` | `/api/damages/map-markers` | 설계안 | 지도 표시용 파손 마커 조회 |
+| 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
+| 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}/duplicates` | 설계안 | 동일/인접 위치 중복 후보 조회 |
 | 파손 | `POST` | `/api/damages/{damageId}/reviews` | 설계안 | 점검 담당자 검토 의견 등록 |
 | 파손 | `GET` | `/api/damages/{damageId}/reviews` | 설계안 | 검토 의견 이력 조회 |
@@ -87,7 +88,8 @@
 | --- | --- | --- |
 | 인증 | `/api/auth` | 로그인, 토큰 재발급, 로그아웃, 내 정보 조회 |
 | 사용자 관리 | `/api/users` | 사용자 목록 조회, 생성, 권한 변경, 활성 상태 변경 |
-| 도로 파손 | `/api/damages` | 파손 정보 등록, 목록/상세 조회, 이미지 조회 |
+| 도로 파손 | `/api/damages` | 파손 정보 등록, 목록 검색, 지도 마커, 상세 및 이미지 조회 |
+| 대시보드 | `/api/dashboard/damages` | 파손 전체·미배정·상태별 건수 조회 |
 
 ### 2.2 권한 구성
 
@@ -1185,9 +1187,9 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 경로점은 최소 2개 이상이어야 하며, `START`와 `DESTINATION`은 각각 정확히 1개씩 포함되어야 한다. 경로 삭제는 `CREATED` 상태에서만 가능하다.
 
-## 9. 파손 데이터 및 대시보드 API 설계
+## 9. 파손 데이터 및 대시보드 API
 
-현재 구현된 `/api/damages` API에 대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능을 추가한다.
+대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 주소, 행정구역, AI 심각도, 중복 및 지연 판정은 9.4의 후속 확장 범위로 구분한다.
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |

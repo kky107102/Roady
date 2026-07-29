@@ -175,6 +175,29 @@ class DamageServiceTest {
     }
 
     @Test
+    void searchReturnsZeroTotalPagesForEmptyResult() {
+        DamageSearchCriteria criteria = new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20
+        );
+        when(damageMapper.searchSummaries(null, null, null, null, null, 0L, 20))
+                .thenReturn(List.of());
+        when(damageMapper.countSummaries(null, null, null, null, null))
+                .thenReturn(0L);
+
+        DamageSearchPage result = damageService.search(criteria);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.totalPages()).isZero();
+    }
+
+    @Test
     void searchCriteriaRejectsInvalidPageConditions() {
         assertThatThrownBy(() -> new DamageSearchCriteria(
                 null,
@@ -247,6 +270,21 @@ class DamageServiceTest {
                 .containsEntry("REVIEW_REQUIRED", 2L)
                 .containsEntry("REPAIR_COMPLETED", 0L)
                 .hasSize(7);
+    }
+
+    @Test
+    void summarizeReturnsZeroFilledResponseForEmptyResult() {
+        DamageFilterCriteria criteria = new DamageFilterCriteria(null, null, null, null, null);
+        when(damageMapper.summarizeByStatus(null, null, null, null, null))
+                .thenReturn(List.of());
+
+        DamageDashboardSummary result = damageService.summarize(criteria);
+
+        assertThat(result.total()).isZero();
+        assertThat(result.unassigned()).isZero();
+        assertThat(result.statusCounts())
+                .hasSize(7)
+                .allSatisfy((status, count) -> assertThat(count).isZero());
     }
 
     @Test

@@ -326,7 +326,10 @@ erDiagram
 | `idx_damages_assigned_to_created_at` | `assigned_to, created_at` | 담당자별 파손 검색 |
 | `idx_damage_images_damage_sort_order` | `damage_id, sort_order` | 목록의 파손별 이미지 수 및 이미지 순서 조회 |
 
-신규 데이터베이스에는 `schema.sql`의 테이블 생성 과정에서 인덱스가 적용된다. 이미 `damages` 테이블이 생성된 데이터베이스는 `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행해야 한다.
+신규 데이터베이스에는 `schema.sql`의 테이블 생성 과정에서 인덱스가 적용된다.
+
+- 최신 컬럼은 있지만 대시보드 인덱스만 없는 데이터베이스: `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행한다.
+- `created_by`를 사용하는 구버전 `damages` 테이블: `docs/sql/migrate-damages-dashboard.sql`을 한 번 실행한다. 기존 `created_by` 값은 `reported_by`로 보존된다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 
