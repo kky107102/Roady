@@ -104,6 +104,7 @@ CREATE TABLE IF NOT EXISTS damages (
     PRIMARY KEY (id),
     INDEX idx_damages_created_at_id (created_at DESC, id DESC),
     INDEX idx_damages_status_created_at_id (current_status, created_at DESC, id DESC),
+    INDEX idx_damages_statistics_created_status (created_at, current_status),
     INDEX idx_damages_robot_created_at (robot_id, created_at),
     INDEX idx_damages_reported_by_created_at (reported_by, created_at),
     INDEX idx_damages_assigned_to_created_at (assigned_to, created_at),
@@ -142,5 +143,11 @@ CREATE TABLE IF NOT EXISTS damage_ai_analysis_results (
     PRIMARY KEY (id),
     INDEX idx_damage_ai_analysis_results_damage_created_at (damage_id, created_at),
     INDEX idx_damage_ai_analysis_results_status_created_at (analysis_status, created_at),
+    INDEX idx_damage_ai_damage_status_created_id (
+        damage_id,
+        analysis_status,
+        created_at DESC,
+        id DESC
+    ),
     CONSTRAINT fk_damage_ai_analysis_results_damage FOREIGN KEY (damage_id) REFERENCES damages (id) ON DELETE CASCADE
 );
