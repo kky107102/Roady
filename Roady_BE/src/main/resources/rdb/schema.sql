@@ -107,6 +107,7 @@ CREATE TABLE IF NOT EXISTS damages (
     INDEX idx_damages_robot_created_at (robot_id, created_at),
     INDEX idx_damages_reported_by_created_at (reported_by, created_at),
     INDEX idx_damages_assigned_to_created_at (assigned_to, created_at),
+    INDEX idx_damages_latitude_longitude (latitude, longitude),
     CONSTRAINT fk_damages_robot FOREIGN KEY (robot_id) REFERENCES robots (id),
     CONSTRAINT fk_damages_reported_by FOREIGN KEY (reported_by) REFERENCES users (id),
     CONSTRAINT fk_damages_assigned_to FOREIGN KEY (assigned_to) REFERENCES users (id)

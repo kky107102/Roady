@@ -273,8 +273,8 @@ public interface DamageMapper {
                 d.current_status
             FROM damages d
             <where>
-                AND d.latitude IS NOT NULL
-                AND d.longitude IS NOT NULL
+                AND d.latitude BETWEEN #{south} AND #{north}
+                AND d.longitude BETWEEN #{west} AND #{east}
                 <if test="from != null">
                     AND d.created_at <![CDATA[>=]]> #{from}
                 </if>
@@ -305,7 +305,11 @@ public interface DamageMapper {
             @Param("to") LocalDateTime to,
             @Param("status") String status,
             @Param("robotId") Long robotId,
-            @Param("assignedTo") Long assignedTo
+            @Param("assignedTo") Long assignedTo,
+            @Param("south") BigDecimal south,
+            @Param("north") BigDecimal north,
+            @Param("west") BigDecimal west,
+            @Param("east") BigDecimal east
     );
 
     @Select("""

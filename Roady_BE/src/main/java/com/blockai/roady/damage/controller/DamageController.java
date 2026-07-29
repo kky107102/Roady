@@ -2,6 +2,7 @@ package com.blockai.roady.damage.controller;
 
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
+import com.blockai.roady.damage.domain.DamageMapBounds;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.dto.CreateDamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageAiAnalysisResponse;
@@ -112,10 +113,15 @@ public class DamageController {
             LocalDateTime to,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "robotId", required = false) Long robotId,
-            @RequestParam(value = "assignedTo", required = false) Long assignedTo
+            @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam("south") BigDecimal south,
+            @RequestParam("north") BigDecimal north,
+            @RequestParam("west") BigDecimal west,
+            @RequestParam("east") BigDecimal east
     ) {
         var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo);
-        return damageService.findMapMarkers(criteria).stream()
+        var bounds = new DamageMapBounds(south, north, west, east);
+        return damageService.findMapMarkers(criteria, bounds).stream()
                 .map(DamageMapMarkerResponse::from)
                 .toList();
     }

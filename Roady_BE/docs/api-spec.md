@@ -774,7 +774,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 ### 5.4 지도 마커 조회
 
-지도에 표시할 파손 좌표와 현재 처리 상태를 조회한다. 위도 또는 경도가 없는 파손은 결과에서 제외한다.
+현재 지도 화면 범위에 표시할 파손 좌표와 현재 처리 상태를 조회한다. 위도 또는 경도가 없는 파손은 결과에서 제외한다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -791,6 +791,12 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `status` | string | 아니오 | 파손 처리 상태 |
 | `robotId` | number | 아니오 | 촬영 로봇 ID |
 | `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+| `south` | decimal | 예 | 지도 남쪽 경계 위도. `-90` 이상이며 `north`보다 작아야 한다. |
+| `north` | decimal | 예 | 지도 북쪽 경계 위도. `90` 이하여야 한다. |
+| `west` | decimal | 예 | 지도 서쪽 경계 경도. `-180` 이상이며 `east`보다 작아야 한다. |
+| `east` | decimal | 예 | 지도 동쪽 경계 경도. `180` 이하여야 한다. |
+
+프론트엔드는 최초 지도 로딩 및 `moveend`, `zoomend` 시 현재 화면 경계를 전달한다. 지도 이동 중인 요청은 취소하고 짧은 debounce를 적용한다.
 
 #### Response `200 OK`
 
@@ -818,7 +824,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 | 상태 코드 | 발생 상황 |
 | --- | --- |
-| `400` | 잘못된 기간 또는 처리 상태 |
+| `400` | 지도 경계 누락, 잘못된 좌표 범위, 잘못된 기간 또는 처리 상태 |
 | `401` | 인증 실패 |
 
 ### 5.5 도로 파손 상세 조회
@@ -957,7 +963,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 ### 6.2 공통 검색 조건
 
-파손 목록, 대시보드 요약, 지도 마커 API는 동일한 검색 조건을 공유한다. 기간 조건은 서버에 파손 데이터가 등록된 `createdAt`을 기준으로 한다.
+파손 목록, 대시보드 요약, 지도 마커 API는 동일한 검색 조건을 공유한다. 기간 조건은 서버에 파손 데이터가 등록된 `createdAt`을 기준으로 한다. 지도 마커 API는 현재 화면 범위를 나타내는 `south`, `north`, `west`, `east`를 추가로 요구한다.
 
 | Query | 타입 | 설명 |
 | --- | --- | --- |
@@ -1313,13 +1319,15 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
 
 ### 9.3 지도 마커 조회
 
-목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않으며, 위도 또는 경도가 없는 파손은 결과에서 제외한다.
+목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않으며, 현재 지도 화면 범위를 나타내는 `south`, `north`, `west`, `east`는 필수다. 위도 또는 경도가 없거나 화면 범위 밖에 있는 파손은 결과에서 제외한다.
 
 #### 요청
 
 ```http
-GET /api/damages/map-markers?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED
+GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED
 ```
+
+프론트엔드는 최초 지도 로딩 및 `moveend`, `zoomend` 시 현재 화면 경계를 전달한다. 지도 이동 중인 요청은 취소하고 약 300ms debounce를 적용한다.
 
 #### DamageMapMarkerResponse
 

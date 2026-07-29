@@ -5,6 +5,7 @@ import com.blockai.roady.damage.domain.DamageDashboardSummary;
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageMapMarker;
+import com.blockai.roady.damage.domain.DamageMapBounds;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
@@ -307,10 +308,26 @@ class DamageServiceTest {
                 BigDecimal.valueOf(126.978),
                 "REVIEW_REQUIRED"
         );
-        when(damageMapper.findMapMarkers(from, to, "REVIEW_REQUIRED", 10L, 3L))
+        DamageMapBounds bounds = new DamageMapBounds(
+                BigDecimal.valueOf(37.45),
+                BigDecimal.valueOf(37.62),
+                BigDecimal.valueOf(126.80),
+                BigDecimal.valueOf(127.10)
+        );
+        when(damageMapper.findMapMarkers(
+                from,
+                to,
+                "REVIEW_REQUIRED",
+                10L,
+                3L,
+                bounds.south(),
+                bounds.north(),
+                bounds.west(),
+                bounds.east()
+        ))
                 .thenReturn(List.of(marker));
 
-        assertThat(damageService.findMapMarkers(criteria)).containsExactly(marker);
+        assertThat(damageService.findMapMarkers(criteria, bounds)).containsExactly(marker);
     }
 
     private MockMultipartFile image(String filename) {
