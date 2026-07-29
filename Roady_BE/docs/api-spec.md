@@ -67,11 +67,10 @@
 | 보수 결과 | `POST` | `/api/repair-results` | 설계안 | 보수 결과 등록 |
 | 보수 결과 | `GET` | `/api/repair-results/{resultId}` | 설계안 | 보수 결과 상세 조회 |
 | 보수 결과 | `GET` | `/api/damages/{damageId}/repair-result` | 설계안 | 파손별 보수 결과 조회 |
-| 통계 | `GET` | `/api/statistics/damages/time-series` | 설계안 | 기간별 파손 통계 조회 |
-| 통계 | `GET` | `/api/statistics/damages/by-region` | 설계안 | 지역별 파손 통계 조회 |
-| 통계 | `GET` | `/api/statistics/damages/by-severity` | 설계안 | 파손 정도별 통계 조회 |
-| 통계 | `GET` | `/api/statistics/damages/by-status` | 설계안 | 처리 상태별 통계 조회 |
-| 통계 | `GET` | `/api/statistics/repair/completion-rate` | 설계안 | 보수 완료율 조회 |
+| 통계 | `GET` | `/api/statistics/damages/time-series` | 구현됨 | 기간별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 구현됨 | 보수 우선순위별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-status` | 구현됨 | 처리 상태별 통계 조회 |
+| 통계 | `GET` | `/api/statistics/repair/completion-rate` | 구현됨 | 보수 완료율 조회 |
 | 통계 | `GET` | `/api/statistics/export` | 설계안 | 통계 CSV/Excel 다운로드 |
 | 행정문서 | `POST` | `/api/documents` | 설계안 | 행정문서 초안 생성 |
 | 행정문서 | `GET` | `/api/documents` | 설계안 | 행정문서 목록 조회 |
@@ -1460,37 +1459,122 @@ RECEIVED -> REPAIR_NOT_REQUIRED
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | 기간별 통계 | `GET` | `/api/statistics/damages/time-series` | 로그인 사용자 | 일별, 주별, 월별, 연도별 파손 발생 건수를 조회한다. |
-| 지역별 통계 | `GET` | `/api/statistics/damages/by-region` | 로그인 사용자 | 행정구역별 파손 발생 건수를 조회한다. |
-| 파손 정도별 통계 | `GET` | `/api/statistics/damages/by-severity` | 로그인 사용자 | 파손 정도별 건수를 조회한다. |
 | 처리 상태별 통계 | `GET` | `/api/statistics/damages/by-status` | 로그인 사용자 | 처리 상태별 건수를 조회한다. |
+| 보수 우선순위별 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 로그인 사용자 | 최신 성공 AI 분석 결과의 보수 우선순위별 건수를 조회한다. |
 | 보수 완료율 조회 | `GET` | `/api/statistics/repair/completion-rate` | 로그인 사용자 | 전체 파손 대비 보수 완료율을 조회한다. |
-| 통계 다운로드 | `GET` | `/api/statistics/export` | `ADMIN`, `INSPECTOR` | 통계 결과를 CSV 또는 Excel로 다운로드한다. |
 
-#### Statistics Query
+지역 코드를 저장하지 않으므로 지역별 통계는 제공하지 않는다. 별도 `severity` 대신 AI 분석 결과의 `repairPriority`를 사용한다. 통계 다운로드는 조회 API 구현 이후 별도 작업으로 확장한다.
+
+### 12.1 공통 조회 조건
 
 | Query | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
-| `from` | string | 예 | 시작일 |
-| `to` | string | 예 | 종료일 |
-| `unit` | string | 조건부 | `DAY`, `WEEK`, `MONTH`, `YEAR` |
-| `regionCode` | string | 아니오 | 행정구역 코드 |
-| `format` | string | 다운로드 시 예 | `CSV`, `XLSX` |
+| `from` | string | 예 | 조회 시작 일시. ISO 8601 형식이며 해당 일시를 포함한다. |
+| `to` | string | 예 | 조회 종료 일시. ISO 8601 형식이며 해당 일시를 포함하지 않는다. `from`보다 커야 한다. |
+
+집계 대상은 `from <= createdAt < to`를 만족하는 파손이다.
+
+### 12.2 기간별 통계
+
+`unit`은 필수이며 `DAY`, `WEEK`, `MONTH`, `YEAR` 중 하나다. `WEEK`는 월요일을 시작일로 사용한다. 조회 범위 내 데이터가 없는 기간도 건수 `0`, 완료율 `0.00`으로 반환한다.
+
+#### 요청
+
+```http
+GET /api/statistics/damages/time-series?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&unit=DAY
+```
 
 #### TimeSeriesStatisticsResponse
 
 ```json
 {
-  "unit": "MONTH",
+  "unit": "DAY",
   "items": [
     {
-      "period": "2026-07",
-      "totalCount": 38,
-      "repairCompletedCount": 12,
-      "repairCompletionRate": 31.58
+      "period": "2026-07-01",
+      "totalCount": 3,
+      "repairCompletedCount": 1,
+      "repairCompletionRate": 33.33
     }
   ]
 }
 ```
+
+`repairCompletedCount`는 현재 상태가 `REPAIR_COMPLETED`인 파손 수다. `repairCompletionRate`는 같은 기간의 `repairCompletedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다.
+
+### 12.3 처리 상태별 통계
+
+#### 요청
+
+```http
+GET /api/statistics/damages/by-status?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00
+```
+
+#### DamageStatusStatisticsResponse
+
+```json
+{
+  "totalCount": 38,
+  "counts": {
+    "COLLECTED": 5,
+    "REVIEW_REQUIRED": 8,
+    "RECEIVED": 4,
+    "REPAIR_SCHEDULED": 3,
+    "REPAIRING": 2,
+    "REPAIR_COMPLETED": 12,
+    "REPAIR_NOT_REQUIRED": 4
+  }
+}
+```
+
+정의된 모든 처리 상태를 포함하며 데이터가 없는 상태의 값은 `0`이다.
+
+### 12.4 보수 우선순위별 통계
+
+#### 요청
+
+```http
+GET /api/statistics/damages/by-repair-priority?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00
+```
+
+#### RepairPriorityStatisticsResponse
+
+```json
+{
+  "totalCount": 38,
+  "classifiedCount": 30,
+  "unclassifiedCount": 8,
+  "counts": {
+    "LOW": 5,
+    "NORMAL": 12,
+    "HIGH": 8,
+    "URGENT": 5
+  }
+}
+```
+
+각 파손에 연결된 `SUCCESS` 분석 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 사용한다. 성공한 분석 결과가 없거나 우선순위 값이 정의되지 않은 파손은 `unclassifiedCount`에 포함한다. 대시보드 긴급/고위험 건수는 `counts.URGENT`를 사용한다.
+
+### 12.5 보수 완료율
+
+#### 요청
+
+```http
+GET /api/statistics/repair/completion-rate?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00
+```
+
+#### RepairCompletionRateResponse
+
+```json
+{
+  "totalCount": 38,
+  "completedCount": 12,
+  "notRequiredCount": 4,
+  "completionRate": 31.58
+}
+```
+
+`completedCount`는 현재 상태가 `REPAIR_COMPLETED`, `notRequiredCount`는 `REPAIR_NOT_REQUIRED`인 파손 수다. `completionRate`는 `completedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다. 보수 결과 도메인이 구현되면 완료 시점 기반 통계로 확장한다.
 
 ## 13. 행정문서 API 설계
 
