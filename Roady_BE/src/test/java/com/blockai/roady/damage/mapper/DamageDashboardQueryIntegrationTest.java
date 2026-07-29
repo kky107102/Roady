@@ -1,6 +1,7 @@
 package com.blockai.roady.damage.mapper;
 
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
+import com.blockai.roady.damage.domain.DamageMapBounds;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.service.DamageService;
 import org.junit.jupiter.api.BeforeEach;
@@ -10,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -190,8 +192,19 @@ class DamageDashboardQueryIntegrationTest {
                 null
         );
 
+        jdbcTemplate.update(
+                "UPDATE damages SET latitude = 35.1796, longitude = 129.0756 WHERE id = ?",
+                newerDamageId
+        );
+        var bounds = new DamageMapBounds(
+                new BigDecimal("37.45"),
+                new BigDecimal("37.62"),
+                new BigDecimal("126.80"),
+                new BigDecimal("127.10")
+        );
+
         var summary = damageService.summarize(criteria);
-        var markers = damageService.findMapMarkers(criteria);
+        var markers = damageService.findMapMarkers(criteria, bounds);
 
         assertThat(summary.total()).isEqualTo(2);
         assertThat(summary.unassigned()).isEqualTo(1);

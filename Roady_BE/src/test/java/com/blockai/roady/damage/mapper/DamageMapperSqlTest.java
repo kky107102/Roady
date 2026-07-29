@@ -4,6 +4,7 @@ import org.apache.ibatis.mapping.BoundSql;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -94,8 +95,8 @@ class DamageMapperSqlTest {
                 .getBoundSql(parameters);
 
         assertThat(normalize(boundSql.getSql()))
-                .contains("d.latitude IS NOT NULL")
-                .contains("d.longitude IS NOT NULL")
+                .contains("d.latitude BETWEEN ? AND ?")
+                .contains("d.longitude BETWEEN ? AND ?")
                 .contains("AND d.created_at >= ?")
                 .contains("AND d.created_at < ?")
                 .contains("AND d.current_status = ?")
@@ -119,6 +120,10 @@ class DamageMapperSqlTest {
         parameters.put("status", "REVIEW_REQUIRED");
         parameters.put("robotId", 1L);
         parameters.put("assignedTo", 5L);
+        parameters.put("south", new BigDecimal("37.45"));
+        parameters.put("north", new BigDecimal("37.62"));
+        parameters.put("west", new BigDecimal("126.80"));
+        parameters.put("east", new BigDecimal("127.10"));
         parameters.put("offset", 20L);
         parameters.put("size", 20);
         return parameters;

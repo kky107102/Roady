@@ -87,7 +87,7 @@ class DamageControllerTest {
 
     @Test
     void getMapMarkersReturnsOnlyMapFields() throws Exception {
-        when(damageService.findMapMarkers(any()))
+        when(damageService.findMapMarkers(any(), any()))
                 .thenReturn(List.of(new DamageMapMarker(
                         1L,
                         BigDecimal.valueOf(37.5665),
@@ -96,7 +96,11 @@ class DamageControllerTest {
                 )));
 
         mockMvc.perform(get("/api/damages/map-markers")
-                        .param("status", "REVIEW_REQUIRED"))
+                        .param("status", "REVIEW_REQUIRED")
+                        .param("south", "37.45")
+                        .param("north", "37.62")
+                        .param("west", "126.80")
+                        .param("east", "127.10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].latitude").value(37.5665))
@@ -104,5 +108,22 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$[0].currentStatus").value("REVIEW_REQUIRED"))
                 .andExpect(jsonPath("$[0].description").doesNotExist())
                 .andExpect(jsonPath("$[0].assignedTo").doesNotExist());
+    }
+
+    @Test
+    void getMapMarkersRejectsInvalidBounds() throws Exception {
+        mockMvc.perform(get("/api/damages/map-markers")
+                        .param("south", "37.62")
+                        .param("north", "37.45")
+                        .param("west", "126.80")
+                        .param("east", "127.10"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("south must be less than north."));
+    }
+
+    @Test
+    void getMapMarkersRequiresBounds() throws Exception {
+        mockMvc.perform(get("/api/damages/map-markers"))
+                .andExpect(status().isBadRequest());
     }
 }
