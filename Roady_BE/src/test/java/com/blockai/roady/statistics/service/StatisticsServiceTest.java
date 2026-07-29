@@ -2,6 +2,7 @@ package com.blockai.roady.statistics.service;
 
 import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
 import com.blockai.roady.statistics.domain.StatisticsCountRow;
+import com.blockai.roady.statistics.domain.RepairCompletionCounts;
 import com.blockai.roady.statistics.domain.StatisticsPeriod;
 import com.blockai.roady.statistics.domain.StatisticsUnit;
 import com.blockai.roady.statistics.mapper.StatisticsMapper;
@@ -80,6 +81,30 @@ class StatisticsServiceTest {
                 .containsEntry("NORMAL", 0L)
                 .containsEntry("HIGH", 2L)
                 .containsEntry("URGENT", 1L);
+    }
+
+    @Test
+    void calculatesRepairCompletionRateFromCurrentStatus() {
+        var period = period();
+        when(statisticsMapper.countRepairCompletion(period.from(), period.to()))
+                .thenReturn(new RepairCompletionCounts(38, 12, 4));
+
+        var result = statisticsService.getRepairCompletionRate(period);
+
+        assertThat(result.totalCount()).isEqualTo(38);
+        assertThat(result.completedCount()).isEqualTo(12);
+        assertThat(result.notRequiredCount()).isEqualTo(4);
+        assertThat(result.completionRate()).isEqualByComparingTo("31.58");
+    }
+
+    @Test
+    void returnsZeroCompletionRateWhenPeriodIsEmpty() {
+        var period = period();
+        when(statisticsMapper.countRepairCompletion(period.from(), period.to()))
+                .thenReturn(new RepairCompletionCounts(0, 0, 0));
+
+        assertThat(statisticsService.getRepairCompletionRate(period).completionRate())
+                .isEqualByComparingTo("0.00");
     }
 
     private StatisticsPeriod period() {

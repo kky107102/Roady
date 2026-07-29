@@ -2,6 +2,7 @@ package com.blockai.roady.statistics.mapper;
 
 import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
 import com.blockai.roady.statistics.domain.StatisticsCountRow;
+import com.blockai.roady.statistics.domain.RepairCompletionCounts;
 import org.apache.ibatis.annotations.Arg;
 import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Mapper;
@@ -102,6 +103,31 @@ public interface StatisticsMapper {
             @Arg(column = "category_count", javaType = long.class)
     })
     List<StatisticsCountRow> countDamagesByRepairPriority(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    @Select("""
+            SELECT
+                COUNT(*) AS total_count,
+                COALESCE(
+                    SUM(CASE WHEN d.current_status = 'REPAIR_COMPLETED' THEN 1 ELSE 0 END),
+                    0
+                ) AS completed_count,
+                COALESCE(
+                    SUM(CASE WHEN d.current_status = 'REPAIR_NOT_REQUIRED' THEN 1 ELSE 0 END),
+                    0
+                ) AS not_required_count
+            FROM damages d
+            WHERE d.created_at >= #{from}
+              AND d.created_at < #{to}
+            """)
+    @ConstructorArgs({
+            @Arg(column = "total_count", javaType = long.class),
+            @Arg(column = "completed_count", javaType = long.class),
+            @Arg(column = "not_required_count", javaType = long.class)
+    })
+    RepairCompletionCounts countRepairCompletion(
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to
     );

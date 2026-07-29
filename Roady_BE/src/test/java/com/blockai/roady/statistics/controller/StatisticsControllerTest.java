@@ -5,6 +5,7 @@ import com.blockai.roady.statistics.domain.DamageTimeSeries;
 import com.blockai.roady.statistics.domain.DamageTimeSeriesItem;
 import com.blockai.roady.statistics.domain.DamageStatusStatistics;
 import com.blockai.roady.statistics.domain.RepairPriorityStatistics;
+import com.blockai.roady.statistics.domain.RepairCompletionRate;
 import com.blockai.roady.statistics.service.StatisticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -106,5 +107,25 @@ class StatisticsControllerTest {
                 .andExpect(jsonPath("$.classifiedCount").value(3))
                 .andExpect(jsonPath("$.unclassifiedCount").value(3))
                 .andExpect(jsonPath("$.counts.URGENT").value(1));
+    }
+
+    @Test
+    void returnsRepairCompletionRate() throws Exception {
+        when(statisticsService.getRepairCompletionRate(any()))
+                .thenReturn(new RepairCompletionRate(
+                        38,
+                        12,
+                        4,
+                        new BigDecimal("31.58")
+                ));
+
+        mockMvc.perform(get("/api/statistics/repair/completion-rate")
+                        .param("from", "2026-07-01T00:00:00")
+                        .param("to", "2026-08-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(38))
+                .andExpect(jsonPath("$.completedCount").value(12))
+                .andExpect(jsonPath("$.notRequiredCount").value(4))
+                .andExpect(jsonPath("$.completionRate").value(31.58));
     }
 }

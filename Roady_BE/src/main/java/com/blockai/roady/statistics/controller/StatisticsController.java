@@ -5,6 +5,7 @@ import com.blockai.roady.statistics.domain.StatisticsUnit;
 import com.blockai.roady.statistics.dto.DamageTimeSeriesResponse;
 import com.blockai.roady.statistics.dto.DamageStatusStatisticsResponse;
 import com.blockai.roady.statistics.dto.RepairPriorityStatisticsResponse;
+import com.blockai.roady.statistics.dto.RepairCompletionRateResponse;
 import com.blockai.roady.statistics.service.StatisticsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,6 +66,20 @@ public class StatisticsController {
     ) {
         return RepairPriorityStatisticsResponse.from(
                 statisticsService.getRepairPriorityStatistics(new StatisticsPeriod(from, to))
+        );
+    }
+
+    @GetMapping("/repair/completion-rate")
+    public RepairCompletionRateResponse getRepairCompletionRate(
+            @RequestParam("from")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam("to")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to
+    ) {
+        return RepairCompletionRateResponse.from(
+                statisticsService.getRepairCompletionRate(new StatisticsPeriod(from, to))
         );
     }
 }

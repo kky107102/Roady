@@ -6,6 +6,7 @@ import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
 import com.blockai.roady.statistics.domain.DamageStatusStatistics;
 import com.blockai.roady.statistics.domain.RepairPriority;
 import com.blockai.roady.statistics.domain.RepairPriorityStatistics;
+import com.blockai.roady.statistics.domain.RepairCompletionRate;
 import com.blockai.roady.statistics.domain.StatisticsPeriod;
 import com.blockai.roady.statistics.domain.StatisticsUnit;
 import com.blockai.roady.statistics.mapper.StatisticsMapper;
@@ -102,6 +103,17 @@ public class StatisticsService {
                 totalCount - unclassifiedCount,
                 unclassifiedCount,
                 counts
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public RepairCompletionRate getRepairCompletionRate(StatisticsPeriod period) {
+        var counts = statisticsMapper.countRepairCompletion(period.from(), period.to());
+        return new RepairCompletionRate(
+                counts.totalCount(),
+                counts.completedCount(),
+                counts.notRequiredCount(),
+                percentage(counts.completedCount(), counts.totalCount())
         );
     }
 

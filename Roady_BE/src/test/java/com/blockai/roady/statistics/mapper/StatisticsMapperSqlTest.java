@@ -59,6 +59,20 @@ class StatisticsMapperSqlTest {
                 .contains("GROUP BY category");
     }
 
+    @Test
+    void repairCompletionRateCountsCurrentStatuses() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(StatisticsMapper.class.getName() + ".countRepairCompletion")
+                .getBoundSql(periodParameters());
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("COUNT(*) AS total_count")
+                .contains("d.current_status = 'REPAIR_COMPLETED'")
+                .contains("d.current_status = 'REPAIR_NOT_REQUIRED'")
+                .contains("d.created_at >= ?")
+                .contains("d.created_at < ?");
+    }
+
     private Configuration configuration() {
         Configuration mybatisConfiguration = new Configuration();
         mybatisConfiguration.addMapper(StatisticsMapper.class);
