@@ -315,3 +315,36 @@ erDiagram
 | `damages.robot_id` | 사진을 촬영한 로봇 ID. 사람이 직접 등록한 경우 `NULL` 가능 |
 | `damages.reported_by` | 파손을 시스템에 등록한 사용자 ID. 로봇 자동 업로드 시 로봇 책임자 ID를 사용하며 `NOT NULL` |
 | `damages.assigned_to` | 파손 처리 담당자 ID. 담당자 배정 전에는 `NULL` 가능 |
+
+## 5. 파손 대시보드 조회 인덱스
+
+| 인덱스 | 컬럼 | 대상 조회 |
+| --- | --- | --- |
+| `idx_damages_created_at_id` | `created_at DESC, id DESC` | 전체 파손 기간 검색 및 최신순 페이지 조회 |
+| `idx_damages_status_created_at_id` | `current_status, created_at DESC, id DESC` | 처리 상태별 기간 검색 및 최신순 페이지 조회 |
+| `idx_damages_robot_created_at` | `robot_id, created_at` | 로봇별 파손 검색 |
+| `idx_damages_assigned_to_created_at` | `assigned_to, created_at` | 담당자별 파손 검색 |
+| `idx_damage_images_damage_sort_order` | `damage_id, sort_order` | 목록의 파손별 이미지 수 및 이미지 순서 조회 |
+
+신규 데이터베이스에는 `schema.sql`의 테이블 생성 과정에서 인덱스가 적용된다. 이미 `damages` 테이블이 생성된 데이터베이스는 `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행해야 한다.
+
+대표 조회 쿼리는 다음 실행계획을 확인한다.
+
+```sql
+EXPLAIN
+SELECT d.id
+FROM damages d
+WHERE d.created_at >= '2026-07-01 00:00:00'
+  AND d.created_at < '2026-08-01 00:00:00'
+ORDER BY d.created_at DESC, d.id DESC
+LIMIT 0, 20;
+
+EXPLAIN
+SELECT d.id
+FROM damages d
+WHERE d.current_status = 'REVIEW_REQUIRED'
+  AND d.created_at >= '2026-07-01 00:00:00'
+  AND d.created_at < '2026-08-01 00:00:00'
+ORDER BY d.created_at DESC, d.id DESC
+LIMIT 0, 20;
+```
