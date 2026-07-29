@@ -18,6 +18,7 @@ class CameraConfig:
     width: Optional[int] = 1280
     height: Optional[int] = 720
     fps: Optional[int] = 30
+    auto_exposure: bool = True
     reconnect_delay_sec: float = 1.0
 
 
@@ -49,6 +50,11 @@ class CameraWorker:
     @property
     def last_error(self) -> Optional[str]:
         return self._last_error
+
+    @property
+    def frame_count(self) -> int:
+        with self._lock:
+            return self._frame_id
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -123,6 +129,10 @@ class CameraWorker:
             capture.release()
             capture = cv2.VideoCapture(self.config.device_index, cv2.CAP_ANY)
 
+        if self.config.auto_exposure:
+            # V4L2 maps 0.75 to aperture-priority (automatic exposure) mode.
+            capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
+
         if self.config.pixel_format:
             fourcc = cv2.VideoWriter_fourcc(*self.config.pixel_format)
             capture.set(cv2.CAP_PROP_FOURCC, fourcc)
@@ -162,14 +172,14 @@ class CameraWorker:
                 time.sleep(self.config.reconnect_delay_sec)
                 continue
 
-            self._frame_id += 1
-            frame = CameraFrame(
-                camera_name=self.config.name,
-                frame_id=self._frame_id,
-                timestamp=time.time(),
-                image=image,
-            )
             with self._lock:
+                self._frame_id += 1
+                frame = CameraFrame(
+                    camera_name=self.config.name,
+                    frame_id=self._frame_id,
+                    timestamp=time.time(),
+                    image=image,
+                )
                 self._latest_frame = frame
 
         self._release_capture()

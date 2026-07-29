@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import array
 import time
 
 import rclpy
@@ -20,7 +21,9 @@ class WideCameraNode(Node):
         self.declare_parameter("width", 1280)
         self.declare_parameter("height", 720)
         self.declare_parameter("fps", 30)
+        self.declare_parameter("auto_exposure", True)
         self.declare_parameter("publish_rate", 30.0)
+        self.declare_parameter("stats_interval_sec", 2.0)
         self.declare_parameter("frame_id", "wide_camera")
         self.declare_parameter("topic", "/camera/wide/image_raw")
 
@@ -41,10 +44,12 @@ class WideCameraNode(Node):
                 width=int(width) if width else None,
                 height=int(height) if height else None,
                 fps=int(fps) if fps else None,
+                auto_exposure=bool(self.get_parameter("auto_exposure").value),
             )
         )
         self._publisher = self.create_publisher(Image, topic, 10)
         self._last_published_frame_id = -1
+        self._published_frame_count = 0
         self._last_error_log_time = 0.0
 
         publish_rate = float(self.get_parameter("publish_rate").value)
@@ -52,6 +57,14 @@ class WideCameraNode(Node):
 
         self._worker.start()
         self._timer = self.create_timer(timer_period, self._publish_latest_frame)
+        stats_interval = float(self.get_parameter("stats_interval_sec").value)
+        self._stats_started_at = time.monotonic()
+        self._stats_capture_count = 0
+        self._stats_publish_count = 0
+        self._stats_timer = self.create_timer(
+            stats_interval if stats_interval > 0 else 2.0,
+            self._log_fps_stats,
+        )
         self.get_logger().info(f"Wide camera publishing on {topic}")
 
     def destroy_node(self):
@@ -72,6 +85,25 @@ class WideCameraNode(Node):
 
         self._publisher.publish(self._to_image_msg(frame.image))
         self._last_published_frame_id = frame.frame_id
+        self._published_frame_count += 1
+
+    def _log_fps_stats(self) -> None:
+        now = time.monotonic()
+        elapsed = now - self._stats_started_at
+        if elapsed <= 0:
+            return
+
+        capture_count = self._worker.frame_count
+        publish_count = self._published_frame_count
+        capture_fps = (capture_count - self._stats_capture_count) / elapsed
+        publish_fps = (publish_count - self._stats_publish_count) / elapsed
+        self.get_logger().info(
+            f"FPS capture={capture_fps:.2f}, publish={publish_fps:.2f}"
+        )
+
+        self._stats_started_at = now
+        self._stats_capture_count = capture_count
+        self._stats_publish_count = publish_count
 
     def _to_image_msg(self, image) -> Image:
         height, width, channels = image.shape
@@ -84,7 +116,7 @@ class WideCameraNode(Node):
         msg.encoding = "bgr8"
         msg.is_bigendian = False
         msg.step = width * channels
-        msg.data = image.tobytes()
+        msg.data = array.array("B", image.tobytes())
         return msg
 
 
