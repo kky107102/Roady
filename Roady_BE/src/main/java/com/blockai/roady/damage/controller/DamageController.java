@@ -1,10 +1,14 @@
 package com.blockai.roady.damage.controller;
 
 import com.blockai.roady.damage.domain.DamageImage;
+import com.blockai.roady.damage.domain.DamageFilterCriteria;
+import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.dto.CreateDamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageImageResponse;
+import com.blockai.roady.damage.dto.DamageMapMarkerResponse;
 import com.blockai.roady.damage.dto.DamageResponse;
+import com.blockai.roady.damage.dto.DamageSearchResponse;
 import com.blockai.roady.damage.dto.DamageSummaryResponse;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
@@ -73,9 +77,46 @@ public class DamageController {
     }
 
     @GetMapping
-    public List<DamageSummaryResponse> getDamages() {
-        return damageService.findAll().stream()
-                .map(DamageSummaryResponse::from)
+    public DamageSearchResponse getDamages(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "robotId", required = false) Long robotId,
+            @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "20") int size
+    ) {
+        var criteria = new DamageSearchCriteria(
+                from,
+                to,
+                status,
+                robotId,
+                assignedTo,
+                page,
+                size
+        );
+        return DamageSearchResponse.from(damageService.search(criteria));
+    }
+
+    @GetMapping("/map-markers")
+    public List<DamageMapMarkerResponse> getMapMarkers(
+            @RequestParam(value = "from", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime from,
+            @RequestParam(value = "to", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+            LocalDateTime to,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "robotId", required = false) Long robotId,
+            @RequestParam(value = "assignedTo", required = false) Long assignedTo
+    ) {
+        var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo);
+        return damageService.findMapMarkers(criteria).stream()
+                .map(DamageMapMarkerResponse::from)
                 .toList();
     }
 

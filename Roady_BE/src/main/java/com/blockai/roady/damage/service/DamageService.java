@@ -1,8 +1,14 @@
 package com.blockai.roady.damage.service;
 
 import com.blockai.roady.damage.domain.Damage;
+import com.blockai.roady.damage.domain.DamageDashboardSummary;
+import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
+import com.blockai.roady.damage.domain.DamageMapMarker;
+import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchPage;
+import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.springframework.stereotype.Service;
@@ -13,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -61,8 +68,60 @@ public class DamageService {
     }
 
     @Transactional(readOnly = true)
-    public List<DamageSummary> findAll() {
-        return damageMapper.findAllSummaries();
+    public DamageSearchPage search(DamageSearchCriteria criteria) {
+        List<DamageSummary> content = damageMapper.searchSummaries(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo(),
+                criteria.offset(),
+                criteria.size()
+        );
+        long totalElements = damageMapper.countSummaries(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo()
+        );
+        return DamageSearchPage.of(content, criteria, totalElements);
+    }
+
+    @Transactional(readOnly = true)
+    public DamageDashboardSummary summarize(DamageFilterCriteria criteria) {
+        var statusCounts = new LinkedHashMap<String, Long>();
+        for (DamageStatus status : DamageStatus.values()) {
+            statusCounts.put(status.name(), 0L);
+        }
+
+        long total = 0;
+        long unassigned = 0;
+        var groupedCounts = damageMapper.summarizeByStatus(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo()
+        );
+        for (var groupedCount : groupedCounts) {
+            statusCounts.put(groupedCount.status(), groupedCount.total());
+            total += groupedCount.total();
+            unassigned += groupedCount.unassigned();
+        }
+
+        return new DamageDashboardSummary(total, unassigned, statusCounts);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DamageMapMarker> findMapMarkers(DamageFilterCriteria criteria) {
+        return damageMapper.findMapMarkers(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo()
+        );
     }
 
     @Transactional(readOnly = true)
