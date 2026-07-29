@@ -5,6 +5,7 @@ import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import RecentDamageList from '@/components/damages/RecentDamageList.vue'
 
 const store = useDashboardStore()
 
@@ -61,7 +62,7 @@ onUnmounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages', query: { severity: 'HIGH' } }">
+        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages' }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -119,14 +120,12 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 신규 탐지 알림 (별도 작업 S15P11A404-148) -->
+        <!-- 신규 탐지 알림 -->
         <section class="dashboard__alert-section" aria-label="신규 탐지 알림">
           <div class="section-header">
             <h2 class="section-title">신규 탐지 알림</h2>
           </div>
-          <div class="panel-placeholder">
-            <p>탐지 알림 목록은 S15P11A404-148에서 구현됩니다.</p>
-          </div>
+          <RecentDamageList />
         </section>
       </div>
 

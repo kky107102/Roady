@@ -4,7 +4,7 @@ import { ref, computed } from 'vue'
 import { damagesApi } from '@/api/damages'
 import { robotsApi } from '@/api/robots'
 import { MOCK_TIME_SERIES, MOCK_HIGH_SEVERITY_COUNT, MOCK_STAT_COUNTS } from '@/mocks/dashboard'
-import type { DamageSummary } from '@/types/damage'
+import type { DamageListItem } from '@/types/damage'
 import type { Robot } from '@/types/robot'
 import type { TimeSeriesResponse } from '@/types/statistics'
 
@@ -28,7 +28,8 @@ function defaultFilter(): DashboardFilter {
 export const useDashboardStore = defineStore('dashboard', () => {
   const filter = ref<DashboardFilter>(defaultFilter())
 
-  const damages = ref<DamageSummary[]>([])
+  const damages = ref<DamageListItem[]>([])
+  const damagesTotalElements = ref(0)
   const robots = ref<Robot[]>([])
   const timeSeries = ref<TimeSeriesResponse>(MOCK_TIME_SERIES)
 
@@ -40,7 +41,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const useMock = computed(() => import.meta.env.DEV && !!error.value && !loading.value)
 
   const totalCount = computed(() =>
-    useMock.value ? MOCK_STAT_COUNTS.total : damages.value.length,
+    useMock.value ? MOCK_STAT_COUNTS.total : damagesTotalElements.value,
   )
 
   const reviewRequiredCount = computed(() =>
@@ -55,12 +56,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
       : damages.value.filter((d) => d.currentStatus === 'REPAIRING').length,
   )
 
-  /** severity 필드가 실제 API 응답에 포함되면 자동으로 실제 값을 사용한다. */
-  const highSeverityCount = computed(() => {
-    if (useMock.value) return MOCK_STAT_COUNTS.highSeverity
-    const fromApi = damages.value.filter((d) => d.severity === 'HIGH').length
-    return damages.value.some((d) => d.severity !== undefined) ? fromApi : MOCK_HIGH_SEVERITY_COUNT
-  })
+  // severity 필드는 현재 API 응답에 포함되지 않으므로 항상 mock 값 사용
+  const highSeverityCount = computed(() =>
+    useMock.value ? MOCK_STAT_COUNTS.highSeverity : MOCK_HIGH_SEVERITY_COUNT,
+  )
 
   const activeRobotCount = computed(() =>
     useMock.value
@@ -76,13 +75,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
       const queryParams = {
         from: filter.value.from,
         to: filter.value.to,
-        ...(filter.value.regionCode ? { regionCode: filter.value.regionCode } : {}),
       }
-      const [damageList, robotList] = await Promise.all([
+      const [damageResponse, robotList] = await Promise.all([
         damagesApi.list(queryParams),
         robotsApi.list(),
       ])
-      damages.value = damageList
+      damages.value = damageResponse.content
+      damagesTotalElements.value = damageResponse.totalElements
       robots.value = robotList
       // 통계 API 구현 후 아래 주석을 풀어 교체한다.
       // timeSeries.value = await statisticsApi.timeSeries({ ...queryParams, unit: 'DAY' })
@@ -102,6 +101,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   return {
     filter,
     damages,
+    damagesTotalElements,
     robots,
     timeSeries,
     loading,
