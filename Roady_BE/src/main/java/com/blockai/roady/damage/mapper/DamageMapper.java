@@ -3,6 +3,7 @@ package com.blockai.roady.damage.mapper;
 import com.blockai.roady.damage.domain.Damage;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
+import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
 import org.apache.ibatis.annotations.Arg;
@@ -241,6 +242,50 @@ public interface DamageMapper {
             @Arg(column = "unassigned", javaType = long.class)
     })
     List<DamageStatusCount> summarizeByStatus(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("status") String status,
+            @Param("robotId") Long robotId,
+            @Param("assignedTo") Long assignedTo
+    );
+
+    @Select("""
+            <script>
+            SELECT
+                d.id,
+                d.latitude,
+                d.longitude,
+                d.current_status
+            FROM damages d
+            <where>
+                AND d.latitude IS NOT NULL
+                AND d.longitude IS NOT NULL
+                <if test="from != null">
+                    AND d.created_at <![CDATA[>=]]> #{from}
+                </if>
+                <if test="to != null">
+                    AND d.created_at <![CDATA[<]]> #{to}
+                </if>
+                <if test="status != null">
+                    AND d.current_status = #{status}
+                </if>
+                <if test="robotId != null">
+                    AND d.robot_id = #{robotId}
+                </if>
+                <if test="assignedTo != null">
+                    AND d.assigned_to = #{assignedTo}
+                </if>
+            </where>
+            ORDER BY d.created_at DESC, d.id DESC
+            </script>
+            """)
+    @ConstructorArgs({
+            @Arg(column = "id", javaType = Long.class, id = true),
+            @Arg(column = "latitude", javaType = BigDecimal.class),
+            @Arg(column = "longitude", javaType = BigDecimal.class),
+            @Arg(column = "current_status", javaType = String.class)
+    })
+    List<DamageMapMarker> findMapMarkers(
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("status") String status,

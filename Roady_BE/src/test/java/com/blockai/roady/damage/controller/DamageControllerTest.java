@@ -3,6 +3,7 @@ package com.blockai.roady.damage.controller;
 import com.blockai.roady.common.exception.GlobalExceptionHandler;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchPage;
+import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
@@ -76,5 +77,26 @@ class DamageControllerTest {
         mockMvc.perform(get("/api/damages").param("size", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("size must be between 1 and 100."));
+    }
+
+    @Test
+    void getMapMarkersReturnsOnlyMapFields() throws Exception {
+        when(damageService.findMapMarkers(any()))
+                .thenReturn(List.of(new DamageMapMarker(
+                        1L,
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        "REVIEW_REQUIRED"
+                )));
+
+        mockMvc.perform(get("/api/damages/map-markers")
+                        .param("status", "REVIEW_REQUIRED"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].latitude").value(37.5665))
+                .andExpect(jsonPath("$[0].longitude").value(126.978))
+                .andExpect(jsonPath("$[0].currentStatus").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$[0].description").doesNotExist())
+                .andExpect(jsonPath("$[0].assignedTo").doesNotExist());
     }
 }

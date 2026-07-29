@@ -770,7 +770,56 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 잘못된 기간 또는 처리 상태 |
 | `401` | 인증 실패 |
 
-### 5.4 도로 파손 상세 조회
+### 5.4 지도 마커 조회
+
+지도에 표시할 파손 좌표와 현재 처리 상태를 조회한다. 위도 또는 경도가 없는 파손은 결과에서 제외한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/damages/map-markers` |
+| 인증 | 필요 |
+
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `from` | string | 아니오 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+
+#### Response `200 OK`
+
+```json
+[
+  {
+    "id": 1,
+    "latitude": 37.5665,
+    "longitude": 126.978,
+    "currentStatus": "REVIEW_REQUIRED"
+  }
+]
+```
+
+#### DamageMapMarkerResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 파손 ID |
+| `latitude` | decimal | 위도 |
+| `longitude` | decimal | 경도 |
+| `currentStatus` | string | 현재 처리 상태 |
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 잘못된 기간 또는 처리 상태 |
+| `401` | 인증 실패 |
+
+### 5.5 도로 파손 상세 조회
 
 특정 도로 파손의 상세 정보와 이미지 메타데이터를 조회한다.
 
@@ -835,7 +884,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 존재하지 않는 파손 ID |
 | `401` | 인증 실패 |
 
-### 5.5 도로 파손 이미지 조회
+### 5.6 도로 파손 이미지 조회
 
 특정 파손에 연결된 이미지 바이너리를 조회한다.
 

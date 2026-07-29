@@ -5,6 +5,7 @@ import com.blockai.roady.damage.domain.DamageDashboardSummary;
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
+import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatus;
@@ -110,6 +111,17 @@ public class DamageService {
         }
 
         return new DamageDashboardSummary(total, unassigned, statusCounts);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DamageMapMarker> findMapMarkers(DamageFilterCriteria criteria) {
+        return damageMapper.findMapMarkers(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo()
+        );
     }
 
     @Transactional(readOnly = true)

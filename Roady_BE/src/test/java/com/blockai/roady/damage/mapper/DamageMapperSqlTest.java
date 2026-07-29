@@ -71,6 +71,27 @@ class DamageMapperSqlTest {
                 .doesNotContain("LIMIT");
     }
 
+    @Test
+    void findMapMarkersBuildsCoordinateFilterQuery() {
+        Map<String, Object> parameters = searchParameters();
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".findMapMarkers")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("d.latitude IS NOT NULL")
+                .contains("d.longitude IS NOT NULL")
+                .contains("AND d.created_at >= ?")
+                .contains("AND d.created_at < ?")
+                .contains("AND d.current_status = ?")
+                .contains("AND d.robot_id = ?")
+                .contains("AND d.assigned_to = ?")
+                .contains("ORDER BY d.created_at DESC, d.id DESC")
+                .doesNotContain("JOIN")
+                .doesNotContain("LIMIT");
+    }
+
     private Configuration configuration() {
         Configuration mybatisConfiguration = new Configuration();
         mybatisConfiguration.addMapper(DamageMapper.class);
