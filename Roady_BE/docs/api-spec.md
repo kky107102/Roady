@@ -723,7 +723,54 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 잘못된 기간, 처리 상태, 페이지 번호 또는 페이지 크기 |
 | `401` | 인증 실패 |
 
-### 5.3 도로 파손 상세 조회
+### 5.3 대시보드 파손 요약 조회
+
+검색 조건에 해당하는 전체 파손 수, 미배정 수, 처리 상태별 수를 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/dashboard/damages/summary` |
+| 인증 | 필요 |
+
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `from` | string | 아니오 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+
+#### Response `200 OK`
+
+```json
+{
+  "total": 123,
+  "unassigned": 12,
+  "statusCounts": {
+    "COLLECTED": 20,
+    "REVIEW_REQUIRED": 35,
+    "RECEIVED": 18,
+    "REPAIR_SCHEDULED": 10,
+    "REPAIRING": 8,
+    "REPAIR_COMPLETED": 27,
+    "REPAIR_NOT_REQUIRED": 5
+  }
+}
+```
+
+데이터가 없는 처리 상태도 `statusCounts`에 값 `0`으로 포함한다.
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 잘못된 기간 또는 처리 상태 |
+| `401` | 인증 실패 |
+
+### 5.4 도로 파손 상세 조회
 
 특정 도로 파손의 상세 정보와 이미지 메타데이터를 조회한다.
 
@@ -788,7 +835,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 존재하지 않는 파손 ID |
 | `401` | 인증 실패 |
 
-### 5.4 도로 파손 이미지 조회
+### 5.5 도로 파손 이미지 조회
 
 특정 파손에 연결된 이미지 바이너리를 조회한다.
 

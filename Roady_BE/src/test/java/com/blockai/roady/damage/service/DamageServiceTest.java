@@ -1,9 +1,12 @@
 package com.blockai.roady.damage.service;
 
 import com.blockai.roady.damage.domain.Damage;
+import com.blockai.roady.damage.domain.DamageDashboardSummary;
+import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchPage;
+import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.junit.jupiter.api.Test;
@@ -221,6 +224,28 @@ class DamageServiceTest {
                 20
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid damage status.");
+    }
+
+    @Test
+    void summarizeReturnsTotalsAndZeroFilledStatusCounts() {
+        LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+        DamageFilterCriteria criteria = new DamageFilterCriteria(from, to, null, 10L, null);
+        when(damageMapper.summarizeByStatus(from, to, null, 10L, null))
+                .thenReturn(List.of(
+                        new DamageStatusCount("COLLECTED", 3, 2),
+                        new DamageStatusCount("REVIEW_REQUIRED", 2, 1)
+                ));
+
+        DamageDashboardSummary result = damageService.summarize(criteria);
+
+        assertThat(result.total()).isEqualTo(5);
+        assertThat(result.unassigned()).isEqualTo(3);
+        assertThat(result.statusCounts())
+                .containsEntry("COLLECTED", 3L)
+                .containsEntry("REVIEW_REQUIRED", 2L)
+                .containsEntry("REPAIR_COMPLETED", 0L)
+                .hasSize(7);
     }
 
     private MockMultipartFile image(String filename) {

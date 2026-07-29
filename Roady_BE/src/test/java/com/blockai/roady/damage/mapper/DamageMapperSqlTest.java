@@ -51,6 +51,26 @@ class DamageMapperSqlTest {
                 .doesNotContain("ORDER BY");
     }
 
+    @Test
+    void summarizeByStatusBuildsGroupedFilterQuery() {
+        Map<String, Object> parameters = searchParameters();
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".summarizeByStatus")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("COUNT(*) AS total")
+                .contains("SUM(CASE WHEN d.assigned_to IS NULL THEN 1 ELSE 0 END) AS unassigned")
+                .contains("WHERE d.created_at >= ?")
+                .contains("AND d.created_at < ?")
+                .contains("AND d.current_status = ?")
+                .contains("AND d.robot_id = ?")
+                .contains("AND d.assigned_to = ?")
+                .contains("GROUP BY d.current_status")
+                .doesNotContain("LIMIT");
+    }
+
     private Configuration configuration() {
         Configuration mybatisConfiguration = new Configuration();
         mybatisConfiguration.addMapper(DamageMapper.class);
