@@ -2,6 +2,8 @@ package com.blockai.roady.damage.service;
 
 import com.blockai.roady.damage.domain.Damage;
 import com.blockai.roady.damage.domain.DamageImage;
+import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.junit.jupiter.api.Test;
@@ -112,6 +114,113 @@ class DamageServiceTest {
         verify(damageMapper, never()).insertDamage(any(Damage.class));
         verify(damageMapper, never()).insertImage(any(DamageImage.class));
         verify(damageMapper, never()).findSummaryById(eq(1L));
+    }
+
+    @Test
+    void searchReturnsFilteredPage() {
+        LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+        DamageSearchCriteria criteria = new DamageSearchCriteria(
+                from,
+                to,
+                "REVIEW_REQUIRED",
+                10L,
+                3L,
+                1,
+                20
+        );
+        DamageSummary summary = new DamageSummary(
+                1L,
+                10L,
+                2L,
+                3L,
+                "점자블록 파손",
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567),
+                LocalDateTime.of(2026, 7, 22, 10, 30),
+                "REVIEW_REQUIRED",
+                2L,
+                LocalDateTime.of(2026, 7, 22, 10, 31),
+                LocalDateTime.of(2026, 7, 22, 10, 31)
+        );
+
+        when(damageMapper.searchSummaries(
+                from,
+                to,
+                "REVIEW_REQUIRED",
+                10L,
+                3L,
+                20L,
+                20
+        )).thenReturn(List.of(summary));
+        when(damageMapper.countSummaries(
+                from,
+                to,
+                "REVIEW_REQUIRED",
+                10L,
+                3L
+        )).thenReturn(41L);
+
+        DamageSearchPage result = damageService.search(criteria);
+
+        assertThat(result.content()).containsExactly(summary);
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalElements()).isEqualTo(41);
+        assertThat(result.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    void searchCriteriaRejectsInvalidPageConditions() {
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                -1,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("page must be 0 or greater.");
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                101
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("size must be between 1 and 100.");
+    }
+
+    @Test
+    void searchCriteriaRejectsInvalidPeriodAndStatus() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 7, 1, 0, 0);
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                from,
+                to,
+                null,
+                null,
+                null,
+                0,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("from must be earlier than to.");
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                "UNKNOWN",
+                null,
+                null,
+                0,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage status.");
     }
 
     private MockMultipartFile image(String filename) {

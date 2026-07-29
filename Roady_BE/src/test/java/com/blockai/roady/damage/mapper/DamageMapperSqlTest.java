@@ -1,0 +1,75 @@
+package com.blockai.roady.damage.mapper;
+
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.Test;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class DamageMapperSqlTest {
+
+    private final Configuration configuration = configuration();
+
+    @Test
+    void searchSummariesBuildsFilteredPageQuery() {
+        Map<String, Object> parameters = searchParameters();
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".searchSummaries")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("WHERE d.created_at >= ?")
+                .contains("AND d.created_at < ?")
+                .contains("AND d.current_status = ?")
+                .contains("AND d.robot_id = ?")
+                .contains("AND d.assigned_to = ?")
+                .contains("ORDER BY d.created_at DESC, d.id DESC")
+                .contains("LIMIT ?, ?");
+    }
+
+    @Test
+    void countSummariesUsesSameFiltersWithoutPagination() {
+        Map<String, Object> parameters = searchParameters();
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".countSummaries")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("SELECT COUNT(*)")
+                .contains("WHERE d.created_at >= ?")
+                .contains("AND d.created_at < ?")
+                .contains("AND d.current_status = ?")
+                .contains("AND d.robot_id = ?")
+                .contains("AND d.assigned_to = ?")
+                .doesNotContain("LIMIT")
+                .doesNotContain("ORDER BY");
+    }
+
+    private Configuration configuration() {
+        Configuration mybatisConfiguration = new Configuration();
+        mybatisConfiguration.addMapper(DamageMapper.class);
+        return mybatisConfiguration;
+    }
+
+    private Map<String, Object> searchParameters() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("from", LocalDateTime.of(2026, 7, 1, 0, 0));
+        parameters.put("to", LocalDateTime.of(2026, 8, 1, 0, 0));
+        parameters.put("status", "REVIEW_REQUIRED");
+        parameters.put("robotId", 1L);
+        parameters.put("assignedTo", 5L);
+        parameters.put("offset", 20L);
+        parameters.put("size", 20);
+        return parameters;
+    }
+
+    private String normalize(String sql) {
+        return sql.replaceAll("\\s+", " ").trim();
+    }
+}

@@ -3,6 +3,8 @@ package com.blockai.roady.damage.service;
 import com.blockai.roady.damage.domain.Damage;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
+import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.springframework.stereotype.Service;
@@ -61,8 +63,24 @@ public class DamageService {
     }
 
     @Transactional(readOnly = true)
-    public List<DamageSummary> findAll() {
-        return damageMapper.findAllSummaries();
+    public DamageSearchPage search(DamageSearchCriteria criteria) {
+        List<DamageSummary> content = damageMapper.searchSummaries(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo(),
+                criteria.offset(),
+                criteria.size()
+        );
+        long totalElements = damageMapper.countSummaries(
+                criteria.from(),
+                criteria.to(),
+                criteria.status(),
+                criteria.robotId(),
+                criteria.assignedTo()
+        );
+        return DamageSearchPage.of(content, criteria, totalElements);
     }
 
     @Transactional(readOnly = true)

@@ -651,7 +651,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 ### 5.2 도로 파손 목록 조회
 
-등록된 도로 파손 목록을 조회한다.
+등록된 도로 파손 목록을 검색하고 페이지 단위로 조회한다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -659,48 +659,68 @@ curl -X POST "http://localhost:8080/api/damages" \
 | URL | `/api/damages` |
 | 인증 | 필요 |
 
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `from` | string | 아니오 | 없음 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 없음 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 없음 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 없음 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 없음 | 처리 담당 사용자 ID |
+| `page` | number | 아니오 | `0` | 0부터 시작하는 페이지 번호 |
+| `size` | number | 아니오 | `20` | 페이지 크기. 1 이상 100 이하 |
+
 #### Response `200 OK`
 
 ```json
-[
-  {
-    "id": 1,
-    "robotId": 1,
-    "reportedBy": 2,
-    "assignedTo": null,
-    "description": "도로 균열 감지",
-    "latitude": 37.5665000,
-    "longitude": 126.9780000,
-    "capturedAt": "2026-07-22T14:30:00",
-    "currentStatus": "COLLECTED",
-    "imageCount": 2,
-    "createdAt": "2026-07-22T14:30:01",
-    "updatedAt": "2026-07-22T14:30:01"
-  }
-]
+{
+  "content": [
+    {
+      "id": 1,
+      "robotId": 1,
+      "assignedTo": null,
+      "description": "도로 균열 감지",
+      "latitude": 37.5665000,
+      "longitude": 126.9780000,
+      "capturedAt": "2026-07-22T14:30:00",
+      "currentStatus": "COLLECTED",
+      "imageCount": 2,
+      "createdAt": "2026-07-22T14:30:01"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
 ```
 
-#### DamageSummaryResponse
+#### DamageSearchResponse
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| `id` | number | 파손 ID |
-| `robotId` | number, null | 촬영 로봇 ID |
-| `reportedBy` | number | 등록 사용자 ID |
-| `assignedTo` | number, null | 처리 담당 사용자 ID |
-| `description` | string, null | 파손 설명 |
-| `latitude` | decimal, null | 위도 |
-| `longitude` | decimal, null | 경도 |
-| `capturedAt` | string, null | 촬영 일시 |
-| `currentStatus` | string | 현재 처리 상태 |
-| `imageCount` | number | 연결된 이미지 수 |
-| `createdAt` | string | 생성 일시 |
-| `updatedAt` | string | 수정 일시 |
+| `content` | array | 현재 페이지의 파손 목록 |
+| `content[].id` | number | 파손 ID |
+| `content[].robotId` | number, null | 촬영 로봇 ID |
+| `content[].assignedTo` | number, null | 처리 담당 사용자 ID |
+| `content[].description` | string, null | 파손 설명 |
+| `content[].latitude` | decimal, null | 위도 |
+| `content[].longitude` | decimal, null | 경도 |
+| `content[].capturedAt` | string, null | 촬영 일시 |
+| `content[].currentStatus` | string | 현재 처리 상태 |
+| `content[].imageCount` | number | 연결된 이미지 수 |
+| `content[].createdAt` | string | 생성 일시 |
+| `page` | number | 현재 페이지 번호 |
+| `size` | number | 페이지 크기 |
+| `totalElements` | number | 검색 조건에 해당하는 전체 데이터 수 |
+| `totalPages` | number | 전체 페이지 수 |
 
 #### Error
 
 | 상태 코드 | 발생 상황 |
 | --- | --- |
+| `400` | 잘못된 기간, 처리 상태, 페이지 번호 또는 페이지 크기 |
 | `401` | 인증 실패 |
 
 ### 5.3 도로 파손 상세 조회
@@ -1095,8 +1115,8 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `from` | 아니오 | 없음 | `createdAt >= from` |
 | `to` | 아니오 | 없음 | `createdAt < to`, `from`보다 커야 한다. |
 | `status` | 아니오 | 없음 | 정의된 파손 처리 상태 중 하나 |
-| `robotId` | 아니오 | 없음 | 존재하는 로봇 ID |
-| `assignedTo` | 아니오 | 없음 | 존재하는 사용자 ID |
+| `robotId` | 아니오 | 없음 | 로봇 ID |
+| `assignedTo` | 아니오 | 없음 | 처리 담당 사용자 ID |
 | `page` | 아니오 | `0` | 0 이상의 정수 |
 | `size` | 아니오 | `20` | 1 이상 100 이하의 정수 |
 

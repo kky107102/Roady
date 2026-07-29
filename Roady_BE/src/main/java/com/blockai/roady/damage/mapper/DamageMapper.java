@@ -112,6 +112,7 @@ public interface DamageMapper {
     DamageSummary findSummaryById(@Param("id") Long id);
 
     @Select("""
+            <script>
             SELECT
                 d.id,
                 d.robot_id,
@@ -122,24 +123,34 @@ public interface DamageMapper {
                 d.longitude,
                 d.captured_at,
                 d.current_status,
-                COUNT(di.id) AS image_count,
+                (
+                    SELECT COUNT(*)
+                    FROM damage_images di
+                    WHERE di.damage_id = d.id
+                ) AS image_count,
                 d.created_at,
                 d.updated_at
             FROM damages d
-            LEFT JOIN damage_images di ON di.damage_id = d.id
-            GROUP BY
-                d.id,
-                d.robot_id,
-                d.reported_by,
-                d.assigned_to,
-                d.description,
-                d.latitude,
-                d.longitude,
-                d.captured_at,
-                d.current_status,
-                d.created_at,
-                d.updated_at
+            <where>
+                <if test="from != null">
+                    AND d.created_at <![CDATA[>=]]> #{from}
+                </if>
+                <if test="to != null">
+                    AND d.created_at <![CDATA[<]]> #{to}
+                </if>
+                <if test="status != null">
+                    AND d.current_status = #{status}
+                </if>
+                <if test="robotId != null">
+                    AND d.robot_id = #{robotId}
+                </if>
+                <if test="assignedTo != null">
+                    AND d.assigned_to = #{assignedTo}
+                </if>
+            </where>
             ORDER BY d.created_at DESC, d.id DESC
+            LIMIT #{offset}, #{size}
+            </script>
             """)
     @ConstructorArgs({
             @Arg(column = "id", javaType = Long.class, id = true),
@@ -155,7 +166,46 @@ public interface DamageMapper {
             @Arg(column = "created_at", javaType = LocalDateTime.class),
             @Arg(column = "updated_at", javaType = LocalDateTime.class)
     })
-    List<DamageSummary> findAllSummaries();
+    List<DamageSummary> searchSummaries(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("status") String status,
+            @Param("robotId") Long robotId,
+            @Param("assignedTo") Long assignedTo,
+            @Param("offset") long offset,
+            @Param("size") int size
+    );
+
+    @Select("""
+            <script>
+            SELECT COUNT(*)
+            FROM damages d
+            <where>
+                <if test="from != null">
+                    AND d.created_at <![CDATA[>=]]> #{from}
+                </if>
+                <if test="to != null">
+                    AND d.created_at <![CDATA[<]]> #{to}
+                </if>
+                <if test="status != null">
+                    AND d.current_status = #{status}
+                </if>
+                <if test="robotId != null">
+                    AND d.robot_id = #{robotId}
+                </if>
+                <if test="assignedTo != null">
+                    AND d.assigned_to = #{assignedTo}
+                </if>
+            </where>
+            </script>
+            """)
+    long countSummaries(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("status") String status,
+            @Param("robotId") Long robotId,
+            @Param("assignedTo") Long assignedTo
+    );
 
     @Select("""
             SELECT id, damage_id, sort_order, original_filename, content_type, size_bytes, created_at
