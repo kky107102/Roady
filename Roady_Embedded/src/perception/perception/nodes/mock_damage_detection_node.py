@@ -24,12 +24,16 @@ class MockDamageDetectionNode(Node):
         self.declare_parameter("base_longitude", 126.9780)
         self.declare_parameter("sensor_latitude_offset", 0.0001)
         self.declare_parameter("sensor_longitude_offset", 0.0001)
-        self.declare_parameter("sensor_offset_m", 1.2)
+        self.declare_parameter("gps_latitude_step", 0.00001)
+        self.declare_parameter("gps_longitude_step", 0.00001)
+        self.declare_parameter("robot_id", 1)
+        self.declare_parameter("description", "도로 균열 감지")
 
         storage_dir = Path(str(self.get_parameter("storage_dir").value))
         self._repository = DamageRepository(storage_dir)
         self._detector = MockDamageDetector()
         self._last_saved_time = 0.0
+        self._capture_count = 0
 
         image_topic = str(self.get_parameter("image_topic").value)
         event_topic = str(self.get_parameter("event_topic").value)
@@ -52,20 +56,20 @@ class MockDamageDetectionNode(Node):
             return
 
         image = self._image_msg_to_bgr(msg)
-        detection = self._detector.detect(image)
+        self._detector.detect(image)
         location = self._dummy_location()
         event = self._repository.save_event(
-            image=image,
+            images=[image],
             location=location,
-            label=detection.label,
-            detector_name="mock_damage_detector",
-            confidence=detection.confidence,
+            robot_id=int(self.get_parameter("robot_id").value),
+            description=str(self.get_parameter("description").value),
         )
 
         self._last_saved_time = now
+        self._capture_count += 1
         self._event_publisher.publish(String(data=self._repository.to_json(event)))
         self.get_logger().info(
-            f"Saved mock damage event {event.event_id} at "
+            "Saved mock damage event at "
             f"{location.latitude:.6f}, {location.longitude:.6f}"
         )
 
@@ -74,10 +78,15 @@ class MockDamageDetectionNode(Node):
         longitude = float(self.get_parameter("base_longitude").value)
         latitude += float(self.get_parameter("sensor_latitude_offset").value)
         longitude += float(self.get_parameter("sensor_longitude_offset").value)
+        latitude += self._capture_count * float(
+            self.get_parameter("gps_latitude_step").value
+        )
+        longitude += self._capture_count * float(
+            self.get_parameter("gps_longitude_step").value
+        )
         return DamageLocation(
             latitude=latitude,
             longitude=longitude,
-            sensor_offset_m=float(self.get_parameter("sensor_offset_m").value),
         )
 
     @staticmethod
