@@ -1,5 +1,6 @@
 package com.blockai.roady.robot.config;
 
+import com.blockai.roady.robot.mqtt.RobotMqttTopics;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
@@ -7,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.annotation.ServiceActivator;
 import org.springframework.integration.channel.DirectChannel;
+import org.springframework.integration.config.EnableIntegration;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.mqtt.core.DefaultMqttPahoClientFactory;
 import org.springframework.integration.mqtt.core.MqttPahoClientFactory;
@@ -17,13 +19,13 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
 @Configuration
-@ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
+@EnableIntegration
 public class MqttConfig {
 
-    @Value("${mqtt.broker-ip}")
+    @Value("${mqtt.broker-ip:localhost}")
     private String brokerIp;
 
-    @Value("${mqtt.broker-port}")
+    @Value("${mqtt.broker-port:1883}")
     private String brokerPort;
 
     /**
@@ -69,6 +71,7 @@ public class MqttConfig {
      * MQTT Subscriber Adapter
      */
     @Bean
+    @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
     public MessageProducer inbound() {
 
         String clientId =
@@ -76,10 +79,10 @@ public class MqttConfig {
 
         MqttPahoMessageDrivenChannelAdapter adapter =
                 new MqttPahoMessageDrivenChannelAdapter(
-                        clientId,
-                        mqttClientFactory(),
-                        "roady/+/telemetry"
-                );
+                         clientId,
+                         mqttClientFactory(),
+                         RobotMqttTopics.TELEMETRY_FILTER
+                 );
 
         adapter.setCompletionTimeout(5000);
         adapter.setConverter(new DefaultPahoMessageConverter());
@@ -94,6 +97,7 @@ public class MqttConfig {
      */
     @Bean
     @ServiceActivator(inputChannel = "mqttOutboundChannel")
+    @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
     public MessageHandler mqttOutbound() {
 
         MqttPahoMessageHandler messageHandler =
