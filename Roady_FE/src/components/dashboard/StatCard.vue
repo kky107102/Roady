@@ -1,19 +1,29 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
+import type { RouteLocationRaw } from 'vue-router'
+
 interface Props {
   label: string
   count: number | null
   subText?: string
   variant?: 'default' | 'danger' | 'dark'
+  to?: RouteLocationRaw
 }
 
 withDefaults(defineProps<Props>(), {
   subText: '',
   variant: 'default',
+  to: undefined,
 })
 </script>
 
 <template>
-  <div class="stat-card" :class="`is-${variant}`">
+  <component
+    :is="to ? RouterLink : 'div'"
+    class="stat-card"
+    :class="[`is-${variant}`, { 'is-link': !!to }]"
+    v-bind="to ? { to } : {}"
+  >
     <div class="stat-card__header">
       <span class="stat-card__label">{{ label }}</span>
       <span class="stat-card__icon" aria-hidden="true">
@@ -25,7 +35,7 @@ withDefaults(defineProps<Props>(), {
       <span v-else class="stat-card__count is-loading" aria-busy="true">—</span>
       <span v-if="subText" class="stat-card__sub">{{ subText }}</span>
     </div>
-  </div>
+  </component>
 </template>
 
 <style scoped>
@@ -42,6 +52,28 @@ withDefaults(defineProps<Props>(), {
 .stat-card.is-dark {
   border-color: var(--roady-brand-primary);
   background: var(--roady-brand-primary);
+}
+
+/* ── 클릭 가능한 카드 ── */
+.stat-card.is-link {
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.stat-card.is-link:hover {
+  border-color: var(--roady-brand-secondary);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+.stat-card.is-link:focus-visible {
+  outline: 2px solid var(--roady-focus-ring, var(--roady-brand-secondary));
+  outline-offset: 2px;
+}
+
+.stat-card.is-dark.is-link:hover {
+  border-color: color-mix(in srgb, var(--roady-brand-secondary) 80%, transparent);
 }
 
 .stat-card__header {

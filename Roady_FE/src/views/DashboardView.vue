@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
@@ -8,8 +8,25 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 const store = useDashboardStore()
 
+const REFRESH_MS = 5 * 60 * 1000
+
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+function handleVisibilityChange() {
+  if (!document.hidden) store.fetchAll()
+}
+
 onMounted(() => {
   store.fetchAll()
+  refreshTimer = setInterval(() => {
+    if (!document.hidden) store.fetchAll()
+  }, REFRESH_MS)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onUnmounted(() => {
+  if (refreshTimer !== null) clearInterval(refreshTimer)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
@@ -36,7 +53,7 @@ onMounted(() => {
 
       <!-- 통계 요약 카드 -->
       <section class="dashboard__stats" aria-label="통계 요약">
-        <StatCard label="신규 탐지" :count="store.totalCount">
+        <StatCard label="신규 탐지" :count="store.totalCount" :to="{ name: 'damages' }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -44,7 +61,7 @@ onMounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger">
+        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages', query: { severity: 'HIGH' } }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -53,7 +70,7 @@ onMounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="검토 대기" :count="store.reviewRequiredCount">
+        <StatCard label="검토 대기" :count="store.reviewRequiredCount" :to="{ name: 'damages', query: { status: 'REVIEW_REQUIRED' } }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
@@ -63,7 +80,7 @@ onMounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="진행 중 보수" :count="store.repairingCount">
+        <StatCard label="진행 중 보수" :count="store.repairingCount" :to="{ name: 'repairs' }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
@@ -73,7 +90,7 @@ onMounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="운행 중 로디" :count="store.activeRobotCount" variant="dark">
+        <StatCard label="운행 중 로디" :count="store.activeRobotCount" variant="dark" :to="{ name: 'robots' }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>

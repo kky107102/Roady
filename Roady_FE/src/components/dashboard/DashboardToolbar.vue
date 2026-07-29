@@ -18,6 +18,26 @@ watch(
   (val) => { local.value = { ...val } },
 )
 
+const PRESETS = [
+  { label: '오늘', offset: 0 },
+  { label: '7일', offset: 6 },
+  { label: '30일', offset: 29 },
+]
+
+function toDateString(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function setPreset(offset: number) {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(from.getDate() - offset)
+  local.value.from = toDateString(from)
+  local.value.to = toDateString(to)
+  emit('update:modelValue', { ...local.value })
+  emit('apply', { ...local.value })
+}
+
 const regionOptions: SelectOption[] = [
   { value: '', label: '전체 지역' },
   { value: '11', label: '서울특별시' },
@@ -49,6 +69,17 @@ function handleApply() {
   <div class="dashboard-toolbar" role="search" aria-label="대시보드 조회 조건">
     <div class="toolbar-group">
       <label class="toolbar-label" for="filter-from">기간</label>
+      <div class="date-presets" role="group" aria-label="기간 단축 선택">
+        <button
+          v-for="preset in PRESETS"
+          :key="preset.label"
+          type="button"
+          class="preset-btn"
+          @click="setPreset(preset.offset)"
+        >
+          {{ preset.label }}
+        </button>
+      </div>
       <div class="date-range">
         <input
           id="filter-from"
@@ -107,6 +138,35 @@ function handleApply() {
   font-size: var(--krds-pc-font-size-body-small);
   font-weight: var(--krds-font-weight-bold);
   white-space: nowrap;
+}
+
+/* ── 기간 단축 버튼 ── */
+.date-presets {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.preset-btn {
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--roady-border-default);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--roady-text-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.preset-btn:hover {
+  border-color: var(--roady-brand-secondary);
+  color: var(--roady-brand-secondary);
+  background: color-mix(in srgb, var(--roady-brand-secondary) 6%, transparent);
+}
+
+.preset-btn:focus-visible {
+  outline: 2px solid var(--roady-focus-ring, var(--roady-brand-secondary));
+  outline-offset: 2px;
 }
 
 .date-range {
