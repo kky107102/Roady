@@ -66,6 +66,33 @@ class DamageDashboardQueryIntegrationTest {
         insertImage(olderDamageId, 1);
         insertImage(olderDamageId, 2);
         insertImage(newerDamageId, 1);
+        insertAnalysis(
+                olderDamageId,
+                82,
+                true,
+                "URGENT",
+                0.91,
+                "SUCCESS",
+                LocalDateTime.of(2099, 1, 1, 10, 10)
+        );
+        insertAnalysis(
+                newerDamageId,
+                55,
+                true,
+                "NORMAL",
+                0.76,
+                "SUCCESS",
+                LocalDateTime.of(2099, 1, 1, 11, 10)
+        );
+        insertAnalysis(
+                newerDamageId,
+                null,
+                null,
+                null,
+                null,
+                "FAILED",
+                LocalDateTime.of(2099, 1, 1, 11, 20)
+        );
     }
 
     private void assertDamageSchema() {
@@ -129,6 +156,10 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(firstPage.content()).hasSize(1);
         assertThat(firstPage.content().getFirst().id()).isEqualTo(newerDamageId);
         assertThat(firstPage.content().getFirst().imageCount()).isEqualTo(1);
+        assertThat(firstPage.content().getFirst().damageScore()).isEqualTo(55);
+        assertThat(firstPage.content().getFirst().repairRequired()).isTrue();
+        assertThat(firstPage.content().getFirst().repairPriority()).isEqualTo("NORMAL");
+        assertThat(firstPage.content().getFirst().confidenceScore()).isEqualByComparingTo("0.7600");
         assertThat(firstPage.totalElements()).isEqualTo(2);
         assertThat(firstPage.totalPages()).isEqualTo(2);
 
@@ -145,6 +176,8 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(secondPage.content()).hasSize(1);
         assertThat(secondPage.content().getFirst().id()).isEqualTo(olderDamageId);
         assertThat(secondPage.content().getFirst().imageCount()).isEqualTo(2);
+        assertThat(secondPage.content().getFirst().damageScore()).isEqualTo(82);
+        assertThat(secondPage.content().getFirst().repairPriority()).isEqualTo("URGENT");
     }
 
     @Test
@@ -255,6 +288,41 @@ class DamageDashboardQueryIntegrationTest {
                 sortOrder,
                 "image-" + sortOrder + ".jpg",
                 new byte[]{1}
+        );
+    }
+
+    private void insertAnalysis(
+            Long damageId,
+            Integer damageScore,
+            Boolean repairRequired,
+            String repairPriority,
+            Double confidenceScore,
+            String analysisStatus,
+            LocalDateTime createdAt
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO damage_ai_analysis_results (
+                    damage_id,
+                    damaged,
+                    damage_score,
+                    repair_required,
+                    repair_priority,
+                    confidence_score,
+                    analysis_status,
+                    analyzed_at,
+                    created_at
+                )
+                VALUES (?, TRUE, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                damageId,
+                damageScore,
+                repairRequired,
+                repairPriority,
+                confidenceScore,
+                analysisStatus,
+                createdAt,
+                createdAt
         );
     }
 }

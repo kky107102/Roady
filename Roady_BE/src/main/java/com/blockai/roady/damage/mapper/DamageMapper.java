@@ -4,6 +4,7 @@ import com.blockai.roady.damage.domain.Damage;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
 import com.blockai.roady.damage.domain.DamageMapMarker;
+import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
 import org.apache.ibatis.annotations.Arg;
@@ -130,9 +131,21 @@ public interface DamageMapper {
                     FROM damage_images di
                     WHERE di.damage_id = d.id
                 ) AS image_count,
-                d.created_at,
-                d.updated_at
+                ai.damage_score,
+                ai.repair_required,
+                ai.repair_priority,
+                ai.confidence_score,
+                d.created_at
             FROM damages d
+            LEFT JOIN damage_ai_analysis_results ai
+                ON ai.id = (
+                    SELECT latest_ai.id
+                    FROM damage_ai_analysis_results latest_ai
+                    WHERE latest_ai.damage_id = d.id
+                      AND latest_ai.analysis_status = 'SUCCESS'
+                    ORDER BY latest_ai.created_at DESC, latest_ai.id DESC
+                    LIMIT 1
+                )
             <where>
                 <if test="from != null">
                     AND d.created_at <![CDATA[>=]]> #{from}
@@ -157,7 +170,6 @@ public interface DamageMapper {
     @ConstructorArgs({
             @Arg(column = "id", javaType = Long.class, id = true),
             @Arg(column = "robot_id", javaType = Long.class),
-            @Arg(column = "reported_by", javaType = Long.class),
             @Arg(column = "assigned_to", javaType = Long.class),
             @Arg(column = "description", javaType = String.class),
             @Arg(column = "latitude", javaType = BigDecimal.class),
@@ -165,10 +177,13 @@ public interface DamageMapper {
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
-            @Arg(column = "created_at", javaType = LocalDateTime.class),
-            @Arg(column = "updated_at", javaType = LocalDateTime.class)
+            @Arg(column = "damage_score", javaType = Integer.class),
+            @Arg(column = "repair_required", javaType = Boolean.class),
+            @Arg(column = "repair_priority", javaType = String.class),
+            @Arg(column = "confidence_score", javaType = BigDecimal.class),
+            @Arg(column = "created_at", javaType = LocalDateTime.class)
     })
-    List<DamageSummary> searchSummaries(
+    List<DamageSearchItem> searchSummaries(
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("status") String status,

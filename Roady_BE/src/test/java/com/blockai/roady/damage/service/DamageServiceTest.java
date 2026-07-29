@@ -6,6 +6,7 @@ import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
@@ -133,10 +134,9 @@ class DamageServiceTest {
                 1,
                 20
         );
-        DamageSummary summary = new DamageSummary(
+        DamageSearchItem summary = new DamageSearchItem(
                 1L,
                 10L,
-                2L,
                 3L,
                 "점자블록 파손",
                 BigDecimal.valueOf(37.1234567),
@@ -144,7 +144,10 @@ class DamageServiceTest {
                 LocalDateTime.of(2026, 7, 22, 10, 30),
                 "REVIEW_REQUIRED",
                 2L,
-                LocalDateTime.of(2026, 7, 22, 10, 31),
+                82,
+                true,
+                "HIGH",
+                BigDecimal.valueOf(0.91),
                 LocalDateTime.of(2026, 7, 22, 10, 31)
         );
 

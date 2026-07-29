@@ -2,9 +2,9 @@ package com.blockai.roady.damage.controller;
 
 import com.blockai.roady.common.exception.GlobalExceptionHandler;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageMapMarker;
-import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,10 +41,9 @@ class DamageControllerTest {
     @Test
     void getDamagesReturnsPagedSearchResponse() throws Exception {
         LocalDateTime createdAt = LocalDateTime.of(2026, 7, 22, 14, 30, 1);
-        DamageSummary summary = new DamageSummary(
+        DamageSearchItem summary = new DamageSearchItem(
                 1L,
                 10L,
-                2L,
                 5L,
                 "점자블록 균열",
                 BigDecimal.valueOf(37.5665),
@@ -52,7 +51,10 @@ class DamageControllerTest {
                 LocalDateTime.of(2026, 7, 22, 14, 30),
                 "REVIEW_REQUIRED",
                 2L,
-                createdAt,
+                82,
+                true,
+                "URGENT",
+                BigDecimal.valueOf(0.91),
                 createdAt
         );
         when(damageService.search(any(DamageSearchCriteria.class)))
@@ -64,6 +66,10 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].assignedTo").value(5))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("REVIEW_REQUIRED"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
+                .andExpect(jsonPath("$.content[0].damageScore").value(82))
+                .andExpect(jsonPath("$.content[0].repairRequired").value(true))
+                .andExpect(jsonPath("$.content[0].repairPriority").value("URGENT"))
+                .andExpect(jsonPath("$.content[0].confidenceScore").value(0.91))
                 .andExpect(jsonPath("$.content[0].reportedBy").doesNotExist())
                 .andExpect(jsonPath("$.content[0].updatedAt").doesNotExist())
                 .andExpect(jsonPath("$.page").value(0))
