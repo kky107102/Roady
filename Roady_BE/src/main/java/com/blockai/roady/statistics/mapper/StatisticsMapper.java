@@ -1,6 +1,7 @@
 package com.blockai.roady.statistics.mapper;
 
 import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
+import com.blockai.roady.statistics.domain.StatisticsCountRow;
 import org.apache.ibatis.annotations.Arg;
 import org.apache.ibatis.annotations.ConstructorArgs;
 import org.apache.ibatis.annotations.Mapper;
@@ -54,5 +55,54 @@ public interface StatisticsMapper {
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("unit") String unit
+    );
+
+    @Select("""
+            SELECT
+                d.current_status AS category,
+                COUNT(*) AS category_count
+            FROM damages d
+            WHERE d.created_at >= #{from}
+              AND d.created_at < #{to}
+            GROUP BY d.current_status
+            """)
+    @ConstructorArgs({
+            @Arg(column = "category", javaType = String.class, id = true),
+            @Arg(column = "category_count", javaType = long.class)
+    })
+    List<StatisticsCountRow> countDamagesByStatus(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
+    );
+
+    @Select("""
+            SELECT
+                CASE
+                    WHEN ai.repair_priority IN ('LOW', 'NORMAL', 'HIGH', 'URGENT')
+                        THEN ai.repair_priority
+                    ELSE 'UNCLASSIFIED'
+                END AS category,
+                COUNT(*) AS category_count
+            FROM damages d
+            LEFT JOIN damage_ai_analysis_results ai
+                ON ai.id = (
+                    SELECT latest_ai.id
+                    FROM damage_ai_analysis_results latest_ai
+                    WHERE latest_ai.damage_id = d.id
+                      AND latest_ai.analysis_status = 'SUCCESS'
+                    ORDER BY latest_ai.created_at DESC, latest_ai.id DESC
+                    LIMIT 1
+                )
+            WHERE d.created_at >= #{from}
+              AND d.created_at < #{to}
+            GROUP BY category
+            """)
+    @ConstructorArgs({
+            @Arg(column = "category", javaType = String.class, id = true),
+            @Arg(column = "category_count", javaType = long.class)
+    })
+    List<StatisticsCountRow> countDamagesByRepairPriority(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to
     );
 }

@@ -32,10 +32,44 @@ class StatisticsMapperSqlTest {
                 .contains("ORDER BY period_key");
     }
 
+    @Test
+    void statusStatisticsGroupsByCurrentStatus() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(StatisticsMapper.class.getName() + ".countDamagesByStatus")
+                .getBoundSql(periodParameters());
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("d.current_status AS category")
+                .contains("d.created_at >= ?")
+                .contains("d.created_at < ?")
+                .contains("GROUP BY d.current_status");
+    }
+
+    @Test
+    void repairPriorityStatisticsUsesLatestSuccessfulAnalysis() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(StatisticsMapper.class.getName() + ".countDamagesByRepairPriority")
+                .getBoundSql(periodParameters());
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("LEFT JOIN damage_ai_analysis_results ai")
+                .contains("latest_ai.analysis_status = 'SUCCESS'")
+                .contains("ORDER BY latest_ai.created_at DESC, latest_ai.id DESC LIMIT 1")
+                .contains("ELSE 'UNCLASSIFIED'")
+                .contains("GROUP BY category");
+    }
+
     private Configuration configuration() {
         Configuration mybatisConfiguration = new Configuration();
         mybatisConfiguration.addMapper(StatisticsMapper.class);
         return mybatisConfiguration;
+    }
+
+    private Map<String, LocalDateTime> periodParameters() {
+        return Map.of(
+                "from", LocalDateTime.of(2026, 7, 1, 0, 0),
+                "to", LocalDateTime.of(2026, 8, 1, 0, 0)
+        );
     }
 
     private String normalize(String sql) {

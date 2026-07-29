@@ -3,6 +3,8 @@ package com.blockai.roady.statistics.controller;
 import com.blockai.roady.common.exception.GlobalExceptionHandler;
 import com.blockai.roady.statistics.domain.DamageTimeSeries;
 import com.blockai.roady.statistics.domain.DamageTimeSeriesItem;
+import com.blockai.roady.statistics.domain.DamageStatusStatistics;
+import com.blockai.roady.statistics.domain.RepairPriorityStatistics;
 import com.blockai.roady.statistics.service.StatisticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +13,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 import static com.blockai.roady.statistics.domain.StatisticsUnit.DAY;
 import static org.mockito.ArgumentMatchers.any;
@@ -66,5 +69,42 @@ class StatisticsControllerTest {
                         .param("unit", "DAY"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("from must be earlier than to."));
+    }
+
+    @Test
+    void returnsDamageStatusStatistics() throws Exception {
+        when(statisticsService.getDamageStatusStatistics(any()))
+                .thenReturn(new DamageStatusStatistics(
+                        5,
+                        Map.of("COLLECTED", 3L, "REPAIR_COMPLETED", 2L)
+                ));
+
+        mockMvc.perform(get("/api/statistics/damages/by-status")
+                        .param("from", "2026-07-01T00:00:00")
+                        .param("to", "2026-08-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(5))
+                .andExpect(jsonPath("$.counts.COLLECTED").value(3))
+                .andExpect(jsonPath("$.counts.REPAIR_COMPLETED").value(2));
+    }
+
+    @Test
+    void returnsRepairPriorityStatistics() throws Exception {
+        when(statisticsService.getRepairPriorityStatistics(any()))
+                .thenReturn(new RepairPriorityStatistics(
+                        6,
+                        3,
+                        3,
+                        Map.of("LOW", 0L, "NORMAL", 0L, "HIGH", 2L, "URGENT", 1L)
+                ));
+
+        mockMvc.perform(get("/api/statistics/damages/by-repair-priority")
+                        .param("from", "2026-07-01T00:00:00")
+                        .param("to", "2026-08-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount").value(6))
+                .andExpect(jsonPath("$.classifiedCount").value(3))
+                .andExpect(jsonPath("$.unclassifiedCount").value(3))
+                .andExpect(jsonPath("$.counts.URGENT").value(1));
     }
 }

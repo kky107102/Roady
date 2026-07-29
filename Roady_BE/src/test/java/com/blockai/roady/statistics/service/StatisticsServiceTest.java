@@ -1,6 +1,7 @@
 package com.blockai.roady.statistics.service;
 
 import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
+import com.blockai.roady.statistics.domain.StatisticsCountRow;
 import com.blockai.roady.statistics.domain.StatisticsPeriod;
 import com.blockai.roady.statistics.domain.StatisticsUnit;
 import com.blockai.roady.statistics.mapper.StatisticsMapper;
@@ -38,5 +39,53 @@ class StatisticsServiceTest {
         assertThat(result.items().get(1).totalCount()).isZero();
         assertThat(result.items().get(1).repairCompletionRate()).isEqualByComparingTo("0.00");
         assertThat(result.items().get(2).repairCompletionRate()).isEqualByComparingTo("50.00");
+    }
+
+    @Test
+    void fillsMissingDamageStatusesWithZero() {
+        var period = period();
+        when(statisticsMapper.countDamagesByStatus(period.from(), period.to()))
+                .thenReturn(List.of(
+                        new StatisticsCountRow("COLLECTED", 3),
+                        new StatisticsCountRow("REPAIR_COMPLETED", 2)
+                ));
+
+        var result = statisticsService.getDamageStatusStatistics(period);
+
+        assertThat(result.totalCount()).isEqualTo(5);
+        assertThat(result.counts())
+                .containsEntry("COLLECTED", 3L)
+                .containsEntry("REPAIR_COMPLETED", 2L)
+                .containsEntry("REPAIRING", 0L)
+                .hasSize(7);
+    }
+
+    @Test
+    void separatesClassifiedAndUnclassifiedRepairPriorities() {
+        var period = period();
+        when(statisticsMapper.countDamagesByRepairPriority(period.from(), period.to()))
+                .thenReturn(List.of(
+                        new StatisticsCountRow("HIGH", 2),
+                        new StatisticsCountRow("URGENT", 1),
+                        new StatisticsCountRow("UNCLASSIFIED", 3)
+                ));
+
+        var result = statisticsService.getRepairPriorityStatistics(period);
+
+        assertThat(result.totalCount()).isEqualTo(6);
+        assertThat(result.classifiedCount()).isEqualTo(3);
+        assertThat(result.unclassifiedCount()).isEqualTo(3);
+        assertThat(result.counts())
+                .containsEntry("LOW", 0L)
+                .containsEntry("NORMAL", 0L)
+                .containsEntry("HIGH", 2L)
+                .containsEntry("URGENT", 1L);
+    }
+
+    private StatisticsPeriod period() {
+        return new StatisticsPeriod(
+                LocalDateTime.of(2026, 7, 1, 0, 0),
+                LocalDateTime.of(2026, 8, 1, 0, 0)
+        );
     }
 }
