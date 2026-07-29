@@ -1,0 +1,58 @@
+package com.blockai.roady.statistics.mapper;
+
+import com.blockai.roady.statistics.domain.DamageTimeSeriesRow;
+import org.apache.ibatis.annotations.Arg;
+import org.apache.ibatis.annotations.ConstructorArgs;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+@Mapper
+public interface StatisticsMapper {
+
+    @Select("""
+            <script>
+            SELECT
+                <choose>
+                    <when test="unit == 'DAY'">
+                        DATE_FORMAT(d.created_at, '%Y-%m-%d')
+                    </when>
+                    <when test="unit == 'WEEK'">
+                        DATE_FORMAT(
+                            DATE_SUB(DATE(d.created_at), INTERVAL WEEKDAY(d.created_at) DAY),
+                            '%Y-%m-%d'
+                        )
+                    </when>
+                    <when test="unit == 'MONTH'">
+                        DATE_FORMAT(d.created_at, '%Y-%m')
+                    </when>
+                    <otherwise>
+                        DATE_FORMAT(d.created_at, '%Y')
+                    </otherwise>
+                </choose>
+                AS period_key,
+                COUNT(*) AS total_count,
+                SUM(
+                    CASE WHEN d.current_status = 'REPAIR_COMPLETED' THEN 1 ELSE 0 END
+                ) AS repair_completed_count
+            FROM damages d
+            WHERE d.created_at <![CDATA[>=]]> #{from}
+              AND d.created_at <![CDATA[<]]> #{to}
+            GROUP BY period_key
+            ORDER BY period_key
+            </script>
+            """)
+    @ConstructorArgs({
+            @Arg(column = "period_key", javaType = String.class, id = true),
+            @Arg(column = "total_count", javaType = long.class),
+            @Arg(column = "repair_completed_count", javaType = long.class)
+    })
+    List<DamageTimeSeriesRow> findDamageTimeSeries(
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            @Param("unit") String unit
+    );
+}
