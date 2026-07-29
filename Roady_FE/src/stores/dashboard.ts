@@ -87,7 +87,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
       // 통계 API 구현 후 아래 주석을 풀어 교체한다.
       // timeSeries.value = await statisticsApi.timeSeries({ ...queryParams, unit: 'DAY' })
     } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : '데이터를 불러오는 중 오류가 발생했습니다.'
+      if (import.meta.env.DEV) console.error('[Dashboard] fetchAll:', e)
+      error.value = '데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
     } finally {
       loading.value = false
     }

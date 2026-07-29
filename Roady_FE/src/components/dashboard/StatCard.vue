@@ -110,7 +110,7 @@ withDefaults(defineProps<Props>(), {
 
 .stat-card__count {
   color: var(--roady-text-primary);
-  font-size: 3.6rem;
+  font-size: var(--krds-pc-font-size-display-small);
   font-weight: var(--krds-font-weight-bold);
   line-height: 1;
   letter-spacing: -0.02em;

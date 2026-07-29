@@ -181,8 +181,8 @@ onUnmounted(() => {
 .dashboard__error-banner {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1rem 1.6rem;
+  gap: 0.8rem;
+  padding: 0.7rem 1.4rem;
   border-radius: 0.6rem;
   border: 1px solid var(--roady-status-danger);
   background: color-mix(in srgb, var(--roady-status-danger) 8%, transparent);
@@ -265,7 +265,7 @@ onUnmounted(() => {
 .section-title {
   margin: 0;
   color: var(--roady-text-primary);
-  font-size: var(--krds-pc-font-size-body-medium);
+  font-size: var(--krds-pc-font-size-heading-xsmall);
   font-weight: var(--krds-font-weight-bold);
 }
 
@@ -314,7 +314,7 @@ onUnmounted(() => {
   border-radius: 0.4rem;
   background: color-mix(in srgb, var(--roady-status-warning) 15%, transparent);
   color: var(--roady-status-warning);
-  font-size: 1.1rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   font-weight: var(--krds-font-weight-bold);
   letter-spacing: 0.02em;
 }

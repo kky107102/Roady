@@ -12,6 +12,7 @@ interface Props {
   label: string
   modelValue: string
   options: SelectOption[]
+  size?: 'small' | 'medium' | 'large'
   placeholder?: string
   hint?: string
   error?: string
@@ -21,6 +22,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  size: 'large',
   placeholder: '',
   hint: '',
   error: '',
@@ -63,7 +65,7 @@ function handleChange(event: Event) {
         :id="id"
         :name="name"
         :value="modelValue"
-        class="krds-form-select large"
+        :class="['krds-form-select', size]"
         :class="{ 'is-error': error }"
         :required="required"
         :disabled="disabled"
