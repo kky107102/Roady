@@ -36,6 +36,7 @@ class DamageDashboardQueryIntegrationTest {
     @BeforeEach
     void setUpDamageData() {
         assertDamageSchema();
+        assertDamageIndexes();
         Long reportedBy = userId("admin");
         assignedUserId = userId("inspector");
         robotId = insertRobot(reportedBy);
@@ -90,6 +91,26 @@ class DamageDashboardQueryIntegrationTest {
                         "current_status",
                         "created_at",
                         "updated_at"
+                );
+    }
+
+    private void assertDamageIndexes() {
+        var indexes = jdbcTemplate.queryForList(
+                """
+                SELECT DISTINCT index_name
+                FROM information_schema.statistics
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'damages'
+                """,
+                String.class
+        );
+        assertThat(indexes)
+                .contains(
+                        "idx_damages_created_at_id",
+                        "idx_damages_status_created_at_id",
+                        "idx_damages_robot_created_at",
+                        "idx_damages_reported_by_created_at",
+                        "idx_damages_assigned_to_created_at"
                 );
     }
 
