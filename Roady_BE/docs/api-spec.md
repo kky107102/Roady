@@ -1101,6 +1101,64 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 허용 상태 전이는 `PENDING -> IN_PROGRESS`, `PENDING -> CANCELED`, `IN_PROGRESS -> SUCCEEDED`, `IN_PROGRESS -> FAILED`, `IN_PROGRESS -> CANCELED`이다.
 
+### 7.4 로봇 MQTT 및 WebSocket 연동
+
+MQTT 브로커 연결은 `MQTT_ENABLED`, `MQTT_BROKER_IP`, `MQTT_BROKER_PORT` 환경변수로 설정한다. 메시지 QoS는 `1`이며 명령 메시지는 retained 메시지로 저장하지 않는다.
+
+| 방향 | MQTT 토픽 | 설명 |
+| --- | --- | --- |
+| 로봇 → 서버 | `roady/{robotId}/telemetry` | 위치, 배터리, 운행 및 연결 상태 수신 |
+| 서버 → 로봇 | `roady/{robotId}/command` | DB에 저장된 제어 명령 발행 |
+| 로봇 → 서버 | `roady/{robotId}/command/ack` | 명령 접수 및 처리 결과 수신 |
+
+#### Telemetry Message
+
+```json
+{
+  "latitude": 37.501,
+  "longitude": 127.039,
+  "batteryLevel": 82,
+  "operationStatus": "MOVING",
+  "connectionStatus": "CONNECTED",
+  "errorCode": null,
+  "errorMessage": null,
+  "recordedAt": "2026-07-29T14:30:00"
+}
+```
+
+서버는 토픽에서 양의 정수 `robotId`를 추출하고 Payload를 검증한다. 정상 메시지는 Redis의 `roady:robots:{robotId}:location`에 최신 값으로 저장한 뒤 다음 STOMP 토픽으로 발행한다.
+
+| STOMP 토픽 | 설명 |
+| --- | --- |
+| `/topic/robots/location` | 모든 로봇의 실시간 위치 |
+| `/topic/robots/{robotId}/location` | 특정 로봇의 실시간 위치 |
+
+STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터리, 운행 상태, 연결 상태, 오류 정보, `recordedAt`, `receivedAt`을 포함한다.
+
+#### RobotCommandMessage
+
+```json
+{
+  "commandId": 15,
+  "commandType": "START_PATROL",
+  "requestedAt": "2026-07-29T14:30:00"
+}
+```
+
+명령은 DB 트랜잭션 커밋이 완료된 후 발행한다. `commandId`는 ACK와 DB 명령을 연결하는 식별자다.
+
+#### RobotCommandAckMessage
+
+```json
+{
+  "commandId": 15,
+  "commandStatus": "IN_PROGRESS",
+  "resultMessage": "Command accepted"
+}
+```
+
+로봇이 보낼 수 있는 ACK 상태는 `IN_PROGRESS`, `SUCCEEDED`, `FAILED`다. 토픽의 `robotId`와 Payload의 `commandId`가 가리키는 DB 명령이 일치해야 한다. QoS 1 중복 전달로 현재 상태와 동일한 ACK가 다시 들어오면 추가 DB 갱신 없이 성공 처리한다.
+
 ## 8. 로봇 경로 API 설계
 
 | 기능 | Method | URL | 권한 | 설명 |
