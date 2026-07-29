@@ -4,6 +4,8 @@ import com.blockai.roady.robot.domain.RobotCommand;
 import com.blockai.roady.robot.domain.RobotCommandStatus;
 import com.blockai.roady.robot.domain.RobotCommandType;
 import com.blockai.roady.robot.mapper.RobotCommandMapper;
+import com.blockai.roady.robot.mqtt.event.RobotCommandCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +18,16 @@ public class RobotCommandService {
 
     private final RobotCommandMapper robotCommandMapper;
     private final RobotService robotService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public RobotCommandService(RobotCommandMapper robotCommandMapper, RobotService robotService) {
+    public RobotCommandService(
+            RobotCommandMapper robotCommandMapper,
+            RobotService robotService,
+            ApplicationEventPublisher eventPublisher
+    ) {
         this.robotCommandMapper = robotCommandMapper;
         this.robotService = robotService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -33,8 +41,10 @@ public class RobotCommandService {
         command.setCommandStatus(RobotCommandStatus.PENDING);
         robotCommandMapper.insert(command);
 
-        return Optional.ofNullable(robotCommandMapper.findById(command.getId()))
+        RobotCommand createdCommand = Optional.ofNullable(robotCommandMapper.findById(command.getId()))
                 .orElseThrow(() -> new IllegalStateException("Created robot command not found."));
+        eventPublisher.publishEvent(RobotCommandCreatedEvent.from(createdCommand));
+        return createdCommand;
     }
 
     @Transactional(readOnly = true)
@@ -58,6 +68,9 @@ public class RobotCommandService {
     ) {
         robotService.get(robotId);
         RobotCommand command = getByRobotId(robotId, commandId);
+        if (command.getCommandStatus() == commandStatus) {
+            return command;
+        }
         validateStatusTransition(command.getCommandStatus(), commandStatus);
 
         LocalDateTime completedAt = isTerminal(commandStatus) ? LocalDateTime.now() : null;

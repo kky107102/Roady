@@ -1,9 +1,11 @@
 package com.blockai.roady.robot.mqtt.publisher;
 
-import com.blockai.roady.robot.dto.CreateRobotCommandRequest;
+import com.blockai.roady.robot.mqtt.RobotMqttTopics;
+import com.blockai.roady.robot.mqtt.dto.RobotCommandMessage;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.integration.mqtt.support.MqttHeaders;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class MqttPublisher {
 
     private final MessageChannel mqttOutboundChannel;
@@ -23,13 +26,11 @@ public class MqttPublisher {
      * Topic :
      * roady/{robotId}/command
      */
-    public void publishCommand(Long robotId,
-                               CreateRobotCommandRequest request
-    ) {
+    public void publishCommand(Long robotId, RobotCommandMessage command) {
         try {
-            String topic = "roady/" + robotId + "/command";
+            String topic = RobotMqttTopics.commandTopic(robotId);
 
-            String payload = objectMapper.writeValueAsString(request);
+            String payload = objectMapper.writeValueAsString(command);
 
             Message<String> message = MessageBuilder
                     .withPayload(payload)
@@ -37,15 +38,13 @@ public class MqttPublisher {
                     .setHeader(MqttHeaders.QOS, 1)
                     .build();
 
-            mqttOutboundChannel.send(message);
+            if (!mqttOutboundChannel.send(message)) {
+                throw new IllegalStateException("MQTT outbound channel rejected robot command.");
+            }
 
-            System.out.println("========== MQTT Publish ==========");
-            System.out.println("Topic   : " + topic);
-            System.out.println("Payload : " + payload);
-            System.out.println("==================================");
-
+            log.info("Published robot command. robotId={}, commandId={}", robotId, command.commandId());
         } catch (JsonProcessingException e) {
-            throw new RuntimeException("MQTT 메시지 발행 실패", e);
+            throw new IllegalArgumentException("Failed to serialize robot command.", e);
         }
     }
 }

@@ -1,7 +1,7 @@
 package com.blockai.roady.robot.mqtt.subscriber;
 
 import com.blockai.roady.robot.mqtt.RobotMqttTopics;
-import com.blockai.roady.robot.service.RobotLocationService;
+import com.blockai.roady.robot.service.RobotCommandAckService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.integration.annotation.ServiceActivator;
@@ -12,16 +12,16 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class MqttSubscriber {
+public class MqttCommandAckSubscriber {
 
-    private final RobotLocationService robotLocationService;
+    private final RobotCommandAckService robotCommandAckService;
 
-    @ServiceActivator(inputChannel = "mqttInputChannel")
+    @ServiceActivator(inputChannel = "mqttCommandAckInputChannel")
     public void receive(Message<String> message) {
         String topic = message.getHeaders().get(MqttHeaders.RECEIVED_TOPIC, String.class);
-        Long robotId = RobotMqttTopics.robotIdFromTelemetryTopic(topic);
+        Long robotId = RobotMqttTopics.robotIdFromCommandAckTopic(topic);
 
-        robotLocationService.saveLatest(robotId, message.getPayload());
-        log.debug("Processed robot telemetry. robotId={}", robotId);
+        robotCommandAckService.handle(robotId, message.getPayload());
+        log.debug("Processed robot command ACK. robotId={}", robotId);
     }
 }
