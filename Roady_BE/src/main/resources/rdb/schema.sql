@@ -102,6 +102,8 @@ CREATE TABLE IF NOT EXISTS damages (
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
+    INDEX idx_damages_created_at_id (created_at DESC, id DESC),
+    INDEX idx_damages_status_created_at_id (current_status, created_at DESC, id DESC),
     INDEX idx_damages_robot_created_at (robot_id, created_at),
     INDEX idx_damages_reported_by_created_at (reported_by, created_at),
     INDEX idx_damages_assigned_to_created_at (assigned_to, created_at),

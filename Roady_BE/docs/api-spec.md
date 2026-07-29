@@ -26,10 +26,11 @@
 | 사용자 | `PATCH` | `/api/users/{userId}/role` | 구현됨 | 사용자 권한 변경 |
 | 사용자 | `PATCH` | `/api/users/{userId}/active` | 구현됨 | 사용자 활성 상태 변경 |
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
-| 파손 | `GET` | `/api/damages` | 구현됨/확장 설계 | 파손 목록 조회 및 검색 |
-| 파손 | `GET` | `/api/damages/{damageId}` | 구현됨/확장 설계 | 파손 상세 조회 |
+| 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색 및 페이지 조회 |
+| 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
-| 파손 | `GET` | `/api/damages/map-markers` | 설계안 | 지도 표시용 파손 마커 조회 |
+| 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
+| 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}/duplicates` | 설계안 | 동일/인접 위치 중복 후보 조회 |
 | 파손 | `POST` | `/api/damages/{damageId}/reviews` | 설계안 | 점검 담당자 검토 의견 등록 |
 | 파손 | `GET` | `/api/damages/{damageId}/reviews` | 설계안 | 검토 의견 이력 조회 |
@@ -87,7 +88,8 @@
 | --- | --- | --- |
 | 인증 | `/api/auth` | 로그인, 토큰 재발급, 로그아웃, 내 정보 조회 |
 | 사용자 관리 | `/api/users` | 사용자 목록 조회, 생성, 권한 변경, 활성 상태 변경 |
-| 도로 파손 | `/api/damages` | 파손 정보 등록, 목록/상세 조회, 이미지 조회 |
+| 도로 파손 | `/api/damages` | 파손 정보 등록, 목록 검색, 지도 마커, 상세 및 이미지 조회 |
+| 대시보드 | `/api/dashboard/damages` | 파손 전체·미배정·상태별 건수 조회 |
 
 ### 2.2 권한 구성
 
@@ -651,7 +653,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 ### 5.2 도로 파손 목록 조회
 
-등록된 도로 파손 목록을 조회한다.
+등록된 도로 파손 목록을 검색하고 페이지 단위로 조회한다.
 
 | 항목 | 내용 |
 | --- | --- |
@@ -659,51 +661,167 @@ curl -X POST "http://localhost:8080/api/damages" \
 | URL | `/api/damages` |
 | 인증 | 필요 |
 
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 기본값 | 설명 |
+| --- | --- | --- | --- | --- |
+| `from` | string | 아니오 | 없음 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 없음 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 없음 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 없음 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 없음 | 처리 담당 사용자 ID |
+| `page` | number | 아니오 | `0` | 0부터 시작하는 페이지 번호 |
+| `size` | number | 아니오 | `20` | 페이지 크기. 1 이상 100 이하 |
+
+#### Response `200 OK`
+
+```json
+{
+  "content": [
+    {
+      "id": 1,
+      "robotId": 1,
+      "assignedTo": null,
+      "description": "도로 균열 감지",
+      "latitude": 37.5665000,
+      "longitude": 126.9780000,
+      "capturedAt": "2026-07-22T14:30:00",
+      "currentStatus": "COLLECTED",
+      "imageCount": 2,
+      "createdAt": "2026-07-22T14:30:01"
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+#### DamageSearchResponse
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `content` | array | 현재 페이지의 파손 목록 |
+| `content[].id` | number | 파손 ID |
+| `content[].robotId` | number, null | 촬영 로봇 ID |
+| `content[].assignedTo` | number, null | 처리 담당 사용자 ID |
+| `content[].description` | string, null | 파손 설명 |
+| `content[].latitude` | decimal, null | 위도 |
+| `content[].longitude` | decimal, null | 경도 |
+| `content[].capturedAt` | string, null | 촬영 일시 |
+| `content[].currentStatus` | string | 현재 처리 상태 |
+| `content[].imageCount` | number | 연결된 이미지 수 |
+| `content[].createdAt` | string | 생성 일시 |
+| `page` | number | 현재 페이지 번호 |
+| `size` | number | 페이지 크기 |
+| `totalElements` | number | 검색 조건에 해당하는 전체 데이터 수 |
+| `totalPages` | number | 전체 페이지 수 |
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 잘못된 기간, 처리 상태, 페이지 번호 또는 페이지 크기 |
+| `401` | 인증 실패 |
+
+### 5.3 대시보드 파손 요약 조회
+
+검색 조건에 해당하는 전체 파손 수, 미배정 수, 처리 상태별 수를 조회한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/dashboard/damages/summary` |
+| 인증 | 필요 |
+
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `from` | string | 아니오 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+
+#### Response `200 OK`
+
+```json
+{
+  "total": 123,
+  "unassigned": 12,
+  "statusCounts": {
+    "COLLECTED": 20,
+    "REVIEW_REQUIRED": 35,
+    "RECEIVED": 18,
+    "REPAIR_SCHEDULED": 10,
+    "REPAIRING": 8,
+    "REPAIR_COMPLETED": 27,
+    "REPAIR_NOT_REQUIRED": 5
+  }
+}
+```
+
+데이터가 없는 처리 상태도 `statusCounts`에 값 `0`으로 포함한다.
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 잘못된 기간 또는 처리 상태 |
+| `401` | 인증 실패 |
+
+### 5.4 지도 마커 조회
+
+지도에 표시할 파손 좌표와 현재 처리 상태를 조회한다. 위도 또는 경도가 없는 파손은 결과에서 제외한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `GET` |
+| URL | `/api/damages/map-markers` |
+| 인증 | 필요 |
+
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `from` | string | 아니오 | 등록 일시 시작값. 해당 일시를 포함한다. |
+| `to` | string | 아니오 | 등록 일시 종료값. 해당 일시를 포함하지 않는다. |
+| `status` | string | 아니오 | 파손 처리 상태 |
+| `robotId` | number | 아니오 | 촬영 로봇 ID |
+| `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+
 #### Response `200 OK`
 
 ```json
 [
   {
     "id": 1,
-    "robotId": 1,
-    "reportedBy": 2,
-    "assignedTo": null,
-    "description": "도로 균열 감지",
-    "latitude": 37.5665000,
-    "longitude": 126.9780000,
-    "capturedAt": "2026-07-22T14:30:00",
-    "currentStatus": "COLLECTED",
-    "imageCount": 2,
-    "createdAt": "2026-07-22T14:30:01",
-    "updatedAt": "2026-07-22T14:30:01"
+    "latitude": 37.5665,
+    "longitude": 126.978,
+    "currentStatus": "REVIEW_REQUIRED"
   }
 ]
 ```
 
-#### DamageSummaryResponse
+#### DamageMapMarkerResponse
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `id` | number | 파손 ID |
-| `robotId` | number, null | 촬영 로봇 ID |
-| `reportedBy` | number | 등록 사용자 ID |
-| `assignedTo` | number, null | 처리 담당 사용자 ID |
-| `description` | string, null | 파손 설명 |
-| `latitude` | decimal, null | 위도 |
-| `longitude` | decimal, null | 경도 |
-| `capturedAt` | string, null | 촬영 일시 |
+| `latitude` | decimal | 위도 |
+| `longitude` | decimal | 경도 |
 | `currentStatus` | string | 현재 처리 상태 |
-| `imageCount` | number | 연결된 이미지 수 |
-| `createdAt` | string | 생성 일시 |
-| `updatedAt` | string | 수정 일시 |
 
 #### Error
 
 | 상태 코드 | 발생 상황 |
 | --- | --- |
+| `400` | 잘못된 기간 또는 처리 상태 |
 | `401` | 인증 실패 |
 
-### 5.3 도로 파손 상세 조회
+### 5.5 도로 파손 상세 조회
 
 특정 도로 파손의 상세 정보와 이미지 메타데이터를 조회한다.
 
@@ -768,7 +886,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 존재하지 않는 파손 ID |
 | `401` | 인증 실패 |
 
-### 5.4 도로 파손 이미지 조회
+### 5.6 도로 파손 이미지 조회
 
 특정 파손에 연결된 이미지 바이너리를 조회한다.
 
@@ -839,19 +957,17 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 ### 6.2 공통 검색 조건
 
-파손 목록, 지도, 통계 API는 가능한 한 동일한 검색 조건을 공유한다.
+파손 목록, 대시보드 요약, 지도 마커 API는 동일한 검색 조건을 공유한다. 기간 조건은 서버에 파손 데이터가 등록된 `createdAt`을 기준으로 한다.
 
 | Query | 타입 | 설명 |
 | --- | --- | --- |
-| `from` | string | 시작 일시 또는 시작일 |
-| `to` | string | 종료 일시 또는 종료일 |
-| `regionCode` | string | 행정구역 코드 |
-| `severity` | string | 파손 정도 |
-| `status` | string | 처리 상태 |
+| `from` | string | 조회 시작 일시. ISO 8601 형식이며 해당 일시를 포함한다. |
+| `to` | string | 조회 종료 일시. ISO 8601 형식이며 해당 일시를 포함하지 않는다. |
+| `status` | string | 파손 처리 상태 |
 | `robotId` | number | 로봇 ID |
-| `assignedTo` | number | 담당자 ID |
-| `page` | number | 페이지 번호. 0부터 시작 |
-| `size` | number | 페이지 크기 |
+| `assignedTo` | number | 처리 담당 사용자 ID. `damages.assigned_to`가 참조하는 `users.id` |
+
+`page`, `size`는 목록 검색 API에서만 사용한다. `regionCode`, `severity`는 현재 데이터 모델에 없으므로 1차 대시보드 API의 검색 조건에서 제외한다.
 
 ## 7. 로봇 관제 API 설계
 
@@ -1071,20 +1187,38 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 경로점은 최소 2개 이상이어야 하며, `START`와 `DESTINATION`은 각각 정확히 1개씩 포함되어야 한다. 경로 삭제는 `CREATED` 상태에서만 가능하다.
 
-## 9. 파손 데이터 API 확장 설계
+## 9. 파손 데이터 및 대시보드 API
 
-현재 구현된 `/api/damages` API에 검색, 지도, 중복 후보, 검토 의견 기능을 추가한다.
+대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 주소, 행정구역, AI 심각도, 중복 및 지연 판정은 9.4의 후속 확장 범위로 구분한다.
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | 파손 등록 | `POST` | `/api/damages` | `ADMIN`, `INSPECTOR`, `ROBOT/DEVICE` | 이미지, 위치, 촬영 일시, 장치 정보를 저장한다. |
-| 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 지역, 파손 정도, 처리 상태로 검색한다. |
+| 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 처리 상태, 로봇, 담당자로 검색하고 페이지 단위로 조회한다. |
+| 대시보드 파손 요약 | `GET` | `/api/dashboard/damages/summary` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 검색 조건에 해당하는 전체 건수, 미배정 건수, 상태별 건수를 조회한다. |
 | 지도 마커 조회 | `GET` | `/api/damages/map-markers` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 지도 표시용 좌표와 상태 요약을 조회한다. |
 | 파손 상세 조회 | `GET` | `/api/damages/{damageId}` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 이미지, AI 분석, 상태 이력, 보수 정보를 함께 조회한다. |
 | 파손 이미지 조회 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 로그인 사용자 | 이미지 바이너리를 조회한다. |
-| 중복 후보 조회 | `GET` | `/api/damages/{damageId}/duplicates` | `ADMIN`, `INSPECTOR` | 동일 또는 인접 위치의 유사 파손 후보를 조회한다. |
-| 검토 의견 등록 | `POST` | `/api/damages/{damageId}/reviews` | `ADMIN`, `INSPECTOR` | 담당자 검토 의견을 등록한다. |
-| 검토 의견 조회 | `GET` | `/api/damages/{damageId}/reviews` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 파손 데이터의 검토 이력을 조회한다. |
+
+### 9.1 파손 목록 검색
+
+#### 요청
+
+```http
+GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&robotId=1&assignedTo=5&page=0&size=20
+```
+
+| Query | 필수 | 기본값 | 제약 |
+| --- | --- | --- | --- |
+| `from` | 아니오 | 없음 | `createdAt >= from` |
+| `to` | 아니오 | 없음 | `createdAt < to`, `from`보다 커야 한다. |
+| `status` | 아니오 | 없음 | 정의된 파손 처리 상태 중 하나 |
+| `robotId` | 아니오 | 없음 | 로봇 ID |
+| `assignedTo` | 아니오 | 없음 | 처리 담당 사용자 ID |
+| `page` | 아니오 | `0` | 0 이상의 정수 |
+| `size` | 아니오 | `20` | 1 이상 100 이하의 정수 |
+
+결과는 `createdAt DESC, id DESC` 순서로 정렬한다.
 
 #### DamageSearchResponse
 
@@ -1094,24 +1228,14 @@ curl -X POST "http://localhost:8080/api/damages" \
     {
       "id": 1,
       "robotId": 1,
-      "reportedBy": 2,
       "assignedTo": 5,
       "description": "점자블록 균열",
       "latitude": 37.5665,
       "longitude": 126.978,
-      "regionCode": "11650101",
-      "address": "서울특별시 서초구 ...",
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "REVIEW_REQUIRED",
-      "severity": "HIGH",
-      "repairRequired": true,
-      "repairPriority": "URGENT",
-      "confidenceScore": 0.82,
       "imageCount": 2,
-      "duplicateSuspected": false,
-      "delayed": false,
-      "createdAt": "2026-07-22T14:30:01",
-      "updatedAt": "2026-07-22T14:30:01"
+      "createdAt": "2026-07-22T14:30:01"
     }
   ],
   "page": 0,
@@ -1120,6 +1244,96 @@ curl -X POST "http://localhost:8080/api/damages" \
   "totalPages": 1
 }
 ```
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `content` | array | 현재 페이지의 파손 목록 |
+| `content[].id` | number | 파손 ID |
+| `content[].robotId` | number, null | 파손을 수집한 로봇 ID |
+| `content[].assignedTo` | number, null | 처리 담당 사용자 ID. 미배정이면 `null` |
+| `content[].description` | string, null | 파손 설명 |
+| `content[].latitude` | number, null | 위도 |
+| `content[].longitude` | number, null | 경도 |
+| `content[].capturedAt` | string, null | 촬영 일시 |
+| `content[].currentStatus` | string | 현재 파손 처리 상태 |
+| `content[].imageCount` | number | 등록된 이미지 수 |
+| `content[].createdAt` | string | 서버 등록 일시 |
+| `page` | number | 현재 페이지 번호. 0부터 시작 |
+| `size` | number | 요청한 페이지 크기 |
+| `totalElements` | number | 검색 조건에 해당하는 전체 데이터 수 |
+| `totalPages` | number | 전체 페이지 수. 결과가 없으면 0 |
+
+`regionCode`, `address`, `severity`, `repairRequired`, `repairPriority`, `confidenceScore`, `duplicateSuspected`, `delayed`는 1차 목록 응답에 포함하지 않는다. AI 분석 정보는 AI 분석 API에서 조회하며, 나머지 필드는 데이터 모델과 판정 규칙을 정의한 뒤 별도 확장한다.
+
+### 9.2 대시보드 파손 요약
+
+목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않는다.
+
+#### 요청
+
+```http
+GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&robotId=1
+```
+
+#### DamageDashboardSummaryResponse
+
+```json
+{
+  "total": 123,
+  "unassigned": 12,
+  "statusCounts": {
+    "COLLECTED": 20,
+    "REVIEW_REQUIRED": 35,
+    "RECEIVED": 18,
+    "REPAIR_SCHEDULED": 10,
+    "REPAIRING": 8,
+    "REPAIR_COMPLETED": 27,
+    "REPAIR_NOT_REQUIRED": 5
+  }
+}
+```
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `total` | number | 검색 조건에 해당하는 전체 파손 수 |
+| `unassigned` | number | 검색 결과 중 `assignedTo`가 `null`인 파손 수 |
+| `statusCounts` | object | 처리 상태별 파손 수. 데이터가 없는 상태도 값 `0`으로 포함한다. |
+
+`status` 조건이 전달되면 `total`, `unassigned`, `statusCounts` 모두 해당 상태로 필터링된 결과를 반환한다.
+
+### 9.3 지도 마커 조회
+
+목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않으며, 위도 또는 경도가 없는 파손은 결과에서 제외한다.
+
+#### 요청
+
+```http
+GET /api/damages/map-markers?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED
+```
+
+#### DamageMapMarkerResponse
+
+```json
+[
+  {
+    "id": 1,
+    "latitude": 37.5665,
+    "longitude": 126.978,
+    "currentStatus": "REVIEW_REQUIRED"
+  }
+]
+```
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | number | 파손 ID |
+| `latitude` | number | 위도 |
+| `longitude` | number | 경도 |
+| `currentStatus` | string | 현재 파손 처리 상태 |
+
+### 9.4 후속 확장 범위
+
+중복 후보, 검토 의견, 주소 및 행정구역 검색, AI 분석 기반 심각도 검색, 처리 지연 여부는 1차 대시보드 API 범위에서 제외한다. 각 기능에 필요한 데이터 모델과 판정 규칙을 먼저 정의한 뒤 별도 API로 추가한다.
 
 ## 10. AI 분석 API 설계
 
