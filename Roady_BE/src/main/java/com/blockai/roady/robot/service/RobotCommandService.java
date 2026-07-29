@@ -68,6 +68,9 @@ public class RobotCommandService {
     ) {
         robotService.get(robotId);
         RobotCommand command = getByRobotId(robotId, commandId);
+        if (command.getCommandStatus() == commandStatus) {
+            return command;
+        }
         validateStatusTransition(command.getCommandStatus(), commandStatus);
 
         LocalDateTime completedAt = isTerminal(commandStatus) ? LocalDateTime.now() : null;

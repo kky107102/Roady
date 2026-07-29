@@ -59,6 +59,11 @@ public class MqttConfig {
         return new DirectChannel();
     }
 
+    @Bean
+    public MessageChannel mqttCommandAckInputChannel() {
+        return new DirectChannel();
+    }
+
     /**
      * MQTT 발행 채널
      */
@@ -89,6 +94,23 @@ public class MqttConfig {
         adapter.setQos(1);
         adapter.setOutputChannel(mqttInputChannel());
 
+        return adapter;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "mqtt.enabled", havingValue = "true", matchIfMissing = true)
+    public MessageProducer commandAckInbound() {
+        MqttPahoMessageDrivenChannelAdapter adapter =
+                new MqttPahoMessageDrivenChannelAdapter(
+                        "spring-boot-command-ack-subscriber-" + System.currentTimeMillis(),
+                        mqttClientFactory(),
+                        RobotMqttTopics.COMMAND_ACK_FILTER
+                );
+
+        adapter.setCompletionTimeout(5000);
+        adapter.setConverter(new DefaultPahoMessageConverter());
+        adapter.setQos(1);
+        adapter.setOutputChannel(mqttCommandAckInputChannel());
         return adapter;
     }
 
