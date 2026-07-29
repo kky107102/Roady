@@ -67,10 +67,10 @@
 | 보수 결과 | `POST` | `/api/repair-results` | 설계안 | 보수 결과 등록 |
 | 보수 결과 | `GET` | `/api/repair-results/{resultId}` | 설계안 | 보수 결과 상세 조회 |
 | 보수 결과 | `GET` | `/api/damages/{damageId}/repair-result` | 설계안 | 파손별 보수 결과 조회 |
-| 통계 | `GET` | `/api/statistics/damages/time-series` | 설계안 | 기간별 파손 통계 조회 |
-| 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 설계안 | 보수 우선순위별 파손 통계 조회 |
-| 통계 | `GET` | `/api/statistics/damages/by-status` | 설계안 | 처리 상태별 통계 조회 |
-| 통계 | `GET` | `/api/statistics/repair/completion-rate` | 설계안 | 보수 완료율 조회 |
+| 통계 | `GET` | `/api/statistics/damages/time-series` | 구현됨 | 기간별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 구현됨 | 보수 우선순위별 파손 통계 조회 |
+| 통계 | `GET` | `/api/statistics/damages/by-status` | 구현됨 | 처리 상태별 통계 조회 |
+| 통계 | `GET` | `/api/statistics/repair/completion-rate` | 구현됨 | 보수 완료율 조회 |
 | 통계 | `GET` | `/api/statistics/export` | 설계안 | 통계 CSV/Excel 다운로드 |
 | 행정문서 | `POST` | `/api/documents` | 설계안 | 행정문서 초안 생성 |
 | 행정문서 | `GET` | `/api/documents` | 설계안 | 행정문서 목록 조회 |
