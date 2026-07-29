@@ -21,4 +21,11 @@ class RobotMqttTopicsTest {
         assertThatThrownBy(() -> RobotMqttTopics.robotIdFromTelemetryTopic("roady/0/telemetry"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void buildsCommandTopic() {
+        assertThat(RobotMqttTopics.commandTopic(10L)).isEqualTo("roady/10/command");
+        assertThatThrownBy(() -> RobotMqttTopics.commandTopic(0L))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
 }

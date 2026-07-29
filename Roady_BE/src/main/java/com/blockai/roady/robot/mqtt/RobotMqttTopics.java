@@ -29,4 +29,11 @@ public final class RobotMqttTopics {
             throw new IllegalArgumentException("Robot id must be a number.", ex);
         }
     }
+
+    public static String commandTopic(Long robotId) {
+        if (robotId == null || robotId <= 0) {
+            throw new IllegalArgumentException("Robot id must be positive.");
+        }
+        return "roady/" + robotId + "/command";
+    }
 }
