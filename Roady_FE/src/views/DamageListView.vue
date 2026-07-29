@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import type { DamageListQuery } from '@/api/damages'
+import { todayLocalStr, localDateOffset, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
 import type { DamageListItem, DamageSearchResponse, DamageStatus } from '@/types/damage'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
@@ -57,20 +58,12 @@ const activePreset = ref<number | null>(null)
 // 프리셋의 날짜 오프셋 (DateRangeFilter의 PRESETS와 동일한 순서)
 const PRESET_OFFSETS = [0, 6, 29]
 
-function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
 function computeActivePreset(from: string, to: string): number | null {
   if (!from || !to) return null
-  const today = new Date()
-  const todayStr = toDateString(today)
-  if (to !== todayStr) return null
+  if (to !== todayLocalStr()) return null
   for (let i = 0; i < PRESET_OFFSETS.length; i++) {
     const offset = PRESET_OFFSETS[i] ?? 0
-    const d = new Date(today)
-    d.setDate(d.getDate() - offset)
-    if (from === toDateString(d)) return i
+    if (from === localDateOffset(offset)) return i
   }
   return null
 }
@@ -99,8 +92,8 @@ async function loadPage(page: number, append: boolean) {
 
   try {
     const query: DamageListQuery = { page, size: 20 }
-    if (appliedFrom.value) query.from = appliedFrom.value
-    if (appliedTo.value) query.to = appliedTo.value
+    if (appliedFrom.value) query.from = toApiFromDateTime(appliedFrom.value)
+    if (appliedTo.value) query.to = toApiToDateTime(appliedTo.value)
     if (appliedStatus.value) query.status = appliedStatus.value
 
     const res: DamageSearchResponse = await damagesApi.list(query)

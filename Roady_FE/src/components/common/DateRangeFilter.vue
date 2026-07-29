@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { todayLocalStr, localDateOffset } from '@/utils/localDate'
+
 const props = defineProps<{
   from: string
   to: string
@@ -19,16 +21,9 @@ const PRESETS = [
   { label: '30일', offset: 29 },
 ]
 
-function toDateString(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
 function setPreset(offset: number, idx: number) {
-  const toDate = new Date()
-  const fromDate = new Date()
-  fromDate.setDate(fromDate.getDate() - offset)
-  const fromStr = toDateString(fromDate)
-  const toStr = toDateString(toDate)
+  const fromStr = localDateOffset(offset)
+  const toStr = todayLocalStr()
   emit('update:activePreset', idx)
   emit('update:from', fromStr)
   emit('update:to', toStr)

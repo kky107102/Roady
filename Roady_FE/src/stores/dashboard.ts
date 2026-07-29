@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 
 import { damagesApi } from '@/api/damages'
 import { robotsApi } from '@/api/robots'
+import { todayLocalStr, localDateOffset, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
 import { MOCK_TIME_SERIES, MOCK_HIGH_SEVERITY_COUNT, MOCK_STAT_COUNTS } from '@/mocks/dashboard'
 import type { DamageListItem } from '@/types/damage'
 import type { Robot } from '@/types/robot'
@@ -14,15 +15,8 @@ export interface DashboardFilter {
   regionCode: string
 }
 
-function toDateString(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
-
 function defaultFilter(): DashboardFilter {
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - 6)
-  return { from: toDateString(from), to: toDateString(to), regionCode: '' }
+  return { from: localDateOffset(6), to: todayLocalStr(), regionCode: '' }
 }
 
 export const useDashboardStore = defineStore('dashboard', () => {
@@ -73,8 +67,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     error.value = null
     try {
       const queryParams = {
-        from: filter.value.from,
-        to: filter.value.to,
+        ...(filter.value.from ? { from: toApiFromDateTime(filter.value.from) } : {}),
+        ...(filter.value.to ? { to: toApiToDateTime(filter.value.to) } : {}),
       }
       const [damageResponse, robotList] = await Promise.all([
         damagesApi.list(queryParams),
