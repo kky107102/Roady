@@ -1235,6 +1235,10 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "REVIEW_REQUIRED",
       "imageCount": 2,
+      "damageScore": 82,
+      "repairRequired": true,
+      "repairPriority": "URGENT",
+      "confidenceScore": 0.91,
       "createdAt": "2026-07-22T14:30:01"
     }
   ],
@@ -1257,13 +1261,19 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 파손 처리 상태 |
 | `content[].imageCount` | number | 등록된 이미지 수 |
+| `content[].damageScore` | number, null | 최신 성공 AI 분석의 파손 점수 |
+| `content[].repairRequired` | boolean, null | 최신 성공 AI 분석의 보수 필요 여부 |
+| `content[].repairPriority` | string, null | 최신 성공 AI 분석의 보수 우선순위 |
+| `content[].confidenceScore` | number, null | 최신 성공 AI 분석의 신뢰도 |
 | `content[].createdAt` | string | 서버 등록 일시 |
 | `page` | number | 현재 페이지 번호. 0부터 시작 |
 | `size` | number | 요청한 페이지 크기 |
 | `totalElements` | number | 검색 조건에 해당하는 전체 데이터 수 |
 | `totalPages` | number | 전체 페이지 수. 결과가 없으면 0 |
 
-`regionCode`, `address`, `severity`, `repairRequired`, `repairPriority`, `confidenceScore`, `duplicateSuspected`, `delayed`는 1차 목록 응답에 포함하지 않는다. AI 분석 정보는 AI 분석 API에서 조회하며, 나머지 필드는 데이터 모델과 판정 규칙을 정의한 뒤 별도 확장한다.
+AI 분석 필드는 `analysisStatus`가 `SUCCESS`인 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 반환한다. 성공한 분석 결과가 없으면 `damageScore`, `repairRequired`, `repairPriority`, `confidenceScore`는 모두 `null`이다.
+
+`regionCode`, `address`, `severity`, `duplicateSuspected`, `delayed`는 현재 목록 응답에 포함하지 않는다. `severity` 대신 AI 분석 결과에 저장된 `damageScore`를 파손 정도로 사용한다.
 
 ### 9.2 대시보드 파손 요약
 

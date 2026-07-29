@@ -15,6 +15,17 @@ class DamageMapperSqlTest {
     private final Configuration configuration = configuration();
 
     @Test
+    void findSummaryByIdSelectsReportedBy() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".findSummaryById")
+                .getBoundSql(Map.of("id", 1L));
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("d.reported_by")
+                .contains("WHERE d.id = ?");
+    }
+
+    @Test
     void searchSummariesBuildsFilteredPageQuery() {
         Map<String, Object> parameters = searchParameters();
 
@@ -23,6 +34,9 @@ class DamageMapperSqlTest {
                 .getBoundSql(parameters);
 
         assertThat(normalize(boundSql.getSql()))
+                .contains("LEFT JOIN damage_ai_analysis_results ai")
+                .contains("latest_ai.analysis_status = 'SUCCESS'")
+                .contains("ORDER BY latest_ai.created_at DESC, latest_ai.id DESC LIMIT 1")
                 .contains("WHERE d.created_at >= ?")
                 .contains("AND d.created_at < ?")
                 .contains("AND d.current_status = ?")

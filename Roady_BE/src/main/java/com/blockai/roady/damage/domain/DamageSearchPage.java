@@ -3,7 +3,7 @@ package com.blockai.roady.damage.domain;
 import java.util.List;
 
 public record DamageSearchPage(
-        List<DamageSummary> content,
+        List<DamageSearchItem> content,
         int page,
         int size,
         long totalElements,
@@ -11,7 +11,7 @@ public record DamageSearchPage(
 ) {
 
     public static DamageSearchPage of(
-            List<DamageSummary> content,
+            List<DamageSearchItem> content,
             DamageSearchCriteria criteria,
             long totalElements
     ) {

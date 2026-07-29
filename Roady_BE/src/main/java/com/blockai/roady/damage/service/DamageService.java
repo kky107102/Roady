@@ -7,6 +7,7 @@ import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
 import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
@@ -69,7 +70,7 @@ public class DamageService {
 
     @Transactional(readOnly = true)
     public DamageSearchPage search(DamageSearchCriteria criteria) {
-        List<DamageSummary> content = damageMapper.searchSummaries(
+        List<DamageSearchItem> content = damageMapper.searchSummaries(
                 criteria.from(),
                 criteria.to(),
                 criteria.status(),
