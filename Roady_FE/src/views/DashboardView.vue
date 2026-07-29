@@ -32,11 +32,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dashboard">
-    <!-- 조회 조건 툴바 -->
-    <div class="dashboard__toolbar">
-      <DashboardToolbar v-model="store.filter" @apply="store.applyFilter" />
-    </div>
+  <div class="dashboard-view">
+    <!-- 조회 조건 툴바 (전체 너비) -->
+    <DashboardToolbar v-model="store.filter" @apply="store.applyFilter" />
+
+    <!-- 스크롤 콘텐츠 영역 -->
+    <div class="dashboard-scroll">
+    <div class="dashboard">
 
     <!-- 로딩 오버레이 -->
     <div v-if="store.loading" class="dashboard__loading">
@@ -155,10 +157,26 @@ onUnmounted(() => {
           </div>
         </section>
       </div>
-  </div>
+    </div>  <!-- .dashboard -->
+    </div>  <!-- .dashboard-scroll -->
+  </div>  <!-- .dashboard-view -->
 </template>
 
 <style scoped>
+/* ── 뷰 셸 ── */
+.dashboard-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.dashboard-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .dashboard {
   position: relative;
   display: flex;
@@ -209,12 +227,6 @@ onUnmounted(() => {
 
 .error-banner__retry:hover {
   background: color-mix(in srgb, var(--roady-status-danger) 10%, transparent);
-}
-
-/* ── 툴바 ── */
-.dashboard__toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 /* ── 통계 카드 행 ── */

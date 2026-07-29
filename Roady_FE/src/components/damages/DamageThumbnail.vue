@@ -18,11 +18,12 @@ onMounted(async () => {
   status.value = 'loading'
   try {
     const detail = await damagesApi.getDetail(props.damageId)
-    if (detail.images.length === 0) {
+    const firstImage = detail.images[0]
+    if (!firstImage) {
       status.value = 'error'
       return
     }
-    const blob = await damagesApi.getImageContent(props.damageId, detail.images[0].id)
+    const blob = await damagesApi.getImageContent(props.damageId, firstImage.id)
     blobUrl.value = URL.createObjectURL(blob)
     status.value = 'done'
   } catch {

@@ -1,0 +1,33 @@
+<script setup lang="ts">
+defineProps<{ ariaLabel?: string }>()
+</script>
+
+<template>
+  <div class="page-filter-toolbar" role="search" :aria-label="ariaLabel">
+    <slot />
+    <div class="toolbar-actions">
+      <slot name="actions" />
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.page-filter-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1.6rem;
+  padding: 1.2rem 3.2rem;
+  background: var(--roady-surface-default);
+  border-bottom: 1px solid var(--roady-border-default);
+  flex-shrink: 0;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+</style>

@@ -7,6 +7,8 @@ import type { DamageListItem, DamageSearchResponse, DamageStatus } from '@/types
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
+import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 import DamageCard from '@/components/damages/DamageCard.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
 
@@ -50,12 +52,35 @@ const formFrom = ref('')
 const formTo = ref('')
 const formStatus = ref('')
 const formError = ref('')
+const activePreset = ref<number | null>(null)
+
+// 프리셋의 날짜 오프셋 (DateRangeFilter의 PRESETS와 동일한 순서)
+const PRESET_OFFSETS = [0, 6, 29]
+
+function toDateString(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function computeActivePreset(from: string, to: string): number | null {
+  if (!from || !to) return null
+  const today = new Date()
+  const todayStr = toDateString(today)
+  if (to !== todayStr) return null
+  for (let i = 0; i < PRESET_OFFSETS.length; i++) {
+    const offset = PRESET_OFFSETS[i] ?? 0
+    const d = new Date(today)
+    d.setDate(d.getDate() - offset)
+    if (from === toDateString(d)) return i
+  }
+  return null
+}
 
 function syncFormFromUrl() {
   formFrom.value = appliedFrom.value
   formTo.value = appliedTo.value
   formStatus.value = appliedStatus.value ?? ''
   formError.value = ''
+  activePreset.value = computeActivePreset(appliedFrom.value, appliedTo.value)
 }
 
 // ── 목록 데이터 ─────────────────────────────────────────────
@@ -117,7 +142,7 @@ watch(
 
 function handleApply() {
   formError.value = ''
-  if (formFrom.value && formTo.value && formFrom.value >= formTo.value) {
+  if (formFrom.value && formTo.value && formFrom.value > formTo.value) {
     formError.value = '시작일은 종료일보다 이전이어야 합니다.'
     return
   }
@@ -129,35 +154,14 @@ function handleApply() {
 }
 
 function handleReset() {
+  activePreset.value = null
   router.push({ name: 'damages' })
 }
 
-// ── 프리셋 버튼 ────────────────────────────────────────────
-
-const activePreset = ref<number | null>(null)
-
-const PRESETS = [
-  { label: '오늘', offset: 0 },
-  { label: '7일', offset: 6 },
-  { label: '30일', offset: 29 },
-]
-
-function toDateString(d: Date) {
-  return d.toISOString().slice(0, 10)
-}
-
-function setPreset(offset: number, idx: number) {
-  const to = new Date()
-  const from = new Date()
-  from.setDate(from.getDate() - offset)
-  formFrom.value = toDateString(from)
-  formTo.value = toDateString(to)
-  activePreset.value = idx
+function handlePresetApply({ from, to }: { from: string; to: string }) {
+  formFrom.value = from
+  formTo.value = to
   handleApply()
-}
-
-function onDateInput() {
-  activePreset.value = null
 }
 
 // ── 선택된 사건 (상세 패널) ─────────────────────────────
@@ -177,43 +181,18 @@ function closeDetail() {
   <div class="damage-view">
 
     <!-- 상단 툴바 -->
-    <div class="damage-toolbar" role="search" aria-label="탐지 사건 조회 조건">
+    <PageFilterToolbar aria-label="탐지 사건 조회 조건">
 
-      <!-- 기간 -->
-      <div class="toolbar-group">
-        <span class="toolbar-label">기간</span>
-        <div class="preset-group" role="group" aria-label="기간 프리셋">
-          <button
-            v-for="(p, idx) in PRESETS"
-            :key="p.label"
-            type="button"
-            class="preset-btn"
-            :class="{ 'is-active': activePreset === idx }"
-            :aria-pressed="activePreset === idx"
-            @click="setPreset(p.offset, idx)"
-          >{{ p.label }}</button>
-        </div>
-        <div class="date-range" role="group" aria-label="날짜 범위">
-          <input
-            v-model="formFrom"
-            type="date"
-            class="krds-input small date-input"
-            :max="formTo || undefined"
-            aria-label="시작일"
-            @input="onDateInput"
-          />
-          <span class="date-sep" aria-hidden="true">–</span>
-          <input
-            v-model="formTo"
-            type="date"
-            class="krds-input small date-input"
-            :min="formFrom || undefined"
-            aria-label="종료일"
-            @input="onDateInput"
-          />
-        </div>
-        <p v-if="formError" class="toolbar-error" role="alert">{{ formError }}</p>
-      </div>
+      <DateRangeFilter
+        :from="formFrom"
+        :to="formTo"
+        :active-preset="activePreset"
+        :error="formError"
+        @update:from="formFrom = $event"
+        @update:to="formTo = $event"
+        @update:active-preset="activePreset = $event"
+        @preset-apply="handlePresetApply"
+      />
 
       <!-- 처리 상태 -->
       <div class="toolbar-group">
@@ -225,30 +204,23 @@ function closeDetail() {
         </select>
       </div>
 
-      <!-- 검색 (비활성화) -->
-      <div class="toolbar-group toolbar-group--search">
-        <div class="search-wrapper" title="사건 번호·주소 검색은 현재 준비 중입니다">
-          <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input
-            type="text"
-            class="krds-input small search-input"
-            placeholder="사건 번호 또는 지역 검색"
-            disabled
-            aria-label="사건 번호 또는 지역 검색 (준비 중)"
-          />
-          <span class="coming-soon">준비 중</span>
-        </div>
+      <!-- 사건 번호·주소 검색 (준비 중, UI만 숨김) -->
+      <div style="display: none" aria-hidden="true">
+        <input
+          type="text"
+          class="krds-input small"
+          placeholder="사건 번호 또는 지역 검색"
+          disabled
+          aria-label="사건 번호 또는 지역 검색 (준비 중)"
+        />
       </div>
 
-      <!-- 버튼 -->
-      <div class="toolbar-actions">
+      <template #actions>
         <button type="button" class="krds-btn small outline" @click="handleReset">초기화</button>
         <button type="button" class="krds-btn small filled primary" @click="handleApply">조회</button>
-      </div>
+      </template>
 
-    </div>
+    </PageFilterToolbar>
 
     <!-- 콘텐츠 영역 -->
     <div class="damage-body">
@@ -346,29 +318,12 @@ function closeDetail() {
   overflow: hidden;
 }
 
-/* ── 툴바 ── */
-.damage-toolbar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 1.6rem;
-  padding: 1.2rem 2rem;
-  border-bottom: 1px solid var(--roady-border-default);
-  background: var(--roady-surface-default);
-  flex-shrink: 0;
-}
-
+/* ── 툴바 그룹 (PageFilterToolbar 내부) ── */
 .toolbar-group {
   display: flex;
   align-items: center;
   gap: 0.8rem;
   flex-wrap: nowrap;
-  position: relative;
-}
-
-.toolbar-group--search {
-  flex: 1;
-  min-width: 22rem;
 }
 
 .toolbar-label {
@@ -379,92 +334,9 @@ function closeDetail() {
   white-space: nowrap;
 }
 
-.preset-group {
-  display: flex;
-  gap: 0.4rem;
-  flex-shrink: 0;
-}
-
-.preset-btn {
-  height: 3.4rem;
-  padding: 0 0.9rem;
-  border: 1px solid var(--roady-border-default);
-  border-radius: 0.4rem;
-  background: transparent;
-  color: var(--roady-text-secondary);
-  font-size: var(--krds-pc-font-size-label-small);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
-}
-
-.preset-btn:hover { border-color: var(--roady-brand-secondary); color: var(--roady-brand-secondary); }
-.preset-btn.is-active {
-  border-color: var(--roady-brand-secondary);
-  background: color-mix(in srgb, var(--roady-brand-secondary) 10%, transparent);
-  color: var(--roady-brand-secondary);
-  font-weight: var(--krds-font-weight-bold);
-}
-
-.date-range {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-shrink: 0;
-}
-
-.date-input { width: 14rem; }
-.date-sep { color: var(--roady-text-tertiary); font-size: var(--krds-pc-font-size-label-small); }
-
-.toolbar-error {
-  position: absolute;
-  bottom: -1.8rem;
-  left: 0;
-  margin: 0;
-  font-size: var(--krds-pc-font-size-label-xsmall);
-  color: var(--roady-status-danger);
-  white-space: nowrap;
-}
-
-.status-select { width: 14rem; }
-
-.search-wrapper {
-  display: flex;
-  align-items: center;
-  position: relative;
-  flex: 1;
-}
-
-.search-icon {
-  position: absolute;
-  left: 1rem;
-  color: var(--roady-text-tertiary);
-  pointer-events: none;
-}
-
-.search-input {
-  width: 100%;
-  padding-left: 3rem !important;
-  padding-right: 6rem !important;
-}
-
-.coming-soon {
-  position: absolute;
-  right: 1rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.3rem;
-  background: var(--roady-surface-subtle);
-  color: var(--roady-text-tertiary);
-  font-size: var(--krds-pc-font-size-label-xsmall);
-  font-weight: var(--krds-font-weight-bold);
-  pointer-events: none;
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 0.6rem;
-  flex-shrink: 0;
-  margin-left: auto;
+.status-select {
+  width: 14rem;
+  height: 4rem;
 }
 
 /* ── 본문 ── */
