@@ -31,6 +31,16 @@ function markerTone(status: DamageStatus): MapMarkerItem['tone'] {
   return 'primary'
 }
 
+function formatCapturedAt(value: string | null): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  return new Intl.DateTimeFormat('ko-KR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
 export function toDamageMapMarkers(items: DamageListItem[]): MapMarkerItem[] {
   return items.flatMap((item) => {
     if (!isValidCoordinate(item.latitude, item.longitude)) return []
@@ -44,6 +54,7 @@ export function toDamageMapMarkers(items: DamageListItem[]): MapMarkerItem[] {
       details: [
         { label: '처리 상태', value: statusLabels[item.currentStatus] },
         { label: '로봇 ID', value: item.robotId == null ? '-' : String(item.robotId) },
+        { label: '탐지 시각', value: formatCapturedAt(item.capturedAt) },
         { label: '설명', value: item.description || '-' },
       ],
     }]

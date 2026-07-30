@@ -17,6 +17,7 @@ interface Props {
   center?: [number, number]
   zoom?: number
   emptyMessage?: string
+  mapLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
   center: () => [37.5665, 126.978],
   zoom: 12,
   emptyMessage: '표시할 위치 정보가 없습니다.',
+  mapLabel: '지도',
 })
 const emit = defineEmits<{
   markerSelect: [id: MapMarkerItem['id']]
@@ -35,9 +37,18 @@ let markerInstances: Marker[] = []
 let resizeObserver: ResizeObserver | null = null
 
 function markerIcon(tone: MapMarkerItem['tone']) {
+  const normalizedTone = tone ?? 'primary'
+  const symbols: Record<NonNullable<MapMarkerItem['tone']>, string> = {
+    primary: 'i',
+    success: '✓',
+    warning: '!',
+    danger: '!',
+    neutral: '·',
+  }
+
   return divIcon({
     className: 'roady-map-marker-wrapper',
-    html: `<span class="roady-map-marker roady-map-marker--${tone ?? 'primary'}"></span>`,
+    html: `<span class="roady-map-marker roady-map-marker--${normalizedTone}"><span class="roady-map-marker__symbol">${symbols[normalizedTone]}</span></span>`,
     iconSize: [32, 40],
     iconAnchor: [16, 40],
     popupAnchor: [0, -34],
@@ -144,10 +155,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="common-map">
-    <div ref="mapElement" class="common-map__canvas" aria-label="지도"></div>
+    <div ref="mapElement" class="common-map__canvas" :aria-label="mapLabel"></div>
     <div v-if="markers.length === 0" class="common-map__empty" role="status">
       {{ emptyMessage }}
     </div>
+    <ul v-else class="common-map__summary">
+      <li v-for="marker in markers" :key="marker.id">
+        <strong>{{ marker.title }}</strong>
+        <span v-for="detail in marker.details" :key="detail.label">
+          {{ detail.label }} {{ detail.value }}
+        </span>
+      </li>
+    </ul>
   </div>
 </template>
 
@@ -177,10 +196,24 @@ onBeforeUnmount(() => {
   border: 1px solid var(--roady-border-default);
   border-radius: 0.6rem;
   color: var(--roady-text-secondary);
-  background: rgb(255 255 255 / 92%);
-  box-shadow: 0 0.4rem 1.2rem rgb(17 24 39 / 10%);
+  background: color-mix(in srgb, var(--roady-surface-default) 92%, transparent);
+  box-shadow: 0 0.4rem 1.2rem color-mix(in srgb, var(--roady-text-primary) 10%, transparent);
   font-size: var(--krds-pc-font-size-body-small);
+  max-width: calc(100% - 3.2rem);
+  text-align: center;
   transform: translateX(-50%);
+}
+
+.common-map__summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 :global(.roady-map-marker-wrapper) {
@@ -195,21 +228,20 @@ onBeforeUnmount(() => {
   height: 2.8rem;
   border: 0.4rem solid var(--roady-surface-default);
   border-radius: 50% 50% 50% 0;
-  box-shadow: 0 0.3rem 0.8rem rgb(17 24 39 / 28%);
+  box-shadow: 0 0.3rem 0.8rem color-mix(in srgb, var(--roady-text-primary) 28%, transparent);
   background: var(--roady-brand-secondary);
   transform: rotate(-45deg);
 }
 
-:global(.roady-map-marker::after) {
+:global(.roady-map-marker__symbol) {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--roady-surface-default);
-  content: '';
-  transform: translate(-50%, -50%);
+  color: var(--roady-surface-default);
+  font-size: 1.4rem;
+  font-weight: var(--krds-font-weight-bold);
+  line-height: 1;
+  transform: translate(-50%, -50%) rotate(45deg);
 }
 
 :global(.roady-map-marker--success) {
@@ -256,5 +288,13 @@ onBeforeUnmount(() => {
 :global(.roady-map-popup__details dd) {
   margin: 0;
   font-weight: var(--krds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+:global(.leaflet-marker-icon:focus-visible),
+:global(.leaflet-control-zoom a:focus-visible) {
+  outline: 0.3rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
+  box-shadow: 0 0 0 0.4rem var(--roady-focus-ring);
 }
 </style>

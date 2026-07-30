@@ -187,6 +187,7 @@ onMounted(fetchRobots)
         <CommonMap
           class="robot-list-map"
           :markers="robotMarkers"
+          map-label="전체 로봇 최신 위치 지도"
           empty-message="위치 정보가 수집된 로봇이 없습니다."
         />
       </section>

@@ -1,6 +1,6 @@
 import type { MapMarkerItem } from '@/types/map'
 import type { Robot } from '@/types/robot'
-import { connectionBadge, operationBadge } from '@/utils/robotDisplay'
+import { connectionBadge, formatDateTime, operationBadge } from '@/utils/robotDisplay'
 
 function isValidCoordinate(latitude: number | null, longitude: number | null): boolean {
   return (
@@ -43,6 +43,7 @@ export function toRobotMapMarkers(robots: Robot[]): MapMarkerItem[] {
             label: '배터리',
             value: status.batteryLevel == null ? '-' : `${status.batteryLevel}%`,
           },
+          { label: '마지막 수신', value: formatDateTime(status.recordedAt) },
         ],
       },
     ]

@@ -121,6 +121,7 @@ onUnmounted(() => {
           <CommonMap
             class="dashboard-map"
             :markers="robotMarkers"
+            map-label="대시보드 로봇 위치 지도"
             empty-message="위치 정보가 수집된 로봇이 없습니다."
           />
         </section>

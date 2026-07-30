@@ -286,6 +286,7 @@ function closeDetail() {
         <CommonMap
           class="damage-map"
           :markers="damageMarkers"
+          map-label="조회된 탐지 사건 위치 지도"
           empty-message="위치 정보가 있는 탐지 사건이 없습니다."
           @marker-select="selectItem(Number($event))"
         />
@@ -452,5 +453,47 @@ function closeDetail() {
 .slide-enter-to,
 .slide-leave-from {
   transform: translateX(0);
+}
+
+@media (max-width: 1024px) {
+  .list-panel {
+    width: 34rem;
+  }
+
+  .detail-panel-wrapper {
+    width: 38rem;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .damage-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .list-panel {
+    width: 100%;
+    height: 42rem;
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--roady-border-default);
+  }
+
+  .map-panel {
+    height: 42rem;
+    flex: none;
+  }
+
+  .detail-panel-wrapper {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-enter-active,
+  .slide-leave-active {
+    transition: none;
+  }
 }
 </style>

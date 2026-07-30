@@ -274,6 +274,7 @@ watch(robotId, fetchRobot)
           <CommonMap
             class="robot-detail-map"
             :markers="robotMarkers"
+            :map-label="`${robot.name} 최신 위치 지도`"
             empty-message="수집된 로봇 위치 정보가 없습니다."
           />
         </section>

@@ -30,18 +30,19 @@ function robot(overrides: Partial<Robot> = {}): Robot {
 describe('toRobotMapMarkers', () => {
   it('maps a located robot to a marker with user-facing status details', () => {
     expect(toRobotMapMarkers([robot()])).toEqual([
-      {
+      expect.objectContaining({
         id: 1,
         latitude: 37.5665,
         longitude: 126.978,
         title: '로디1호',
         tone: 'success',
-        details: [
+        details: expect.arrayContaining([
           { label: '운행 상태', value: '이동 중' },
           { label: '연결 상태', value: '연결됨' },
           { label: '배터리', value: '72%' },
-        ],
-      },
+          expect.objectContaining({ label: '마지막 수신' }),
+        ]),
+      }),
     ])
   })
 
