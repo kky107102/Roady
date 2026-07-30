@@ -41,8 +41,14 @@ const router = createRouter({
         {
           path: 'robots',
           name: 'robots',
-          component: () => import('@/views/PlaceholderView.vue'),
+          component: () => import('@/views/RobotListView.vue'),
           meta: { title: '로디 운행' },
+        },
+        {
+          path: 'robots/:id',
+          name: 'robot-detail',
+          component: () => import('@/views/RobotDetailView.vue'),
+          meta: { title: '로봇 상세' },
         },
         {
           path: 'repairs',

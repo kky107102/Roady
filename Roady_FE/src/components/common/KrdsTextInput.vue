@@ -7,6 +7,7 @@ interface Props {
   label: string
   modelValue: string
   type?: 'text' | 'password'
+  size?: 'small' | 'medium' | 'large'
   autocomplete?: string
   placeholder?: string
   hint?: string
@@ -19,6 +20,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   type: 'text',
+  size: 'large',
   autocomplete: 'off',
   placeholder: '',
   hint: '',
@@ -81,7 +83,7 @@ defineExpose({
         :name="name"
         :value="modelValue"
         :type="inputType"
-        class="krds-input large"
+        :class="['krds-input', size]"
         :autocomplete="autocomplete"
         :placeholder="placeholder"
         :required="required"
