@@ -49,8 +49,10 @@ erDiagram
     users {
         bigint id PK
         varchar username UK
-        varchar password
+        varchar password_hash
+        varchar email UK
         varchar name
+        varchar assigned_region_code "NULL"
         varchar role
         boolean active
         datetime created_at
@@ -117,10 +119,18 @@ erDiagram
         bigint robot_id FK "NULL"
         bigint reported_by FK "NOT NULL"
         bigint assigned_to FK "NULL"
-        decimal latitude
-        decimal longitude
-        datetime captured_at
-        varchar current_status
+        text description
+        varchar address_name "NULL"
+        varchar road_address_name "NULL"
+        varchar region_code "NULL"
+        varchar region_1depth_name "NULL"
+        varchar region_2depth_name "NULL"
+        varchar region_3depth_name "NULL"
+        datetime geocoded_at "NULL"
+        decimal latitude "NULL"
+        decimal longitude "NULL"
+        datetime captured_at "NULL"
+        varchar current_status "DEFAULT COLLECTED"
         datetime created_at
         datetime updated_at
     }
@@ -312,9 +322,11 @@ erDiagram
 | 컬럼 | 의미 |
 | --- | --- |
 | `robots.user_id` | 로봇 책임자 사용자 ID |
+| `users.assigned_region_code` | 사용자의 담당 시군구 코드. 시군구 코드 데이터와 조인해 담당 지역명을 해석한다. 미배정이면 `NULL` |
 | `damages.robot_id` | 사진을 촬영한 로봇 ID. 사람이 직접 등록한 경우 `NULL` 가능 |
 | `damages.reported_by` | 파손을 시스템에 등록한 사용자 ID. 로봇 자동 업로드 시 로봇 책임자 ID를 사용하며 `NOT NULL` |
 | `damages.assigned_to` | 파손 처리 담당자 ID. 담당자 배정 전에는 `NULL` 가능 |
+| `damages.region_code` | 파손 좌표를 카카오 행정구역 API로 변환해 저장한 시군구 코드. 지역 필터 조건으로 사용하며 변환 전에는 `NULL` 가능 |
 
 ## 5. 파손 대시보드 조회 인덱스
 
@@ -324,12 +336,18 @@ erDiagram
 | `idx_damages_status_created_at_id` | `current_status, created_at DESC, id DESC` | 처리 상태별 기간 검색 및 최신순 페이지 조회 |
 | `idx_damages_robot_created_at` | `robot_id, created_at` | 로봇별 파손 검색 |
 | `idx_damages_assigned_to_created_at` | `assigned_to, created_at` | 담당자별 파손 검색 |
+| `idx_users_assigned_region_code` | `assigned_region_code` | 담당 시군구 코드별 사용자 조회 |
+| `idx_damages_address_name` | `address_name` | 지번 주소 키워드 검색 |
+| `idx_damages_road_address_name` | `road_address_name` | 도로명 주소 키워드 검색 |
+| `idx_damages_region_code_created_at` | `region_code, created_at DESC, id DESC` | 시군구 코드와 기간 조건을 함께 사용하는 파손 검색 |
 | `idx_damage_images_damage_sort_order` | `damage_id, sort_order` | 목록의 파손별 이미지 수 및 이미지 순서 조회 |
 
 신규 데이터베이스에는 `schema.sql`의 테이블 생성 과정에서 인덱스가 적용된다.
 
 - 최신 컬럼은 있지만 대시보드 인덱스만 없는 데이터베이스: `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행한다.
 - `created_by`를 사용하는 구버전 `damages` 테이블: `docs/sql/migrate-damages-dashboard.sql`을 한 번 실행한다. 기존 `created_by` 값은 `reported_by`로 보존된다.
+- 담당 시군구 코드가 없는 구버전 `users` 테이블: `docs/sql/add-user-assigned-region-code-field.sql`을 한 번 실행한다.
+- 주소/행정구역 필드가 없는 구버전 `damages` 테이블: `docs/sql/add-damage-geocoding-fields.sql`, `docs/sql/add-damage-region-code-field.sql`을 순서대로 한 번 실행한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 

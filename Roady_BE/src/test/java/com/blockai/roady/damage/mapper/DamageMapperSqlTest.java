@@ -43,6 +43,7 @@ class DamageMapperSqlTest {
                 .contains("AND d.current_status = ?")
                 .contains("AND d.robot_id = ?")
                 .contains("AND d.assigned_to = ?")
+                .contains("AND d.region_code = ?")
                 .contains("ORDER BY d.created_at DESC, d.id DESC")
                 .contains("LIMIT ?, ?");
     }
@@ -62,6 +63,7 @@ class DamageMapperSqlTest {
                 .contains("AND d.current_status = ?")
                 .contains("AND d.robot_id = ?")
                 .contains("AND d.assigned_to = ?")
+                .contains("AND d.region_code = ?")
                 .doesNotContain("LIMIT")
                 .doesNotContain("ORDER BY");
     }
@@ -82,6 +84,7 @@ class DamageMapperSqlTest {
                 .contains("AND d.current_status = ?")
                 .contains("AND d.robot_id = ?")
                 .contains("AND d.assigned_to = ?")
+                .contains("AND d.region_code = ?")
                 .contains("GROUP BY d.current_status")
                 .doesNotContain("LIMIT");
     }
@@ -102,6 +105,7 @@ class DamageMapperSqlTest {
                 .contains("AND d.current_status = ?")
                 .contains("AND d.robot_id = ?")
                 .contains("AND d.assigned_to = ?")
+                .contains("AND d.region_code = ?")
                 .contains("ORDER BY d.created_at DESC, d.id DESC")
                 .doesNotContain("JOIN")
                 .doesNotContain("LIMIT");
@@ -120,6 +124,7 @@ class DamageMapperSqlTest {
         parameters.put("status", "REVIEW_REQUIRED");
         parameters.put("robotId", 1L);
         parameters.put("assignedTo", 5L);
+        parameters.put("regionCode", "41550");
         parameters.put("south", new BigDecimal("37.45"));
         parameters.put("north", new BigDecimal("37.62"));
         parameters.put("west", new BigDecimal("126.80"));

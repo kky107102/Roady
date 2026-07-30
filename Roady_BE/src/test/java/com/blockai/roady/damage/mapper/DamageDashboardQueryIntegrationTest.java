@@ -114,6 +114,13 @@ class DamageDashboardQueryIntegrationTest {
                         "reported_by",
                         "assigned_to",
                         "description",
+                        "address_name",
+                        "road_address_name",
+                        "region_code",
+                        "region_1depth_name",
+                        "region_2depth_name",
+                        "region_3depth_name",
+                        "geocoded_at",
                         "latitude",
                         "longitude",
                         "captured_at",
@@ -139,7 +146,10 @@ class DamageDashboardQueryIntegrationTest {
                         "idx_damages_status_created_at_id",
                         "idx_damages_robot_created_at",
                         "idx_damages_reported_by_created_at",
-                        "idx_damages_assigned_to_created_at"
+                        "idx_damages_assigned_to_created_at",
+                        "idx_damages_address_name",
+                        "idx_damages_road_address_name",
+                        "idx_damages_region_code_created_at"
                 );
     }
 
@@ -150,6 +160,7 @@ class DamageDashboardQueryIntegrationTest {
                 TO,
                 "REVIEW_REQUIRED",
                 robotId,
+                null,
                 null,
                 0,
                 1
@@ -171,6 +182,7 @@ class DamageDashboardQueryIntegrationTest {
                 "REVIEW_REQUIRED",
                 robotId,
                 null,
+                null,
                 1,
                 1
         ));
@@ -180,6 +192,58 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(secondPage.content().getFirst().imageCount()).isEqualTo(2);
         assertThat(secondPage.content().getFirst().damageScore()).isEqualTo(82);
         assertThat(secondPage.content().getFirst().repairPriority()).isEqualTo("URGENT");
+    }
+
+    @Test
+    void searchFiltersByCaseNumberOrAddressKeyword() {
+        var byCaseNumber = damageService.search(new DamageSearchCriteria(
+                FROM,
+                TO,
+                null,
+                null,
+                null,
+                newerDamageId.toString(),
+                0,
+                20
+        ));
+
+        assertThat(byCaseNumber.content())
+                .extracting(damage -> damage.id())
+                .containsExactly(newerDamageId);
+
+        var byAddress = damageService.search(new DamageSearchCriteria(
+                FROM,
+                TO,
+                "REVIEW_REQUIRED",
+                null,
+                null,
+                "Juksan",
+                0,
+                20
+        ));
+
+        assertThat(byAddress.content())
+                .extracting(damage -> damage.id())
+                .containsExactly(newerDamageId, olderDamageId);
+    }
+
+    @Test
+    void searchFiltersByRegionCodeAndPeriod() {
+        var result = damageService.search(new DamageSearchCriteria(
+                FROM,
+                TO,
+                null,
+                null,
+                null,
+                "41550",
+                null,
+                0,
+                20
+        ));
+
+        assertThat(result.content())
+                .extracting(damage -> damage.id())
+                .containsExactly(newerDamageId, olderDamageId);
     }
 
     @Test
@@ -257,6 +321,13 @@ class DamageDashboardQueryIntegrationTest {
                     reported_by,
                     assigned_to,
                     description,
+                    address_name,
+                    road_address_name,
+                    region_code,
+                    region_1depth_name,
+                    region_2depth_name,
+                    region_3depth_name,
+                    geocoded_at,
                     latitude,
                     longitude,
                     captured_at,
@@ -264,12 +335,19 @@ class DamageDashboardQueryIntegrationTest {
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 robotId,
                 reportedBy,
                 assignedTo,
                 description,
+                "Gyeonggi Anseong Juksan " + UUID.randomUUID(),
+                "Gyeonggi Anseong Juksanchogyogil " + UUID.randomUUID(),
+                status.equals("REVIEW_REQUIRED") ? "41550" : "41111",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                createdAt,
                 hasCoordinates ? 37.5665 : null,
                 hasCoordinates ? 126.978 : null,
                 createdAt,

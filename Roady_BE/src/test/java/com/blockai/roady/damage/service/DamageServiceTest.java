@@ -4,13 +4,15 @@ import com.blockai.roady.damage.domain.Damage;
 import com.blockai.roady.damage.domain.DamageDashboardSummary;
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
-import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageMapBounds;
+import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
+import com.blockai.roady.damage.geocoding.GeocodedAddress;
+import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,6 +25,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -36,18 +39,37 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DamageServiceTest {
 
+    private static final String ADDRESS_NAME = "Gyeonggi Anseong Juksan 343-1";
+    private static final String ROAD_ADDRESS_NAME = "Gyeonggi Anseong Juksanchogyogil 69-4";
+
     @Mock
     private DamageMapper damageMapper;
+
+    @Mock
+    private KakaoReverseGeocodingClient geocodingClient;
 
     @InjectMocks
     private DamageService damageService;
 
     @Test
-    void createStoresDamageAndMultipleImages() {
+    void createStoresDamageAddressWhenReverseGeocodingSucceeds() {
         LocalDateTime capturedAt = LocalDateTime.of(2026, 7, 22, 10, 30);
+        LocalDateTime geocodedAt = LocalDateTime.of(2026, 7, 22, 10, 31);
         MockMultipartFile firstImage = image("first.jpg");
         MockMultipartFile secondImage = image("second.jpg");
 
+        when(geocodingClient.reverseGeocode(
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567)
+        )).thenReturn(Optional.of(new GeocodedAddress(
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                geocodedAt
+        )));
         doAnswer(invocation -> {
             Damage damage = invocation.getArgument(0);
             damage.setId(1L);
@@ -58,7 +80,14 @@ class DamageServiceTest {
                 10L,
                 2L,
                 3L,
-                "점자블록 파손",
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                geocodedAt,
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
@@ -72,7 +101,7 @@ class DamageServiceTest {
                 10L,
                 2L,
                 3L,
-                "점자블록 파손",
+                "tactile block damage",
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
@@ -88,12 +117,59 @@ class DamageServiceTest {
         assertThat(savedDamage.getRobotId()).isEqualTo(10L);
         assertThat(savedDamage.getReportedBy()).isEqualTo(2L);
         assertThat(savedDamage.getAssignedTo()).isEqualTo(3L);
+        assertThat(savedDamage.getAddressName()).isEqualTo(ADDRESS_NAME);
+        assertThat(savedDamage.getRoadAddressName()).isEqualTo(ROAD_ADDRESS_NAME);
+        assertThat(savedDamage.getRegionCode()).isEqualTo("41550");
+        assertThat(savedDamage.getRegion1DepthName()).isEqualTo("Gyeonggi");
+        assertThat(savedDamage.getRegion2DepthName()).isEqualTo("Anseong");
+        assertThat(savedDamage.getRegion3DepthName()).isEqualTo("Juksan");
+        assertThat(savedDamage.getGeocodedAt()).isEqualTo(geocodedAt);
 
         List<DamageImage> savedImages = imageCaptor.getAllValues();
         assertThat(savedImages).extracting(DamageImage::getSortOrder).containsExactly(1, 2);
         assertThat(savedImages).extracting(DamageImage::getOriginalFilename)
                 .containsExactly("first.jpg", "second.jpg");
         assertThat(result.imageCount()).isEqualTo(2L);
+    }
+
+    @Test
+    void createStoresDamageWithoutAddressWhenReverseGeocodingReturnsEmpty() {
+        MockMultipartFile image = image("damage.jpg");
+        when(geocodingClient.reverseGeocode(null, null)).thenReturn(Optional.empty());
+        doAnswer(invocation -> {
+            Damage damage = invocation.getArgument(0);
+            damage.setId(1L);
+            return 1;
+        }).when(damageMapper).insertDamage(any(Damage.class));
+        when(damageMapper.findSummaryById(1L)).thenReturn(new DamageSummary(
+                1L,
+                null,
+                2L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "COLLECTED",
+                1L,
+                null,
+                null
+        ));
+
+        damageService.create(null, 2L, null, null, null, null, null, List.of(image));
+
+        ArgumentCaptor<Damage> damageCaptor = ArgumentCaptor.forClass(Damage.class);
+        verify(damageMapper).insertDamage(damageCaptor.capture());
+        assertThat(damageCaptor.getValue().getAddressName()).isNull();
+        assertThat(damageCaptor.getValue().getRoadAddressName()).isNull();
+        assertThat(damageCaptor.getValue().getGeocodedAt()).isNull();
     }
 
     @Test
@@ -120,6 +196,7 @@ class DamageServiceTest {
         verify(damageMapper, never()).insertDamage(any(Damage.class));
         verify(damageMapper, never()).insertImage(any(DamageImage.class));
         verify(damageMapper, never()).findSummaryById(eq(1L));
+        verify(geocodingClient, never()).reverseGeocode(any(), any());
     }
 
     @Test
@@ -132,6 +209,8 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
+                "Juksan",
                 1,
                 20
         );
@@ -139,7 +218,14 @@ class DamageServiceTest {
                 1L,
                 10L,
                 3L,
-                "점자블록 파손",
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                LocalDateTime.of(2026, 7, 22, 10, 31),
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 LocalDateTime.of(2026, 7, 22, 10, 30),
@@ -158,6 +244,9 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
+                null,
+                "Juksan",
                 20L,
                 20
         )).thenReturn(List.of(summary));
@@ -166,7 +255,10 @@ class DamageServiceTest {
                 to,
                 "REVIEW_REQUIRED",
                 10L,
-                3L
+                3L,
+                "41550",
+                null,
+                "Juksan"
         )).thenReturn(41L);
 
         DamageSearchPage result = damageService.search(criteria);
@@ -186,12 +278,13 @@ class DamageServiceTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 20
         );
-        when(damageMapper.searchSummaries(null, null, null, null, null, 0L, 20))
+        when(damageMapper.searchSummaries(null, null, null, null, null, null, null, null, 0L, 20))
                 .thenReturn(List.of());
-        when(damageMapper.countSummaries(null, null, null, null, null))
+        when(damageMapper.countSummaries(null, null, null, null, null, null, null, null))
                 .thenReturn(0L);
 
         DamageSearchPage result = damageService.search(criteria);
@@ -209,12 +302,14 @@ class DamageServiceTest {
                 null,
                 null,
                 null,
+                null,
                 -1,
                 20
         )).isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("page must be 0 or greater.");
 
         assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
                 null,
                 null,
                 null,
@@ -237,6 +332,7 @@ class DamageServiceTest {
                 null,
                 null,
                 null,
+                null,
                 0,
                 20
         )).isInstanceOf(IllegalArgumentException.class)
@@ -248,6 +344,7 @@ class DamageServiceTest {
                 "UNKNOWN",
                 null,
                 null,
+                null,
                 0,
                 20
         )).isInstanceOf(IllegalArgumentException.class)
@@ -255,11 +352,23 @@ class DamageServiceTest {
     }
 
     @Test
+    void searchCriteriaParsesCaseNumberAndEscapesAddressKeyword() {
+        DamageSearchCriteria numeric = new DamageSearchCriteria(null, null, null, null, null, "42", 0, 20);
+        DamageSearchCriteria text = new DamageSearchCriteria(null, null, null, null, null, " road_% ", 0, 20);
+
+        assertThat(numeric.caseNumber()).isEqualTo(42L);
+        assertThat(numeric.addressKeyword()).isEqualTo("42");
+        assertThat(text.caseNumber()).isNull();
+        assertThat(text.keyword()).isEqualTo("road_%");
+        assertThat(text.addressKeyword()).isEqualTo("road\\_\\%");
+    }
+
+    @Test
     void summarizeReturnsTotalsAndZeroFilledStatusCounts() {
         LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
         LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
         DamageFilterCriteria criteria = new DamageFilterCriteria(from, to, null, 10L, null);
-        when(damageMapper.summarizeByStatus(from, to, null, 10L, null))
+        when(damageMapper.summarizeByStatus(from, to, null, 10L, null, null))
                 .thenReturn(List.of(
                         new DamageStatusCount("COLLECTED", 3, 2),
                         new DamageStatusCount("REVIEW_REQUIRED", 2, 1)
@@ -279,7 +388,7 @@ class DamageServiceTest {
     @Test
     void summarizeReturnsZeroFilledResponseForEmptyResult() {
         DamageFilterCriteria criteria = new DamageFilterCriteria(null, null, null, null, null);
-        when(damageMapper.summarizeByStatus(null, null, null, null, null))
+        when(damageMapper.summarizeByStatus(null, null, null, null, null, null))
                 .thenReturn(List.of());
 
         DamageDashboardSummary result = damageService.summarize(criteria);
@@ -300,7 +409,8 @@ class DamageServiceTest {
                 to,
                 "REVIEW_REQUIRED",
                 10L,
-                3L
+                3L,
+                "41550"
         );
         DamageMapMarker marker = new DamageMapMarker(
                 1L,
@@ -320,6 +430,7 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
                 bounds.south(),
                 bounds.north(),
                 bounds.west(),

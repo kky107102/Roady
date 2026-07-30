@@ -19,4 +19,6 @@ public interface UserAccountService {
     UserAccount updateRole(Long id, UserRole role);
 
     UserAccount updateActive(Long id, boolean active);
+
+    UserAccount updateAssignedRegion(Long id, String assignedRegionCode);
 }

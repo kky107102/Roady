@@ -25,8 +25,9 @@
 | 사용자 | `POST` | `/api/users` | 구현됨 | 사용자 생성 |
 | 사용자 | `PATCH` | `/api/users/{userId}/role` | 구현됨 | 사용자 권한 변경 |
 | 사용자 | `PATCH` | `/api/users/{userId}/active` | 구현됨 | 사용자 활성 상태 변경 |
+| 사용자 | `PATCH` | `/api/users/{userId}/assigned-region` | 구현됨 | 사용자 담당 시군구 코드 변경 |
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
-| 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색 및 페이지 조회 |
+| 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색, 지역코드·기간 필터 및 페이지 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
 | 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
@@ -388,6 +389,7 @@ refresh token을 삭제하여 재발급을 막는다.
     "username": "admin",
     "email": "admin@example.com",
     "name": "관리자",
+    "assignedRegionCode": "41550",
     "role": "ADMIN",
     "active": true,
     "createdAt": "2026-07-22T14:30:00"
@@ -403,6 +405,7 @@ refresh token을 삭제하여 재발급을 막는다.
 | `username` | string | 사용자 아이디 |
 | `email` | string | 이메일 |
 | `name` | string | 이름 |
+| `assignedRegionCode` | string, null | 담당 시군구 코드. 미배정이면 `null` |
 | `role` | string | 사용자 권한 |
 | `active` | boolean | 계정 활성 여부 |
 | `createdAt` | string | 생성 일시 |
@@ -454,6 +457,7 @@ refresh token을 삭제하여 재발급을 막는다.
   "username": "inspector01",
   "email": "inspector01@example.com",
   "name": "점검 담당자",
+  "assignedRegionCode": null,
   "role": "INSPECTOR",
   "active": true,
   "createdAt": "2026-07-22T14:30:00"
@@ -506,6 +510,7 @@ refresh token을 삭제하여 재발급을 막는다.
   "username": "inspector01",
   "email": "inspector01@example.com",
   "name": "점검 담당자",
+  "assignedRegionCode": null,
   "role": "REPAIRER",
   "active": true,
   "createdAt": "2026-07-22T14:30:00"
@@ -558,8 +563,62 @@ refresh token을 삭제하여 재발급을 막는다.
   "username": "inspector01",
   "email": "inspector01@example.com",
   "name": "점검 담당자",
+  "assignedRegionCode": null,
   "role": "REPAIRER",
   "active": false,
+  "createdAt": "2026-07-22T14:30:00"
+}
+```
+
+#### Error
+
+| 상태 코드 | 발생 상황 |
+| --- | --- |
+| `400` | 요청 값 검증 실패, 존재하지 않는 사용자 |
+| `401` | 인증 실패 |
+| `403` | 관리자 권한 없음 |
+
+### 4.5 사용자 담당 시군구 코드 변경
+
+특정 사용자의 담당 시군구 코드를 변경한다. 코드는 별도 시군구 코드 테이블이나 외부 행정구역 코드 데이터와 조인해 해석한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `PATCH` |
+| URL | `/api/users/{userId}/assigned-region` |
+| 인증 | 필요 |
+| 권한 | `ADMIN` |
+| Content-Type | `application/json` |
+
+#### Path Parameter
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `userId` | number | 사용자 ID |
+
+#### Request Body
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `assignedRegionCode` | string, null | 아니오 | 최대 10자 | 담당 시군구 코드. `null` 또는 빈 값이면 담당구를 해제한다. |
+
+```json
+{
+  "assignedRegionCode": "41550"
+}
+```
+
+#### Response `200 OK`
+
+```json
+{
+  "id": 2,
+  "username": "inspector01",
+  "email": "inspector01@example.com",
+  "name": "점검 담당자",
+  "assignedRegionCode": "41550",
+  "role": "INSPECTOR",
+  "active": true,
   "createdAt": "2026-07-22T14:30:00"
 }
 ```
@@ -622,6 +681,13 @@ curl -X POST "http://localhost:8080/api/damages" \
   "reportedBy": 2,
   "assignedTo": null,
   "description": "도로 균열 감지",
+  "addressName": "경기 안성시 죽산면 죽산리 343-1",
+  "roadAddressName": "경기 안성시 죽산초교길 69-4",
+  "regionCode": "41550",
+  "region1DepthName": "경기",
+  "region2DepthName": "안성시",
+  "region3DepthName": "죽산면",
+  "geocodedAt": "2026-07-22T14:30:01",
   "latitude": 37.5665000,
   "longitude": 126.9780000,
   "capturedAt": "2026-07-22T14:30:00",
@@ -669,6 +735,8 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `status` | string | 아니오 | 없음 | 파손 처리 상태 |
 | `robotId` | number | 아니오 | 없음 | 촬영 로봇 ID |
 | `assignedTo` | number | 아니오 | 없음 | 처리 담당 사용자 ID |
+| `regionCode` | string | 아니오 | 없음 | 시군구 코드. `damages.region_code`와 정확히 일치하는 파손만 조회 |
+| `keyword` | string | 아니오 | 없음 | 사건번호 또는 주소 키워드. 숫자만 있으면 사건번호(`id`)와도 매칭하고, 주소 필드도 부분 검색 |
 | `page` | number | 아니오 | `0` | 0부터 시작하는 페이지 번호 |
 | `size` | number | 아니오 | `20` | 페이지 크기. 1 이상 100 이하 |
 
@@ -682,6 +750,13 @@ curl -X POST "http://localhost:8080/api/damages" \
       "robotId": 1,
       "assignedTo": null,
       "description": "도로 균열 감지",
+      "addressName": "경기 안성시 죽산면 죽산리 343-1",
+      "roadAddressName": "경기 안성시 죽산초교길 69-4",
+      "regionCode": "41550",
+      "region1DepthName": "경기",
+      "region2DepthName": "안성시",
+      "region3DepthName": "죽산면",
+      "geocodedAt": "2026-07-22T14:30:01",
       "latitude": 37.5665000,
       "longitude": 126.9780000,
       "capturedAt": "2026-07-22T14:30:00",
@@ -706,6 +781,13 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `content[].robotId` | number, null | 촬영 로봇 ID |
 | `content[].assignedTo` | number, null | 처리 담당 사용자 ID |
 | `content[].description` | string, null | 파손 설명 |
+| `content[].addressName` | string, null | 카카오 좌표 변환으로 얻은 지번 주소 |
+| `content[].roadAddressName` | string, null | 카카오 좌표 변환으로 얻은 도로명 주소 |
+| `content[].regionCode` | string, null | 카카오 행정구역 좌표 변환으로 얻은 시군구 코드 |
+| `content[].region1DepthName` | string, null | 시도명 |
+| `content[].region2DepthName` | string, null | 시군구명 |
+| `content[].region3DepthName` | string, null | 읍면동명 |
+| `content[].geocodedAt` | string, null | 주소/행정구역 변환 일시 |
 | `content[].latitude` | decimal, null | 위도 |
 | `content[].longitude` | decimal, null | 경도 |
 | `content[].capturedAt` | string, null | 촬영 일시 |
@@ -743,6 +825,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `status` | string | 아니오 | 파손 처리 상태 |
 | `robotId` | number | 아니오 | 촬영 로봇 ID |
 | `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+| `regionCode` | string | 아니오 | 시군구 코드. `damages.region_code`와 정확히 일치하는 파손만 집계 |
 
 #### Response `200 OK`
 
@@ -790,6 +873,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `status` | string | 아니오 | 파손 처리 상태 |
 | `robotId` | number | 아니오 | 촬영 로봇 ID |
 | `assignedTo` | number | 아니오 | 처리 담당 사용자 ID |
+| `regionCode` | string | 아니오 | 시군구 코드. `damages.region_code`와 정확히 일치하는 파손만 조회 |
 | `south` | decimal | 예 | 지도 남쪽 경계 위도. `-90` 이상이며 `north`보다 작아야 한다. |
 | `north` | decimal | 예 | 지도 북쪽 경계 위도. `90` 이하여야 한다. |
 | `west` | decimal | 예 | 지도 서쪽 경계 경도. `-180` 이상이며 `east`보다 작아야 한다. |
@@ -851,6 +935,13 @@ curl -X POST "http://localhost:8080/api/damages" \
   "reportedBy": 2,
   "assignedTo": null,
   "description": "도로 균열 감지",
+  "addressName": "경기 안성시 죽산면 죽산리 343-1",
+  "roadAddressName": "경기 안성시 죽산초교길 69-4",
+  "regionCode": "41550",
+  "region1DepthName": "경기",
+  "region2DepthName": "안성시",
+  "region3DepthName": "죽산면",
+  "geocodedAt": "2026-07-22T14:30:01",
   "latitude": 37.5665000,
   "longitude": 126.9780000,
   "capturedAt": "2026-07-22T14:30:00",
@@ -971,8 +1062,9 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `status` | string | 파손 처리 상태 |
 | `robotId` | number | 로봇 ID |
 | `assignedTo` | number | 처리 담당 사용자 ID. `damages.assigned_to`가 참조하는 `users.id` |
+| `regionCode` | string | 시군구 코드. `damages.region_code`와 정확히 일치하는 파손만 조회 |
 
-`page`, `size`는 목록 검색 API에서만 사용한다. `regionCode`, `severity`는 현재 데이터 모델에 없으므로 1차 대시보드 API의 검색 조건에서 제외한다.
+`page`, `size`, `keyword`는 목록 검색 API에서만 사용한다. `keyword`는 사건번호 또는 주소 키워드 검색에 사용한다. `severity`는 현재 데이터 모델에 없으므로 1차 대시보드 API의 검색 조건에서 제외한다.
 
 ## 7. 로봇 관제 API 설계
 
@@ -1252,12 +1344,12 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 
 ## 9. 파손 데이터 및 대시보드 API
 
-대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 주소, 행정구역, AI 심각도, 중복 및 지연 판정은 9.4의 후속 확장 범위로 구분한다.
+대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 목록 검색은 사건번호·주소 키워드와 시군구 코드 필터를 지원한다. AI 심각도, 중복 및 지연 판정은 9.4의 후속 확장 범위로 구분한다.
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | 파손 등록 | `POST` | `/api/damages` | `ADMIN`, `INSPECTOR`, `ROBOT/DEVICE` | 이미지, 위치, 촬영 일시, 장치 정보를 저장한다. |
-| 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 처리 상태, 로봇, 담당자로 검색하고 페이지 단위로 조회한다. |
+| 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 처리 상태, 로봇, 담당자, 시군구 코드, 사건번호·주소 키워드로 검색하고 페이지 단위로 조회한다. |
 | 대시보드 파손 요약 | `GET` | `/api/dashboard/damages/summary` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 검색 조건에 해당하는 전체 건수, 미배정 건수, 상태별 건수를 조회한다. |
 | 지도 마커 조회 | `GET` | `/api/damages/map-markers` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 지도 표시용 좌표와 상태 요약을 조회한다. |
 | 파손 상세 조회 | `GET` | `/api/damages/{damageId}` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 이미지, AI 분석, 상태 이력, 보수 정보를 함께 조회한다. |
@@ -1268,7 +1360,7 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 #### 요청
 
 ```http
-GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&robotId=1&assignedTo=5&page=0&size=20
+GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&robotId=1&assignedTo=5&regionCode=41550&keyword=죽산&page=0&size=20
 ```
 
 | Query | 필수 | 기본값 | 제약 |
@@ -1278,6 +1370,8 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `status` | 아니오 | 없음 | 정의된 파손 처리 상태 중 하나 |
 | `robotId` | 아니오 | 없음 | 로봇 ID |
 | `assignedTo` | 아니오 | 없음 | 처리 담당 사용자 ID |
+| `regionCode` | 아니오 | 없음 | 시군구 코드. `damages.region_code`와 정확히 일치 |
+| `keyword` | 아니오 | 없음 | 사건번호 또는 주소 키워드. 숫자만 있으면 사건번호(`id`)와도 매칭 |
 | `page` | 아니오 | `0` | 0 이상의 정수 |
 | `size` | 아니오 | `20` | 1 이상 100 이하의 정수 |
 
@@ -1293,6 +1387,13 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
       "robotId": 1,
       "assignedTo": 5,
       "description": "점자블록 균열",
+      "addressName": "경기 안성시 죽산면 죽산리 343-1",
+      "roadAddressName": "경기 안성시 죽산초교길 69-4",
+      "regionCode": "41550",
+      "region1DepthName": "경기",
+      "region2DepthName": "안성시",
+      "region3DepthName": "죽산면",
+      "geocodedAt": "2026-07-22T14:30:01",
       "latitude": 37.5665,
       "longitude": 126.978,
       "capturedAt": "2026-07-22T14:30:00",
@@ -1319,6 +1420,13 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `content[].robotId` | number, null | 파손을 수집한 로봇 ID |
 | `content[].assignedTo` | number, null | 처리 담당 사용자 ID. 미배정이면 `null` |
 | `content[].description` | string, null | 파손 설명 |
+| `content[].addressName` | string, null | 카카오 좌표 변환으로 얻은 지번 주소 |
+| `content[].roadAddressName` | string, null | 카카오 좌표 변환으로 얻은 도로명 주소 |
+| `content[].regionCode` | string, null | 카카오 행정구역 좌표 변환으로 얻은 시군구 코드 |
+| `content[].region1DepthName` | string, null | 시도명 |
+| `content[].region2DepthName` | string, null | 시군구명 |
+| `content[].region3DepthName` | string, null | 읍면동명 |
+| `content[].geocodedAt` | string, null | 주소/행정구역 변환 일시 |
 | `content[].latitude` | number, null | 위도 |
 | `content[].longitude` | number, null | 경도 |
 | `content[].capturedAt` | string, null | 촬영 일시 |
@@ -1336,16 +1444,16 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 
 AI 분석 필드는 `analysisStatus`가 `SUCCESS`인 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 반환한다. 성공한 분석 결과가 없으면 `damageScore`, `repairRequired`, `repairPriority`, `confidenceScore`는 모두 `null`이다.
 
-`regionCode`, `address`, `severity`, `duplicateSuspected`, `delayed`는 현재 목록 응답에 포함하지 않는다. `severity` 대신 AI 분석 결과에 저장된 `damageScore`를 파손 정도로 사용한다.
+`severity`, `duplicateSuspected`, `delayed`는 현재 목록 응답에 포함하지 않는다. `severity` 대신 AI 분석 결과에 저장된 `damageScore`를 파손 정도로 사용한다.
 
 ### 9.2 대시보드 파손 요약
 
-목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않는다.
+목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo`, `regionCode` 조건을 사용한다. `page`, `size`, `keyword`는 받지 않는다.
 
 #### 요청
 
 ```http
-GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&robotId=1
+GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&robotId=1&regionCode=41550
 ```
 
 #### DamageDashboardSummaryResponse
@@ -1376,12 +1484,12 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
 
 ### 9.3 지도 마커 조회
 
-목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo` 조건을 사용한다. `page`, `size`는 받지 않으며, 현재 지도 화면 범위를 나타내는 `south`, `north`, `west`, `east`는 필수다. 위도 또는 경도가 없거나 화면 범위 밖에 있는 파손은 결과에서 제외한다.
+목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo`, `regionCode` 조건을 사용한다. `page`, `size`, `keyword`는 받지 않으며, 현재 지도 화면 범위를 나타내는 `south`, `north`, `west`, `east`는 필수다. 위도 또는 경도가 없거나 화면 범위 밖에 있는 파손은 결과에서 제외한다.
 
 #### 요청
 
 ```http
-GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED
+GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&regionCode=41550
 ```
 
 프론트엔드는 최초 지도 로딩 및 `moveend`, `zoomend` 시 현재 화면 경계를 전달한다. 지도 이동 중인 요청은 취소하고 약 300ms debounce를 적용한다.
@@ -1521,7 +1629,7 @@ RECEIVED -> REPAIR_NOT_REQUIRED
 | 보수 우선순위별 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 로그인 사용자 | 최신 성공 AI 분석 결과의 보수 우선순위별 건수를 조회한다. |
 | 보수 완료율 조회 | `GET` | `/api/statistics/repair/completion-rate` | 로그인 사용자 | 전체 파손 대비 보수 완료율을 조회한다. |
 
-지역 코드를 저장하지 않으므로 지역별 통계는 제공하지 않는다. 별도 `severity` 대신 AI 분석 결과의 `repairPriority`를 사용한다. 통계 다운로드는 조회 API 구현 이후 별도 작업으로 확장한다.
+파손 데이터에는 시군구 코드를 저장하지만, 지역별 통계 API는 아직 제공하지 않는다. 별도 `severity` 대신 AI 분석 결과의 `repairPriority`를 사용한다. 통계 다운로드는 조회 API 구현 이후 별도 작업으로 확장한다.
 
 ### 12.1 공통 조회 조건
 
