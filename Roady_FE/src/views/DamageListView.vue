@@ -12,6 +12,8 @@ import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 import DamageCard from '@/components/damages/DamageCard.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
+import CommonMap from '@/components/common/CommonMap.vue'
+import { toDamageMapMarkers } from '@/utils/damageMap'
 
 // ── 상수 ──────────────────────────────────────────────────
 
@@ -85,6 +87,7 @@ const totalPages = ref(0)
 const listLoading = ref(false)
 const listError = ref<string | null>(null)
 const hasMore = computed(() => currentPage.value + 1 < totalPages.value)
+const damageMarkers = computed(() => toDamageMapMarkers(items.value))
 
 async function loadPage(page: number, append: boolean) {
   listLoading.value = true
@@ -278,15 +281,15 @@ function closeDetail() {
         </div>
       </div>
 
-      <!-- 중앙: 지도 placeholder (S15P11A404-137) -->
+      <!-- 중앙: 탐지 사건 지도 -->
       <div class="map-panel" aria-label="도로 파손 지도">
-        <div class="map-placeholder">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-            <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
-          </svg>
-          <p>지도 연동 구현 예정 (S15P11A404-137)</p>
-        </div>
+        <CommonMap
+          class="damage-map"
+          :markers="damageMarkers"
+          map-label="조회된 탐지 사건 위치 지도"
+          empty-message="위치 정보가 있는 탐지 사건이 없습니다."
+          @marker-select="selectItem(Number($event))"
+        />
       </div>
 
       <!-- 오른쪽: 상세 패널 (슬라이드 인) -->
@@ -417,20 +420,13 @@ function closeDetail() {
 /* ── 지도 패널 ── */
 .map-panel {
   flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: var(--roady-surface-background);
   min-width: 0;
 }
 
-.map-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.2rem;
-  color: var(--roady-text-tertiary);
-  font-size: var(--krds-pc-font-size-body-small);
+.damage-map {
+  min-height: 100%;
+  border-radius: 0;
 }
 
 /* ── 상세 패널 (슬라이드) ── */
@@ -457,5 +453,47 @@ function closeDetail() {
 .slide-enter-to,
 .slide-leave-from {
   transform: translateX(0);
+}
+
+@media (max-width: 1024px) {
+  .list-panel {
+    width: 34rem;
+  }
+
+  .detail-panel-wrapper {
+    width: 38rem;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .damage-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .list-panel {
+    width: 100%;
+    height: 42rem;
+    flex: none;
+    border-right: 0;
+    border-bottom: 1px solid var(--roady-border-default);
+  }
+
+  .map-panel {
+    height: 42rem;
+    flex: none;
+  }
+
+  .detail-panel-wrapper {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-enter-active,
+  .slide-leave-active {
+    transition: none;
+  }
 }
 </style>

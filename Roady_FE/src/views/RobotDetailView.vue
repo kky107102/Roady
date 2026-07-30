@@ -7,6 +7,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import CommonMap from '@/components/common/CommonMap.vue'
 import type {
   Robot,
   RobotCommand,
@@ -20,6 +21,7 @@ import {
   formatDateTime,
   operationBadge,
 } from '@/utils/robotDisplay'
+import { toRobotMapMarkers } from '@/utils/robotMap'
 
 const route = useRoute()
 const robot = ref<Robot | null>(null)
@@ -56,6 +58,7 @@ const canResumeAfterEmergency = computed(
     currentCommand.value?.commandType === 'EMERGENCY_STOP' &&
     currentCommand.value.commandStatus === 'SUCCEEDED',
 )
+const robotMarkers = computed(() => robot.value ? toRobotMapMarkers([robot.value]) : [])
 const commandFeedbackLines = computed(() => {
   const command = currentCommand.value
   if (!command) return []
@@ -265,25 +268,15 @@ watch(robotId, fetchRobot)
           <div class="section-header">
             <div>
               <h2 id="robot-map-title">로봇 위치</h2>
-              <p>출발지와 도착지, 현재 위치 및 전체 운행 경로를 지도에서 확인합니다.</p>
+              <p>현재 수집된 로봇 위치를 지도에서 확인합니다.</p>
             </div>
           </div>
-          <div class="map-placeholder">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-              <line x1="9" y1="3" x2="9" y2="18" />
-              <line x1="15" y1="6" x2="15" y2="21" />
-            </svg>
-            <span>운행 경로 지도 연동 예정</span>
-          </div>
+          <CommonMap
+            class="robot-detail-map"
+            :markers="robotMarkers"
+            :map-label="`${robot.name} 최신 위치 지도`"
+            empty-message="수집된 로봇 위치 정보가 없습니다."
+          />
         </section>
 
         <section class="detail-card basic-card" aria-labelledby="basic-info-title">
@@ -501,23 +494,9 @@ watch(robotId, fetchRobot)
   gap: 1.6rem;
 }
 
-.map-placeholder {
+.robot-detail-map {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.2rem;
   min-height: 26rem;
-  border-radius: 0.6rem;
-  color: var(--roady-text-tertiary);
-  background: var(--roady-surface-background);
-  font-size: var(--krds-pc-font-size-body-small);
-}
-
-.map-placeholder svg {
-  width: 4.8rem;
-  height: 4.8rem;
 }
 
 .basic-info-list {

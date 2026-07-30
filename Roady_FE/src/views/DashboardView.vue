@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
+import CommonMap from '@/components/common/CommonMap.vue'
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import RecentDamageList from '@/components/damages/RecentDamageList.vue'
+import { toRobotMapMarkers } from '@/utils/robotMap'
 
 const store = useDashboardStore()
+const robotMarkers = computed(() => toRobotMapMarkers(store.robots))
 
 const REFRESH_MS = 5 * 60 * 1000
 
@@ -105,21 +108,22 @@ onUnmounted(() => {
 
       <!-- 메인 콘텐츠 영역 -->
       <div class="dashboard__main">
-        <!-- 지도 영역 (별도 작업 S15P11A404-137) -->
-        <section class="dashboard__map-section" aria-label="도로 파손 실시간 현황">
+        <section class="dashboard__map-section" aria-label="로봇 위치 현황">
           <div class="section-header">
             <div>
-              <h2 class="section-title">도로 파손 실시간 현황</h2>
-              <p class="section-subtitle">지도 서비스 연동은 S15P11A404-137에서 구현됩니다.</p>
+              <h2 class="section-title">로봇 위치 현황</h2>
+              <p class="section-subtitle">
+                마지막으로 수집된 로봇 위치입니다. 마커를 선택하면 상태를 확인할 수 있습니다.
+              </p>
             </div>
+            <span class="map-marker-count">위치 확인 {{ robotMarkers.length }}대</span>
           </div>
-          <div class="map-placeholder">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
-              <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
-            </svg>
-            <p>지도 연동 구현 예정</p>
-          </div>
+          <CommonMap
+            class="dashboard-map"
+            :markers="robotMarkers"
+            map-label="대시보드 로봇 위치 지도"
+            empty-message="위치 정보가 수집된 로봇이 없습니다."
+          />
         </section>
 
         <!-- 신규 탐지 알림 -->
@@ -289,18 +293,16 @@ onUnmounted(() => {
   font-size: var(--krds-pc-font-size-body-small);
 }
 
-/* ── 지도 placeholder ── */
-.map-placeholder {
+.dashboard-map {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.2rem;
-  border-radius: 0.6rem;
-  background: var(--roady-surface-background);
-  color: var(--roady-text-tertiary);
+  min-height: 30rem;
+}
+
+.map-marker-count {
+  flex-shrink: 0;
+  color: var(--roady-text-secondary);
   font-size: var(--krds-pc-font-size-body-small);
+  font-weight: var(--krds-font-weight-bold);
 }
 
 /* ── 패널 placeholder ── */
