@@ -7,21 +7,66 @@ export type DamageStatus =
   | 'REPAIR_COMPLETED'
   | 'REPAIR_NOT_REQUIRED'
 
-export type DamageSeverity = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH'
-
-export interface DamageSummary {
+export interface DamageListItem {
   id: number
   robotId: number | null
-  reportedBy: number
   assignedTo: number | null
   description: string | null
   latitude: number | null
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
-  /** severity 필드는 API 확장 설계안에 있음. 현재 구현 응답에 없을 수 있음 */
-  severity?: DamageSeverity
   imageCount: number
+  damageScore: number | null
+  repairRequired: boolean | null
+  repairPriority: string | null
+  confidenceScore: number | null
+  createdAt: string
+}
+
+export interface DamageSearchResponse {
+  content: DamageListItem[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+export interface DamageImage {
+  id: number
+  damageId: number
+  sortOrder: number
+  originalFilename: string
+  contentType: string
+  sizeBytes: number
+  createdAt: string
+}
+
+export interface DamageDetail {
+  id: number
+  robotId: number | null
+  reportedBy: number | null
+  assignedTo: number | null
+  description: string | null
+  latitude: number | null
+  longitude: number | null
+  capturedAt: string | null
+  currentStatus: DamageStatus
+  imageCount: number
+  images: DamageImage[]
   createdAt: string
   updatedAt: string
+}
+
+export interface DamageAnalysis {
+  id: number
+  damageId: number
+  damaged: boolean | null
+  damageScore: number | null
+  repairRequired: boolean | null
+  repairPriority: string | null
+  confidenceScore: number | null
+  analysisStatus: string
+  analyzedAt: string | null
+  createdAt: string
 }

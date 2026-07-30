@@ -5,6 +5,7 @@ import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import RecentDamageList from '@/components/damages/RecentDamageList.vue'
 
 const store = useDashboardStore()
 
@@ -31,11 +32,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dashboard">
-    <!-- 조회 조건 툴바 -->
-    <div class="dashboard__toolbar">
-      <DashboardToolbar v-model="store.filter" @apply="store.applyFilter" />
-    </div>
+  <div class="dashboard-view">
+    <!-- 조회 조건 툴바 (전체 너비) -->
+    <DashboardToolbar v-model="store.filter" @apply="store.applyFilter" />
+
+    <!-- 스크롤 콘텐츠 영역 -->
+    <div class="dashboard-scroll">
+    <div class="dashboard">
 
     <!-- 로딩 오버레이 -->
     <div v-if="store.loading" class="dashboard__loading">
@@ -61,7 +64,7 @@ onUnmounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages', query: { severity: 'HIGH' } }">
+        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages' }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -119,14 +122,12 @@ onUnmounted(() => {
           </div>
         </section>
 
-        <!-- 신규 탐지 알림 (별도 작업 S15P11A404-148) -->
+        <!-- 신규 탐지 알림 -->
         <section class="dashboard__alert-section" aria-label="신규 탐지 알림">
           <div class="section-header">
             <h2 class="section-title">신규 탐지 알림</h2>
           </div>
-          <div class="panel-placeholder">
-            <p>탐지 알림 목록은 S15P11A404-148에서 구현됩니다.</p>
-          </div>
+          <RecentDamageList />
         </section>
       </div>
 
@@ -156,10 +157,26 @@ onUnmounted(() => {
           </div>
         </section>
       </div>
-  </div>
+    </div>  <!-- .dashboard -->
+    </div>  <!-- .dashboard-scroll -->
+  </div>  <!-- .dashboard-view -->
 </template>
 
 <style scoped>
+/* ── 뷰 셸 ── */
+.dashboard-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.dashboard-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .dashboard {
   position: relative;
   display: flex;
@@ -210,12 +227,6 @@ onUnmounted(() => {
 
 .error-banner__retry:hover {
   background: color-mix(in srgb, var(--roady-status-danger) 10%, transparent);
-}
-
-/* ── 툴바 ── */
-.dashboard__toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 /* ── 통계 카드 행 ── */

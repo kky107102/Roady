@@ -35,7 +35,7 @@ const router = createRouter({
         {
           path: 'damages',
           name: 'damages',
-          component: () => import('@/views/PlaceholderView.vue'),
+          component: () => import('@/views/DamageListView.vue'),
           meta: { title: '탐지·사건 관리' },
         },
         {
