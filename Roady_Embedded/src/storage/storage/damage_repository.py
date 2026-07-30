@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 import cv2
 import numpy as np
@@ -15,80 +16,115 @@ import numpy as np
 class DamageLocation:
     latitude: float
     longitude: float
-    sensor_offset_m: float = 0.0
 
 
 @dataclass(frozen=True)
 class DamageEvent:
     event_id: str
+    robot_id: int
+    description: str
+    latitude: float
+    longitude: float
     captured_at: str
-    location: DamageLocation
-    image_path: str
-    detector_name: str
-    confidence: float
-    label: str = "mock_damage"
+    image_paths: tuple[str, ...]
 
 
 class DamageRepository:
-    """Stores damage events as an image file plus a JSON sidecar."""
+    """Stores each captured image and its pending robot event on disk."""
 
     def __init__(self, base_dir: str | Path):
         self.base_dir = Path(base_dir)
         self.image_dir = self.base_dir / "images"
-        self.event_dir = self.base_dir / "events"
+        self.pending_dir = self.base_dir / "pending"
         self.image_dir.mkdir(parents=True, exist_ok=True)
-        self.event_dir.mkdir(parents=True, exist_ok=True)
+        self.pending_dir.mkdir(parents=True, exist_ok=True)
 
     def save_event(
         self,
-        image: np.ndarray,
+        images: Sequence[np.ndarray],
         location: DamageLocation,
-        label: str = "mock_damage",
-        detector_name: str = "mock_damage_detector",
-        confidence: float = 1.0,
+        robot_id: int = 1,
+        description: str = "도로 균열 감지",
         captured_at: Optional[datetime] = None,
     ) -> DamageEvent:
-        now = captured_at or datetime.now(timezone.utc)
-        event_id = self._make_event_id(now)
-        image_path = self.image_dir / f"{event_id}.jpg"
-        event_path = self.event_dir / f"{event_id}.json"
+        if not 1 <= len(images) <= 3:
+            raise ValueError("an event must contain between 1 and 3 images")
+        if any(image is None or image.size == 0 for image in images):
+            raise ValueError("event images must not be empty")
+        if robot_id < 1:
+            raise ValueError("robot_id must be a positive integer")
+        if not description.strip():
+            raise ValueError("description must not be blank")
+        if not -90.0 <= location.latitude <= 90.0:
+            raise ValueError("latitude must be between -90 and 90")
+        if not -180.0 <= location.longitude <= 180.0:
+            raise ValueError("longitude must be between -180 and 180")
 
-        if not cv2.imwrite(str(image_path), image):
-            raise RuntimeError(f"Failed to write damage image: {image_path}")
+        now = captured_at or datetime.now().astimezone()
+        if now.tzinfo is None:
+            now = now.astimezone()
+        event_id = self._make_event_id(now)
+        event_path = self.pending_dir / f"{event_id}.json"
+
+        image_paths = [
+            self.image_dir / f"{event_id}_{index:02d}.jpg"
+            for index in range(1, len(images) + 1)
+        ]
+        for image, image_path in zip(images, image_paths):
+            if not cv2.imwrite(str(image_path), image):
+                self._remove_files(image_paths)
+                raise RuntimeError(f"Failed to write damage image: {image_path}")
 
         event = DamageEvent(
             event_id=event_id,
-            captured_at=now.isoformat(),
-            location=location,
-            image_path=str(image_path),
-            detector_name=detector_name,
-            confidence=confidence,
-            label=label,
+            robot_id=robot_id,
+            description=description,
+            latitude=location.latitude,
+            longitude=location.longitude,
+            captured_at=now.replace(tzinfo=None).isoformat(timespec="seconds"),
+            image_paths=tuple(path.name for path in image_paths),
         )
-        with event_path.open("w", encoding="utf-8") as fp:
-            json.dump(self.to_dict(event), fp, ensure_ascii=False, indent=2)
+        try:
+            self._write_json_atomically(event_path, self.to_dict(event))
+        except Exception:
+            self._remove_files(image_paths)
+            raise
         return event
 
-    def list_event_files(self) -> list[Path]:
-        return sorted(self.event_dir.glob("*.json"))
+    def list_pending_events(self) -> list[Path]:
+        return sorted(self.pending_dir.glob("*.json"))
 
     @staticmethod
     def load_event_file(event_path: str | Path) -> dict:
         with Path(event_path).open("r", encoding="utf-8") as fp:
             return json.load(fp)
 
-    @staticmethod
-    def mark_uploaded(event_path: str | Path, uploaded_at: Optional[datetime] = None) -> None:
+    def resolve_image_paths(self, event: dict) -> list[Path]:
+        return [self._resolve_image_name(name) for name in event.get("images", [])]
+
+    def delete_event(self, event_path: str | Path) -> None:
         path = Path(event_path)
-        event = DamageRepository.load_event_file(path)
-        event["uploaded"] = True
-        event["uploadedAt"] = (uploaded_at or datetime.now(timezone.utc)).isoformat()
-        with path.open("w", encoding="utf-8") as fp:
-            json.dump(event, fp, ensure_ascii=False, indent=2)
+        if path.parent.resolve() != self.pending_dir.resolve():
+            raise ValueError("event file must be inside the pending directory")
+
+        event = self.load_event_file(path)
+        if event.get("eventId") != path.stem:
+            raise ValueError("eventId does not match the event filename")
+
+        self._remove_files(self.resolve_image_paths(event))
+        path.unlink(missing_ok=True)
 
     @staticmethod
     def to_dict(event: DamageEvent) -> dict:
-        return asdict(event)
+        return {
+            "eventId": event.event_id,
+            "robotId": event.robot_id,
+            "description": event.description,
+            "latitude": event.latitude,
+            "longitude": event.longitude,
+            "capturedAt": event.captured_at,
+            "images": list(event.image_paths),
+        }
 
     @staticmethod
     def to_json(event: DamageEvent) -> str:
@@ -96,6 +132,26 @@ class DamageRepository:
 
     @staticmethod
     def _make_event_id(captured_at: datetime) -> str:
-        stamp = captured_at.strftime("%Y%m%dT%H%M%S%fZ")
+        stamp = captured_at.strftime("%Y%m%dT%H%M%S%f")
         suffix = uuid.uuid4().hex[:8]
         return f"damage_{stamp}_{suffix}"
+
+    @staticmethod
+    def _write_json_atomically(path: Path, payload: dict) -> None:
+        temporary_path = path.with_suffix(f"{path.suffix}.tmp")
+        with temporary_path.open("w", encoding="utf-8") as fp:
+            json.dump(payload, fp, ensure_ascii=False, indent=2)
+            fp.flush()
+            os.fsync(fp.fileno())
+        temporary_path.replace(path)
+
+    @staticmethod
+    def _remove_files(paths: Sequence[Path]) -> None:
+        for path in paths:
+            path.unlink(missing_ok=True)
+
+    def _resolve_image_name(self, image_name: str) -> Path:
+        name = Path(image_name)
+        if name.name != image_name:
+            raise ValueError(f"invalid image filename: {image_name}")
+        return self.image_dir / name

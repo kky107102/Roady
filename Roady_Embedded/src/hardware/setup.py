@@ -19,6 +19,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
+            "obstacle_camera_node = hardware.nodes.obstacle_camera_node:main",
             "wide_camera_node = hardware.nodes.camera_node:main",
         ],
     },

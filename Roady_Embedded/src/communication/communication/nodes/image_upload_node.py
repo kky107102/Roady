@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import rclpy
 from rclpy.node import Node
 
@@ -15,8 +13,6 @@ class ImageUploadNode(Node):
 
         self.declare_parameter("base_url", "http://localhost:8080")
         self.declare_parameter("access_token", "")
-        self.declare_parameter("robot_id", 1)
-        self.declare_parameter("description", "도로 균열 감지")
         self.declare_parameter("storage_dir", "data/damage_events")
         self.declare_parameter("upload_interval_sec", 10.0)
         self.declare_parameter("upload_enabled", False)
@@ -35,32 +31,29 @@ class ImageUploadNode(Node):
         if not bool(self.get_parameter("upload_enabled").value):
             return
 
-        for event_path in self._repository.list_event_files():
+        for event_path in self._repository.list_pending_events():
             event = self._repository.load_event_file(event_path)
-            if event.get("uploaded"):
-                continue
 
-            image_path = event.get("image_path")
-            if not image_path or not Path(image_path).exists():
+            image_paths = self._repository.resolve_image_paths(event)
+            if not image_paths or not all(path.exists() for path in image_paths):
                 self.get_logger().warn(f"Skipping event without image: {event_path}")
                 continue
 
-            location = event["location"]
             try:
                 self._client.upload_damage(
-                    robot_id=self.get_parameter("robot_id").value,
-                    description=str(self.get_parameter("description").value),
-                    latitude=float(location["latitude"]),
-                    longitude=float(location["longitude"]),
-                    captured_at=str(event["captured_at"]),
-                    image_paths=[image_path],
+                    robot_id=int(event["robotId"]),
+                    description=str(event["description"]),
+                    latitude=float(event["latitude"]),
+                    longitude=float(event["longitude"]),
+                    captured_at=str(event["capturedAt"]),
+                    image_paths=image_paths,
                 )
             except Exception as exc:
                 self.get_logger().warn(f"Failed to upload {event_path.name}: {exc}")
                 continue
 
-            self._repository.mark_uploaded(event_path)
-            self.get_logger().info(f"Uploaded damage event: {event['event_id']}")
+            self._repository.delete_event(event_path)
+            self.get_logger().info(f"Uploaded damage event: {event['eventId']}")
 
 
 def main(args=None):

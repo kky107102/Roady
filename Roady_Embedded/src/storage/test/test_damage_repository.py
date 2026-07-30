@@ -1,0 +1,88 @@
+from datetime import datetime, timezone
+import json
+
+import numpy as np
+import pytest
+
+from storage.damage_repository import DamageLocation, DamageRepository
+
+
+def test_save_event_uses_server_payload_shape(tmp_path):
+    repository = DamageRepository(tmp_path)
+    event = repository.save_event(
+        images=[np.zeros((2, 2, 3), dtype=np.uint8)],
+        location=DamageLocation(latitude=12.4, longitude=8.7),
+        robot_id=1,
+        description="도로 균열 감지",
+        captured_at=datetime(2026, 7, 28, 8, 30, 15, tzinfo=timezone.utc),
+    )
+    event_files = repository.list_pending_events()
+    assert len(event_files) == 1
+    assert len(list((tmp_path / "images").glob("*.jpg"))) == 1
+    assert json.loads(event_files[0].read_text()) == repository.to_dict(event)
+    assert repository.to_dict(event) == {
+        "eventId": event_files[0].stem,
+        "robotId": 1,
+        "description": "도로 균열 감지",
+        "latitude": 12.4,
+        "longitude": 8.7,
+        "capturedAt": "2026-07-28T08:30:15",
+        "images": [next((tmp_path / "images").glob("*.jpg")).name],
+    }
+
+
+@pytest.mark.parametrize("robot_id", [0, -1])
+def test_save_event_rejects_invalid_robot_id(tmp_path, robot_id):
+    repository = DamageRepository(tmp_path)
+    with pytest.raises(ValueError):
+        repository.save_event(
+            images=[np.zeros((2, 2, 3), dtype=np.uint8)],
+            location=DamageLocation(latitude=12.4, longitude=8.7),
+            robot_id=robot_id,
+        )
+
+
+def test_save_event_connects_up_to_three_images_with_same_event_id(tmp_path):
+    repository = DamageRepository(tmp_path)
+    repository.save_event(
+        images=[
+            np.full((2, 2, 3), fill_value=value, dtype=np.uint8)
+            for value in (10, 20, 30)
+        ],
+        location=DamageLocation(latitude=12.4, longitude=8.7),
+    )
+    event_file = repository.list_pending_events()[0]
+    image_files = sorted((tmp_path / "images").glob("*.jpg"))
+    event_id = event_file.stem
+    assert [path.name for path in image_files] == [
+        f"{event_id}_01.jpg",
+        f"{event_id}_02.jpg",
+        f"{event_id}_03.jpg",
+    ]
+
+
+def test_save_event_rejects_more_than_three_images(tmp_path):
+    repository = DamageRepository(tmp_path)
+    with pytest.raises(ValueError, match="between 1 and 3"):
+        repository.save_event(
+            images=[np.zeros((2, 2, 3), dtype=np.uint8) for _ in range(4)],
+            location=DamageLocation(latitude=12.4, longitude=8.7),
+        )
+
+
+def test_delete_event_removes_json_and_all_connected_images(tmp_path):
+    repository = DamageRepository(tmp_path)
+    repository.save_event(
+        images=[
+            np.full((2, 2, 3), fill_value=value, dtype=np.uint8)
+            for value in (10, 20, 30)
+        ],
+        location=DamageLocation(latitude=12.4, longitude=8.7),
+    )
+    event_path = repository.list_pending_events()[0]
+    event = repository.load_event_file(event_path)
+    image_paths = repository.resolve_image_paths(event)
+    repository.delete_event(event_path)
+    assert not event_path.exists()
+    assert all(not path.exists() for path in image_paths)
+    assert repository.list_pending_events() == []

@@ -13,11 +13,13 @@ import numpy as np
 class CameraConfig:
     name: str = "wide_camera"
     device_index: int = 0
+    device_path: Optional[str] = None
     backend: str = "v4l2"
     pixel_format: Optional[str] = "MJPG"
     width: Optional[int] = 1280
     height: Optional[int] = 720
     fps: Optional[int] = 30
+    auto_exposure: bool = True
     reconnect_delay_sec: float = 1.0
 
 
@@ -49,6 +51,11 @@ class CameraWorker:
     @property
     def last_error(self) -> Optional[str]:
         return self._last_error
+
+    @property
+    def frame_count(self) -> int:
+        with self._lock:
+            return self._frame_id
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -93,7 +100,10 @@ class CameraWorker:
         raise ValueError(f"Unsupported camera backend: {self.config.backend}")
 
     def _build_gstreamer_pipeline(self) -> str:
-        device = f"/dev/video{self.config.device_index}"
+        device = (
+            self.config.device_path
+            or f"/dev/video{self.config.device_index}"
+        )
         width = self.config.width or 1280
         height = self.config.height or 720
         fps = self.config.fps or 30
@@ -111,17 +121,30 @@ class CameraWorker:
             "videoconvert ! video/x-raw,format=BGR ! appsink drop=true sync=false"
         )
 
+    def _device_source(self):
+        return self.config.device_path or self.config.device_index
+
+    def _device_label(self) -> str:
+        source = self._device_source()
+        if isinstance(source, int):
+            return f"index {source}"
+        return source
+
     def _open_capture(self) -> bool:
         self._release_capture()
         backend = self._resolve_backend()
         if backend == cv2.CAP_GSTREAMER:
             capture = cv2.VideoCapture(self._build_gstreamer_pipeline(), cv2.CAP_GSTREAMER)
         else:
-            capture = cv2.VideoCapture(self.config.device_index, backend)
+            capture = cv2.VideoCapture(self._device_source(), backend)
 
         if not capture.isOpened() and backend not in (cv2.CAP_ANY, cv2.CAP_GSTREAMER):
             capture.release()
-            capture = cv2.VideoCapture(self.config.device_index, cv2.CAP_ANY)
+            capture = cv2.VideoCapture(self._device_source(), cv2.CAP_ANY)
+
+        if self.config.auto_exposure:
+            # V4L2 maps 0.75 to aperture-priority (automatic exposure) mode.
+            capture.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.75)
 
         if self.config.pixel_format:
             fourcc = cv2.VideoWriter_fourcc(*self.config.pixel_format)
@@ -135,7 +158,7 @@ class CameraWorker:
             capture.set(cv2.CAP_PROP_FPS, self.config.fps)
 
         if not capture.isOpened():
-            self._last_error = f"Failed to open camera index: {self.config.device_index}"
+            self._last_error = f"Failed to open camera: {self._device_label()}"
             capture.release()
             return False
 
@@ -162,14 +185,14 @@ class CameraWorker:
                 time.sleep(self.config.reconnect_delay_sec)
                 continue
 
-            self._frame_id += 1
-            frame = CameraFrame(
-                camera_name=self.config.name,
-                frame_id=self._frame_id,
-                timestamp=time.time(),
-                image=image,
-            )
             with self._lock:
+                self._frame_id += 1
+                frame = CameraFrame(
+                    camera_name=self.config.name,
+                    frame_id=self._frame_id,
+                    timestamp=time.time(),
+                    image=image,
+                )
                 self._latest_frame = frame
 
         self._release_capture()

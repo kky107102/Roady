@@ -5,23 +5,23 @@ import time
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 
 from hardware.devices.camera import CameraConfig, CameraWorker
 
 
-class WideCameraNode(Node):
-    def __init__(self):
-        super().__init__("wide_camera_node")
+class ObstacleCameraNode(Node):
+    """Publishes frames from the camera dedicated to obstacle detection."""
 
-        self.declare_parameter("device_index", 0)
+    def __init__(self):
+        super().__init__("obstacle_camera_node")
+
+        self.declare_parameter("device_index", 2)
         self.declare_parameter(
             "device_path",
-            (
-                "/dev/v4l/by-id/"
-                "usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0"
-            ),
+            "/dev/v4l/by-id/usb-046d_Brio_100_2515ZBA0WRC8-video-index0",
         )
         self.declare_parameter("backend", "v4l2")
         self.declare_parameter("pixel_format", "MJPG")
@@ -31,21 +31,21 @@ class WideCameraNode(Node):
         self.declare_parameter("auto_exposure", True)
         self.declare_parameter("publish_rate", 30.0)
         self.declare_parameter("stats_interval_sec", 2.0)
-        self.declare_parameter("frame_id", "wide_camera")
-        self.declare_parameter("topic", "/camera/wide/image_raw")
+        self.declare_parameter("frame_id", "obstacle_camera")
+        self.declare_parameter("topic", "/camera/obstacle/image_raw")
 
         width = self.get_parameter("width").value
         height = self.get_parameter("height").value
         fps = self.get_parameter("fps").value
         backend = self.get_parameter("backend").value
         pixel_format = self.get_parameter("pixel_format").value
-        topic = self.get_parameter("topic").value
+        topic = str(self.get_parameter("topic").value)
         device_path = str(self.get_parameter("device_path").value)
 
-        self._frame_id = self.get_parameter("frame_id").value
+        self._frame_id = str(self.get_parameter("frame_id").value)
         self._worker = CameraWorker(
             CameraConfig(
-                name="wide_camera",
+                name="obstacle_camera",
                 device_index=int(self.get_parameter("device_index").value),
                 device_path=device_path or None,
                 backend=str(backend),
@@ -56,7 +56,12 @@ class WideCameraNode(Node):
                 auto_exposure=bool(self.get_parameter("auto_exposure").value),
             )
         )
-        self._publisher = self.create_publisher(Image, topic, 10)
+        image_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
+        self._publisher = self.create_publisher(Image, topic, image_qos)
         self._last_published_frame_id = -1
         self._published_frame_count = 0
         self._last_error_log_time = 0.0
@@ -76,7 +81,7 @@ class WideCameraNode(Node):
         )
         device = device_path or f"index {self.get_parameter('device_index').value}"
         self.get_logger().info(
-            f"Wide camera ({device}) publishing on {topic}"
+            f"Obstacle camera ({device}) publishing on {topic}"
         )
 
     def destroy_node(self):
@@ -134,7 +139,7 @@ class WideCameraNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WideCameraNode()
+    node = ObstacleCameraNode()
     try:
         rclpy.spin(node)
     finally:
