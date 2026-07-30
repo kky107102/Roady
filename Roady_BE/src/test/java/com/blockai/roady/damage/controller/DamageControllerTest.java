@@ -1,14 +1,15 @@
 package com.blockai.roady.damage.controller;
 
 import com.blockai.roady.common.exception.GlobalExceptionHandler;
+import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
-import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -45,7 +47,13 @@ class DamageControllerTest {
                 1L,
                 10L,
                 5L,
-                "점자블록 균열",
+                "tactile block crack",
+                "Gyeonggi Anseong Juksan 343-1",
+                "Gyeonggi Anseong Juksanchogyogil 69-4",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                LocalDateTime.of(2026, 7, 22, 14, 31),
                 BigDecimal.valueOf(37.5665),
                 BigDecimal.valueOf(126.978),
                 LocalDateTime.of(2026, 7, 22, 14, 30),
@@ -64,6 +72,9 @@ class DamageControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(1))
                 .andExpect(jsonPath("$.content[0].assignedTo").value(5))
+                .andExpect(jsonPath("$.content[0].addressName").value("Gyeonggi Anseong Juksan 343-1"))
+                .andExpect(jsonPath("$.content[0].roadAddressName").value("Gyeonggi Anseong Juksanchogyogil 69-4"))
+                .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("REVIEW_REQUIRED"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
@@ -76,6 +87,19 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.size").value(20))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    @Test
+    void getDamagesAcceptsKeywordForCaseNumberOrAddressSearch() throws Exception {
+        ArgumentCaptor<DamageSearchCriteria> criteriaCaptor = ArgumentCaptor.forClass(DamageSearchCriteria.class);
+        when(damageService.search(criteriaCaptor.capture()))
+                .thenReturn(new DamageSearchPage(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/damages").param("keyword", "Juksan"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        assertThat(criteriaCaptor.getValue().keyword()).isEqualTo("Juksan");
     }
 
     @Test

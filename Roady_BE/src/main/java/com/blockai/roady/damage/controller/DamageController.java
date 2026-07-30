@@ -88,6 +88,7 @@ public class DamageController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "robotId", required = false) Long robotId,
             @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size
     ) {
@@ -97,6 +98,7 @@ public class DamageController {
                 status,
                 robotId,
                 assignedTo,
+                keyword,
                 page,
                 size
         );

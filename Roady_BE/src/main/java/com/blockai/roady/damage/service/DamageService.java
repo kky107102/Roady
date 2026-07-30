@@ -12,6 +12,8 @@ import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
+import com.blockai.roady.damage.geocoding.GeocodedAddress;
+import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +35,11 @@ public class DamageService {
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
 
     private final DamageMapper damageMapper;
+    private final KakaoReverseGeocodingClient geocodingClient;
 
-    public DamageService(DamageMapper damageMapper) {
+    public DamageService(DamageMapper damageMapper, KakaoReverseGeocodingClient geocodingClient) {
         this.damageMapper = damageMapper;
+        this.geocodingClient = geocodingClient;
     }
 
     @Transactional
@@ -60,6 +64,7 @@ public class DamageService {
         damage.setLongitude(longitude);
         damage.setCapturedAt(capturedAt);
         damage.setCurrentStatus("COLLECTED");
+        applyReverseGeocoding(damage);
         damageMapper.insertDamage(damage);
 
         for (int index = 0; index < images.size(); index++) {
@@ -77,6 +82,8 @@ public class DamageService {
                 criteria.status(),
                 criteria.robotId(),
                 criteria.assignedTo(),
+                criteria.caseNumber(),
+                criteria.addressKeyword(),
                 criteria.offset(),
                 criteria.size()
         );
@@ -85,7 +92,9 @@ public class DamageService {
                 criteria.to(),
                 criteria.status(),
                 criteria.robotId(),
-                criteria.assignedTo()
+                criteria.assignedTo(),
+                criteria.caseNumber(),
+                criteria.addressKeyword()
         );
         return DamageSearchPage.of(content, criteria, totalElements);
     }
@@ -147,6 +156,20 @@ public class DamageService {
         getSummary(damageId);
         return Optional.ofNullable(damageMapper.findImageById(damageId, imageId))
                 .orElseThrow(() -> new IllegalArgumentException("Damage image not found."));
+    }
+
+    private void applyReverseGeocoding(Damage damage) {
+        geocodingClient.reverseGeocode(damage.getLatitude(), damage.getLongitude())
+                .ifPresent(geocodedAddress -> applyGeocodedAddress(damage, geocodedAddress));
+    }
+
+    private void applyGeocodedAddress(Damage damage, GeocodedAddress geocodedAddress) {
+        damage.setAddressName(geocodedAddress.addressName());
+        damage.setRoadAddressName(geocodedAddress.roadAddressName());
+        damage.setRegion1DepthName(geocodedAddress.region1DepthName());
+        damage.setRegion2DepthName(geocodedAddress.region2DepthName());
+        damage.setRegion3DepthName(geocodedAddress.region3DepthName());
+        damage.setGeocodedAt(geocodedAddress.geocodedAt());
     }
 
     private DamageImage toDamageImage(Long damageId, int index, MultipartFile file) {
