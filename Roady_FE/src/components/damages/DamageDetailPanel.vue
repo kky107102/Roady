@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { damagesApi } from '@/api/damages'
 import type { DamageDetail, DamageImage, DamageAnalysis, DamageStatus } from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
@@ -14,9 +14,15 @@ const emit = defineEmits<{ close: [] }>()
 
 const detail = ref<DamageDetail | null>(null)
 const analyses = ref<DamageAnalysis[]>([])
+const analysisError = ref<string | null>(null)
+const analysisLoading = ref(false)
 const imageBlobUrls = ref<Map<number, string>>(new Map())
+const imagesLoading = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
+
+// 경쟁 조건 방지: 가장 최근 요청의 순번만 결과를 반영함
+let fetchSeq = 0
 
 const latestAnalysis = computed<DamageAnalysis | null>(() =>
   analyses.value.find((a) => a.analysisStatus === 'SUCCESS' || a.analysisStatus === 'CONFIRMED') ??
@@ -24,47 +30,97 @@ const latestAnalysis = computed<DamageAnalysis | null>(() =>
   null,
 )
 
-// ── 이미지 로드 ────────────────────────────────────────────
+// ── 이미지 로드 (fire-and-forget) ─────────────────────────
 
-async function loadImages(d: DamageDetail) {
-  // 기존 blob URL 해제
-  for (const url of imageBlobUrls.value.values()) URL.revokeObjectURL(url)
-  imageBlobUrls.value = new Map()
-
+async function loadImages(d: DamageDetail, seq: number) {
+  imagesLoading.value = true
   const urls = new Map<number, string>()
+
   await Promise.allSettled(
     d.images.map(async (img: DamageImage) => {
       try {
         const blob = await damagesApi.getImageContent(d.id, img.id)
-        urls.set(img.id, URL.createObjectURL(blob))
+        // 언마운트 또는 사건 변경으로 seq가 무효화된 경우 URL 생성 안 함
+        if (seq === fetchSeq) {
+          urls.set(img.id, URL.createObjectURL(blob))
+        }
       } catch {
         // 개별 이미지 실패는 무시
       }
     }),
   )
+
+  if (seq !== fetchSeq) {
+    for (const url of urls.values()) URL.revokeObjectURL(url)
+    return
+  }
   imageBlobUrls.value = urls
+  imagesLoading.value = false
 }
 
 // ── 데이터 조회 ────────────────────────────────────────────
 
 async function fetchDetail(id: number) {
+  const seq = ++fetchSeq
   loading.value = true
   error.value = null
   detail.value = null
   analyses.value = []
+  analysisError.value = null
+  analysisLoading.value = false
+  imagesLoading.value = false
+  for (const url of imageBlobUrls.value.values()) URL.revokeObjectURL(url)
+  imageBlobUrls.value = new Map()
 
   try {
-    const [d, a] = await Promise.all([
+    const [detailResult, analysisResult] = await Promise.allSettled([
       damagesApi.getDetail(id),
-      damagesApi.getAnalysisJobs(id).catch(() => [] as DamageAnalysis[]),
+      damagesApi.getAnalysisJobs(id),
     ])
-    detail.value = d
-    analyses.value = a
-    if (d.images.length > 0) await loadImages(d)
-  } catch {
-    error.value = '사건 정보를 불러오지 못했습니다.'
+
+    if (seq !== fetchSeq) return
+
+    if (detailResult.status === 'rejected') {
+      error.value = '사건 정보를 불러오지 못했습니다.'
+      return
+    }
+
+    detail.value = detailResult.value
+
+    if (analysisResult.status === 'fulfilled') {
+      analyses.value = analysisResult.value
+    } else {
+      analysisError.value = 'AI 분석 결과를 불러오지 못했습니다.'
+    }
+
+    // 이미지 다운로드는 상세 로딩과 분리해 fire-and-forget으로 실행
+    if (detailResult.value.images.length > 0) {
+      loadImages(detailResult.value, seq)
+    }
   } finally {
-    loading.value = false
+    // 상세 + 분석 조회 완료 시점에 전체 로딩 해제 (이미지 다운로드는 별도)
+    if (seq === fetchSeq) loading.value = false
+  }
+}
+
+// ── 분석 결과 재시도 ───────────────────────────────────────
+
+async function retryAnalysis() {
+  if (props.damageId == null) return
+  const id = props.damageId
+  const seq = fetchSeq  // 사건 변경 여부 감지용 스냅샷
+
+  analysisError.value = null
+  analysisLoading.value = true
+  try {
+    const a = await damagesApi.getAnalysisJobs(id)
+    if (seq !== fetchSeq) return
+    analyses.value = a
+  } catch {
+    if (seq !== fetchSeq) return
+    analysisError.value = 'AI 분석 결과를 불러오지 못했습니다.'
+  } finally {
+    if (seq === fetchSeq) analysisLoading.value = false
   }
 }
 
@@ -75,6 +131,19 @@ watch(
   },
   { immediate: true },
 )
+
+// ── 키보드 접근성 ─────────────────────────────────────────
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') emit('close')
+}
+
+onMounted(() => document.addEventListener('keydown', handleKeydown))
+onUnmounted(() => {
+  ++fetchSeq  // 진행 중인 모든 비동기 작업(이미지 다운로드 포함) 무효화
+  document.removeEventListener('keydown', handleKeydown)
+  for (const url of imageBlobUrls.value.values()) URL.revokeObjectURL(url)
+})
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
 
@@ -110,6 +179,14 @@ const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
   HIGH: 'warning',
   MEDIUM: 'info',
   LOW: 'neutral',
+}
+
+const ANALYSIS_STATUS_LABELS: Record<string, string> = {
+  PENDING: '분석 대기',
+  IN_PROGRESS: '분석 중',
+  SUCCESS: '분석 완료',
+  CONFIRMED: '검토 완료',
+  FAILED: '분석 실패',
 }
 
 function formatCaseId(id: number, createdAt: string): string {
@@ -189,7 +266,10 @@ function formatCoords(lat: number | null, lng: number | null): string {
             </span>
           </div>
 
-          <div v-if="imageBlobUrls.size > 0" class="image-grid">
+          <div v-if="imagesLoading" class="image-loading">
+            <LoadingSpinner label="이미지 불러오는 중" />
+          </div>
+          <div v-else-if="imageBlobUrls.size > 0" class="image-grid">
             <img
               v-for="img in detail.images"
               :key="img.id"
@@ -199,9 +279,7 @@ function formatCoords(lat: number | null, lng: number | null): string {
               v-show="imageBlobUrls.has(img.id)"
             />
           </div>
-          <div v-else class="image-loading">
-            <LoadingSpinner label="이미지 불러오는 중" />
-          </div>
+          <div v-else class="no-image-notice">이미지를 불러올 수 없습니다.</div>
         </div>
 
         <div v-else class="no-image-notice">이미지 없음</div>
@@ -232,9 +310,38 @@ function formatCoords(lat: number | null, lng: number | null): string {
         </div>
 
         <!-- AI 분석 결과 -->
-        <div v-if="latestAnalysis" class="detail-analysis">
+        <div class="detail-analysis">
           <h3 class="analysis-title">AI 분석 결과</h3>
-          <div class="detail-meta">
+
+          <!-- 분석 API 오류 -->
+          <template v-if="analysisError">
+            <p class="analysis-error-msg">{{ analysisError }}</p>
+            <button
+              type="button"
+              data-testid="analysis-retry-btn"
+              class="krds-btn small outline analysis-retry-btn"
+              @click="retryAnalysis"
+            >
+              다시 시도
+            </button>
+          </template>
+
+          <!-- 분석 재시도 로딩 -->
+          <div v-else-if="analysisLoading" class="analysis-loading">
+            <LoadingSpinner label="AI 분석 결과 조회 중" />
+          </div>
+
+          <!-- 분석 결과 없음 (API는 성공했으나 빈 배열) -->
+          <p v-else-if="analyses.length === 0" class="analysis-empty">분석 결과가 없습니다.</p>
+
+          <!-- 분석 결과 있음 -->
+          <div v-else-if="latestAnalysis" class="detail-meta">
+            <div class="meta-item">
+              <span class="meta-label">분석 상태</span>
+              <span class="meta-value">
+                {{ ANALYSIS_STATUS_LABELS[latestAnalysis.analysisStatus] ?? latestAnalysis.analysisStatus }}
+              </span>
+            </div>
             <div class="meta-item" v-if="latestAnalysis.damageScore != null">
               <span class="meta-label">파손 점수</span>
               <span class="meta-value">{{ latestAnalysis.damageScore }}점</span>
@@ -247,15 +354,11 @@ function formatCoords(lat: number | null, lng: number | null): string {
               <span class="meta-label">보수 필요</span>
               <span class="meta-value">{{ latestAnalysis.repairRequired ? '예' : '아니오' }}</span>
             </div>
-            <div class="meta-item">
-              <span class="meta-label">분석 상태</span>
-              <span class="meta-value">{{ latestAnalysis.analysisStatus }}</span>
-            </div>
           </div>
         </div>
       </div>
 
-      <!-- 액션 버튼 (S15P11A404-149에서 API 연결 예정) -->
+      <!-- 액션 버튼 (S15P11A404-150에서 구현 예정) -->
       <div class="detail-actions">
         <button type="button" class="krds-btn large filled primary action-btn" disabled title="추후 구현 예정">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -495,5 +598,42 @@ function formatCoords(lat: number | null, lng: number | null): string {
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── AI 분석 상태 ── */
+.analysis-empty {
+  margin: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+  color: var(--roady-text-tertiary);
+  text-align: center;
+  padding: 0.8rem;
+}
+
+.analysis-error-msg {
+  margin: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+  color: var(--roady-status-danger);
+}
+
+.analysis-retry-btn {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+}
+
+.analysis-loading {
+  display: flex;
+  justify-content: center;
+  padding: 0.8rem 0;
+}
+
+/* ── 반응형 (좁은 패널) ── */
+@media (max-width: 480px) {
+  .detail-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
