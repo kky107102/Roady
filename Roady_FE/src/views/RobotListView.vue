@@ -8,6 +8,7 @@ import type { SelectOption } from '@/components/common/KrdsSelect.vue'
 import KrdsTextInput from '@/components/common/KrdsTextInput.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import CommonMap from '@/components/common/CommonMap.vue'
 import type {
   Robot,
   RobotConnectionStatus,
@@ -21,6 +22,7 @@ import {
   operationBadge,
   operationLabels,
 } from '@/utils/robotDisplay'
+import { toRobotMapMarkers } from '@/utils/robotMap'
 
 const robots = ref<Robot[]>([])
 const loading = ref(true)
@@ -120,6 +122,7 @@ const urgentRobots = computed(() =>
     .filter((robot) => getUrgentReasons(robot).length > 0)
     .sort((a, b) => collator.compare(a.name, b.name)),
 )
+const robotMarkers = computed(() => toRobotMapMarkers(robots.value))
 
 function getUrgentReasons(robot: Robot): string[] {
   const reasons: string[] = []
@@ -179,24 +182,13 @@ onMounted(fetchRobots)
       <section class="overview-card map-card" aria-labelledby="robot-map-title">
         <div class="overview-header">
           <h2 id="robot-map-title">로봇 위치 현황</h2>
-          <p>지도 내 로봇 위치 표시는 추후 연동될 예정입니다.</p>
+          <p>마지막으로 수집된 로봇 위치입니다. 마커를 선택하면 상태를 확인할 수 있습니다.</p>
         </div>
-        <div class="map-placeholder">
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-            <line x1="9" y1="3" x2="9" y2="18" />
-            <line x1="15" y1="6" x2="15" y2="21" />
-          </svg>
-          <span>지도 연동 구현 예정</span>
-        </div>
+        <CommonMap
+          class="robot-list-map"
+          :markers="robotMarkers"
+          empty-message="위치 정보가 수집된 로봇이 없습니다."
+        />
       </section>
 
       <section class="overview-card urgent-card" aria-labelledby="urgent-robot-title">
@@ -442,23 +434,9 @@ onMounted(fetchRobots)
   font-size: var(--krds-pc-font-size-body-small);
 }
 
-.map-placeholder {
+.robot-list-map {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.2rem;
   min-height: 22rem;
-  border-radius: 0.6rem;
-  color: var(--roady-text-tertiary);
-  background: var(--roady-surface-background);
-  font-size: var(--krds-pc-font-size-body-small);
-}
-
-.map-placeholder svg {
-  width: 4.8rem;
-  height: 4.8rem;
 }
 
 .urgent-header {

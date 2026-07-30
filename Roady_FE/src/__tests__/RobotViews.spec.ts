@@ -160,7 +160,7 @@ describe('RobotDetailView', () => {
     expect(robotsApi.get).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('로디 1호')
     expect(wrapper.text()).toContain('로봇 위치')
-    expect(wrapper.text()).toContain('운행 경로 지도 연동 예정')
+    expect(wrapper.text()).toContain('현재 수집된 로봇 위치를 지도에서 확인합니다.')
     expect(wrapper.text()).toContain('기본 정보')
     expect(wrapper.text()).toContain('수집된 최신 상태가 없습니다.')
     expect(wrapper.text()).toContain('운행 시작')

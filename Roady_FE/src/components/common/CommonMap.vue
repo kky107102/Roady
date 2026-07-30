@@ -25,6 +25,9 @@ const props = withDefaults(defineProps<Props>(), {
   zoom: 12,
   emptyMessage: '표시할 위치 정보가 없습니다.',
 })
+const emit = defineEmits<{
+  markerSelect: [id: MapMarkerItem['id']]
+}>()
 
 const mapElement = ref<HTMLElement | null>(null)
 let mapInstance: Map | null = null
@@ -76,16 +79,19 @@ function renderMarkers() {
   if (!mapInstance) return
   clearMarkers()
 
-  markerInstances = props.markers.map((item) =>
-    createMarker([item.latitude, item.longitude], {
+  markerInstances = props.markers.map((item) => {
+    const marker = createMarker([item.latitude, item.longitude], {
       icon: markerIcon(item.tone),
       title: item.title,
       alt: `${item.title} 위치`,
       keyboard: true,
     })
       .bindPopup(popupContent(item), { minWidth: 190 })
-      .addTo(mapInstance as Map),
-  )
+      .addTo(mapInstance as Map)
+
+    marker.on('click', () => emit('markerSelect', item.id))
+    return marker
+  })
 
   if (props.markers.length === 1) {
     const marker = props.markers[0]
@@ -116,8 +122,10 @@ onMounted(() => {
 
   renderMarkers()
 
-  resizeObserver = new ResizeObserver(() => mapInstance?.invalidateSize())
-  resizeObserver.observe(mapElement.value)
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => mapInstance?.invalidateSize())
+    resizeObserver.observe(mapElement.value)
+  }
 })
 
 watch(
