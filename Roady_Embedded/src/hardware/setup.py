@@ -21,6 +21,12 @@ setup(
         "console_scripts": [
             "obstacle_camera_node = hardware.nodes.obstacle_camera_node:main",
             "wide_camera_node = hardware.nodes.camera_node:main",
+            "test_push_lock = hardware.tools.test_push_lock:main",
+            "test_dot_matrix = hardware.tools.test_dot_matrix:main",
+            "test_max7219_raw = hardware.tools.test_max7219_raw:main",
+            "test_gps = hardware.tools.test_gps:main",
+            "test_hall_sensor = hardware.tools.test_hall_sensor:main",
+            "test_leds = hardware.tools.test_leds:main",
         ],
     },
 )
