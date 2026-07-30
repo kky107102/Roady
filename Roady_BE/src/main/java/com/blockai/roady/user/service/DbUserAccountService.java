@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -74,6 +75,24 @@ public class DbUserAccountService implements UserAccountService {
             throw new IllegalArgumentException("사용자를 찾을 수 없습니다.");
         }
         return findById(id).orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    @Override
+    public UserAccount updateAssignedRegion(Long id, String assignedRegionCode) {
+        String normalizedRegionCode = normalizeRegionCode(assignedRegionCode);
+
+        int updatedRows = userAccountMapper.updateAssignedRegion(id, normalizedRegionCode);
+        if (updatedRows == 0) {
+            throw new IllegalArgumentException("User not found.");
+        }
+        return findById(id).orElseThrow(() -> new IllegalArgumentException("User not found."));
+    }
+
+    private String normalizeRegionCode(String regionCode) {
+        if (!StringUtils.hasText(regionCode)) {
+            return null;
+        }
+        return regionCode.trim();
     }
 
     private void validateDuplicate(String username, String email) {

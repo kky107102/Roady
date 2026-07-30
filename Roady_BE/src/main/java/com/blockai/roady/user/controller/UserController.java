@@ -3,6 +3,7 @@ package com.blockai.roady.user.controller;
 import com.blockai.roady.user.domain.UserAccount;
 import com.blockai.roady.user.dto.CreateUserRequest;
 import com.blockai.roady.user.dto.UpdateUserActiveRequest;
+import com.blockai.roady.user.dto.UpdateUserAssignedRegionRequest;
 import com.blockai.roady.user.dto.UpdateUserRoleRequest;
 import com.blockai.roady.user.dto.UserResponse;
 import com.blockai.roady.user.service.UserAccountService;
@@ -62,5 +63,16 @@ public class UserController {
             @Valid @RequestBody UpdateUserActiveRequest request
     ) {
         return UserResponse.from(userAccountService.updateActive(userId, request.active()));
+    }
+
+    @PatchMapping("/{userId}/assigned-region")
+    public UserResponse updateAssignedRegion(
+            @PathVariable Long userId,
+            @Valid @RequestBody UpdateUserAssignedRegionRequest request
+    ) {
+        return UserResponse.from(userAccountService.updateAssignedRegion(
+                userId,
+                request.assignedRegionCode()
+        ));
     }
 }

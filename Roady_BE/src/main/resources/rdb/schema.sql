@@ -4,11 +4,13 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255) NOT NULL,
     email VARCHAR(100) NOT NULL,
     name VARCHAR(50) NOT NULL,
+    assigned_region_code VARCHAR(10) NULL,
     role ENUM('ADMIN', 'INSPECTOR', 'REPAIRER', 'VIEWER') NOT NULL DEFAULT 'VIEWER',
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
+    INDEX idx_users_assigned_region_code (assigned_region_code),
     CONSTRAINT uk_users_username UNIQUE (username),
     CONSTRAINT uk_users_email UNIQUE (email)
 );

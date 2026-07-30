@@ -42,6 +42,7 @@ public class InMemoryUserAccountService implements UserAccountService {
                 passwordEncoder.encode(rawPassword),
                 email,
                 name,
+                null,
                 role,
                 true,
                 LocalDateTime.now()
@@ -87,6 +88,25 @@ public class InMemoryUserAccountService implements UserAccountService {
             }
             return user.withActive(active);
         });
+    }
+
+    @Override
+    public UserAccount updateAssignedRegion(Long id, String assignedRegionCode) {
+        String normalizedRegionCode = normalizeRegionCode(assignedRegionCode);
+
+        return usersById.compute(id, (ignored, user) -> {
+            if (user == null) {
+                throw new IllegalArgumentException("User not found.");
+            }
+            return user.withAssignedRegionCode(normalizedRegionCode);
+        });
+    }
+
+    private String normalizeRegionCode(String regionCode) {
+        if (regionCode == null || regionCode.isBlank()) {
+            return null;
+        }
+        return regionCode.trim();
     }
 
     private void seedUser(String username, String password, String email, String name, UserRole role) {
