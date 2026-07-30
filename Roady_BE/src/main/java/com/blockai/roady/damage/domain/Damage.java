@@ -12,6 +12,7 @@ public class Damage {
     private String description;
     private String addressName;
     private String roadAddressName;
+    private String regionCode;
     private String region1DepthName;
     private String region2DepthName;
     private String region3DepthName;
@@ -34,6 +35,7 @@ public class Damage {
             String description,
             String addressName,
             String roadAddressName,
+            String regionCode,
             String region1DepthName,
             String region2DepthName,
             String region3DepthName,
@@ -52,6 +54,7 @@ public class Damage {
         this.description = description;
         this.addressName = addressName;
         this.roadAddressName = roadAddressName;
+        this.regionCode = regionCode;
         this.region1DepthName = region1DepthName;
         this.region2DepthName = region2DepthName;
         this.region3DepthName = region3DepthName;
@@ -118,6 +121,14 @@ public class Damage {
 
     public void setRoadAddressName(String roadAddressName) {
         this.roadAddressName = roadAddressName;
+    }
+
+    public String getRegionCode() {
+        return regionCode;
+    }
+
+    public void setRegionCode(String regionCode) {
+        this.regionCode = regionCode;
     }
 
     public String getRegion1DepthName() {

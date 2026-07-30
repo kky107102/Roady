@@ -11,6 +11,7 @@ public record DamageSummary(
         String description,
         String addressName,
         String roadAddressName,
+        String regionCode,
         String region1DepthName,
         String region2DepthName,
         String region3DepthName,

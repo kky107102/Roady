@@ -50,6 +50,7 @@ class DamageControllerTest {
                 "tactile block crack",
                 "Gyeonggi Anseong Juksan 343-1",
                 "Gyeonggi Anseong Juksanchogyogil 69-4",
+                "41550",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
@@ -74,6 +75,7 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].assignedTo").value(5))
                 .andExpect(jsonPath("$.content[0].addressName").value("Gyeonggi Anseong Juksan 343-1"))
                 .andExpect(jsonPath("$.content[0].roadAddressName").value("Gyeonggi Anseong Juksanchogyogil 69-4"))
+                .andExpect(jsonPath("$.content[0].regionCode").value("41550"))
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("REVIEW_REQUIRED"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
@@ -100,6 +102,24 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content").isArray());
 
         assertThat(criteriaCaptor.getValue().keyword()).isEqualTo("Juksan");
+    }
+
+    @Test
+    void getDamagesAcceptsRegionCodeWithPeriodFilter() throws Exception {
+        ArgumentCaptor<DamageSearchCriteria> criteriaCaptor = ArgumentCaptor.forClass(DamageSearchCriteria.class);
+        when(damageService.search(criteriaCaptor.capture()))
+                .thenReturn(new DamageSearchPage(List.of(), 0, 20, 0, 0));
+
+        mockMvc.perform(get("/api/damages")
+                        .param("regionCode", "41550")
+                        .param("from", "2026-07-01T00:00:00")
+                        .param("to", "2026-08-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isArray());
+
+        assertThat(criteriaCaptor.getValue().regionCode()).isEqualTo("41550");
+        assertThat(criteriaCaptor.getValue().from()).isEqualTo(LocalDateTime.of(2026, 7, 1, 0, 0));
+        assertThat(criteriaCaptor.getValue().to()).isEqualTo(LocalDateTime.of(2026, 8, 1, 0, 0));
     }
 
     @Test

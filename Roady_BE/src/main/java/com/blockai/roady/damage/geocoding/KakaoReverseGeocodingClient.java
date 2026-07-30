@@ -37,7 +37,7 @@ public class KakaoReverseGeocodingClient {
         }
 
         try {
-            KakaoCoord2AddressResponse response = restClient.get()
+            KakaoCoord2AddressResponse addressResponse = restClient.get()
                     .uri(
                             properties.getCoord2AddressUrl() + "?x={x}&y={y}&input_coord=WGS84",
                             longitude,
@@ -46,8 +46,17 @@ public class KakaoReverseGeocodingClient {
                     .header("Authorization", KAKAO_AUTHORIZATION_PREFIX + properties.getRestApiKey())
                     .retrieve()
                     .body(KakaoCoord2AddressResponse.class);
+            KakaoCoord2RegionCodeResponse regionCodeResponse = restClient.get()
+                    .uri(
+                            properties.getCoord2RegionCodeUrl() + "?x={x}&y={y}&input_coord=WGS84",
+                            longitude,
+                            latitude
+                    )
+                    .header("Authorization", KAKAO_AUTHORIZATION_PREFIX + properties.getRestApiKey())
+                    .retrieve()
+                    .body(KakaoCoord2RegionCodeResponse.class);
 
-            return toGeocodedAddress(response);
+            return toGeocodedAddress(addressResponse, regionCodeResponse);
         } catch (RuntimeException ex) {
             log.warn("Failed to reverse geocode damage coordinates. latitude={}, longitude={}", latitude, longitude, ex);
             return Optional.empty();
@@ -58,35 +67,63 @@ public class KakaoReverseGeocodingClient {
         return properties.isEnabled()
                 && StringUtils.hasText(properties.getRestApiKey())
                 && StringUtils.hasText(properties.getCoord2AddressUrl())
+                && StringUtils.hasText(properties.getCoord2RegionCodeUrl())
                 && latitude != null
                 && longitude != null;
     }
 
-    private Optional<GeocodedAddress> toGeocodedAddress(KakaoCoord2AddressResponse response) {
-        if (response == null || CollectionUtils.isEmpty(response.documents())) {
-            return Optional.empty();
-        }
-
-        KakaoAddressDocument document = response.documents().getFirst();
-        KakaoAddress address = document.address();
-        KakaoRoadAddress roadAddress = document.roadAddress();
+    private Optional<GeocodedAddress> toGeocodedAddress(
+            KakaoCoord2AddressResponse addressResponse,
+            KakaoCoord2RegionCodeResponse regionCodeResponse
+    ) {
+        KakaoAddressDocument document = firstAddressDocument(addressResponse).orElse(null);
+        KakaoAddress address = document == null ? null : document.address();
+        KakaoRoadAddress roadAddress = document == null ? null : document.roadAddress();
         KakaoRegionSource regionSource = roadAddress != null ? roadAddress : address;
+        String regionCode = toSigunguCode(regionCodeResponse);
 
         String addressName = address == null ? null : address.addressName();
         String roadAddressName = roadAddress == null ? null : roadAddress.addressName();
 
-        if (!StringUtils.hasText(addressName) && !StringUtils.hasText(roadAddressName)) {
+        if (!StringUtils.hasText(addressName)
+                && !StringUtils.hasText(roadAddressName)
+                && !StringUtils.hasText(regionCode)) {
             return Optional.empty();
         }
 
         return Optional.of(new GeocodedAddress(
                 addressName,
                 roadAddressName,
+                regionCode,
                 regionSource == null ? null : regionSource.region1DepthName(),
                 regionSource == null ? null : regionSource.region2DepthName(),
                 regionSource == null ? null : regionSource.region3DepthName(),
                 LocalDateTime.now()
         ));
+    }
+
+    private Optional<KakaoAddressDocument> firstAddressDocument(KakaoCoord2AddressResponse response) {
+        if (response == null || CollectionUtils.isEmpty(response.documents())) {
+            return Optional.empty();
+        }
+        return Optional.of(response.documents().getFirst());
+    }
+
+    private String toSigunguCode(KakaoCoord2RegionCodeResponse response) {
+        if (response == null || CollectionUtils.isEmpty(response.documents())) {
+            return null;
+        }
+
+        return response.documents().stream()
+                .filter(document -> "H".equals(document.regionType()))
+                .findFirst()
+                .or(() -> response.documents().stream()
+                        .filter(document -> "B".equals(document.regionType()))
+                        .findFirst())
+                .map(KakaoRegionCodeDocument::code)
+                .filter(StringUtils::hasText)
+                .map(code -> code.length() < 5 ? code : code.substring(0, 5))
+                .orElse(null);
     }
 
     private interface KakaoRegionSource {
@@ -100,6 +137,17 @@ public class KakaoReverseGeocodingClient {
 
     private record KakaoCoord2AddressResponse(
             List<KakaoAddressDocument> documents
+    ) {
+    }
+
+    private record KakaoCoord2RegionCodeResponse(
+            List<KakaoRegionCodeDocument> documents
+    ) {
+    }
+
+    private record KakaoRegionCodeDocument(
+            @JsonProperty("region_type") String regionType,
+            String code
     ) {
     }
 

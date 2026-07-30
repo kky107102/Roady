@@ -10,6 +10,7 @@ public class KakaoGeocodingProperties {
     private boolean enabled;
     private String restApiKey;
     private String coord2AddressUrl = "https://dapi.kakao.com/v2/local/geo/coord2address.json";
+    private String coord2RegionCodeUrl = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
     private Duration requestTimeout = Duration.ofSeconds(3);
 
     public boolean isEnabled() {
@@ -34,6 +35,14 @@ public class KakaoGeocodingProperties {
 
     public void setCoord2AddressUrl(String coord2AddressUrl) {
         this.coord2AddressUrl = coord2AddressUrl;
+    }
+
+    public String getCoord2RegionCodeUrl() {
+        return coord2RegionCodeUrl;
+    }
+
+    public void setCoord2RegionCodeUrl(String coord2RegionCodeUrl) {
+        this.coord2RegionCodeUrl = coord2RegionCodeUrl;
     }
 
     public Duration getRequestTimeout() {

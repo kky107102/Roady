@@ -82,6 +82,7 @@ public class DamageService {
                 criteria.status(),
                 criteria.robotId(),
                 criteria.assignedTo(),
+                criteria.regionCode(),
                 criteria.caseNumber(),
                 criteria.addressKeyword(),
                 criteria.offset(),
@@ -93,6 +94,7 @@ public class DamageService {
                 criteria.status(),
                 criteria.robotId(),
                 criteria.assignedTo(),
+                criteria.regionCode(),
                 criteria.caseNumber(),
                 criteria.addressKeyword()
         );
@@ -113,7 +115,8 @@ public class DamageService {
                 criteria.to(),
                 criteria.status(),
                 criteria.robotId(),
-                criteria.assignedTo()
+                criteria.assignedTo(),
+                criteria.regionCode()
         );
         for (var groupedCount : groupedCounts) {
             statusCounts.put(groupedCount.status(), groupedCount.total());
@@ -132,6 +135,7 @@ public class DamageService {
                 criteria.status(),
                 criteria.robotId(),
                 criteria.assignedTo(),
+                criteria.regionCode(),
                 bounds.south(),
                 bounds.north(),
                 bounds.west(),
@@ -166,6 +170,7 @@ public class DamageService {
     private void applyGeocodedAddress(Damage damage, GeocodedAddress geocodedAddress) {
         damage.setAddressName(geocodedAddress.addressName());
         damage.setRoadAddressName(geocodedAddress.roadAddressName());
+        damage.setRegionCode(geocodedAddress.regionCode());
         damage.setRegion1DepthName(geocodedAddress.region1DepthName());
         damage.setRegion2DepthName(geocodedAddress.region2DepthName());
         damage.setRegion3DepthName(geocodedAddress.region3DepthName());

@@ -31,9 +31,10 @@ public class DamageDashboardController {
             LocalDateTime to,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "robotId", required = false) Long robotId,
-            @RequestParam(value = "assignedTo", required = false) Long assignedTo
+            @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam(value = "regionCode", required = false) String regionCode
     ) {
-        var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo);
+        var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo, regionCode);
         return DamageDashboardSummaryResponse.from(damageService.summarize(criteria));
     }
 }

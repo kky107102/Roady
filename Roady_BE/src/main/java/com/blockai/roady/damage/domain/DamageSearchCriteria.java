@@ -29,6 +29,20 @@ public record DamageSearchCriteria(
             String status,
             Long robotId,
             Long assignedTo,
+            String regionCode,
+            String keyword,
+            int page,
+            int size
+    ) {
+        this(new DamageFilterCriteria(from, to, status, robotId, assignedTo, regionCode), keyword, page, size);
+    }
+
+    public DamageSearchCriteria(
+            LocalDateTime from,
+            LocalDateTime to,
+            String status,
+            Long robotId,
+            Long assignedTo,
             String keyword,
             int page,
             int size
@@ -54,6 +68,10 @@ public record DamageSearchCriteria(
 
     public Long assignedTo() {
         return filter.assignedTo();
+    }
+
+    public String regionCode() {
+        return filter.regionCode();
     }
 
     public long offset() {

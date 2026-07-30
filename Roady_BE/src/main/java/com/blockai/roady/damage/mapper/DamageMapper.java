@@ -30,6 +30,7 @@ public interface DamageMapper {
                 description,
                 address_name,
                 road_address_name,
+                region_code,
                 region_1depth_name,
                 region_2depth_name,
                 region_3depth_name,
@@ -46,6 +47,7 @@ public interface DamageMapper {
                 #{description},
                 #{addressName},
                 #{roadAddressName},
+                #{regionCode},
                 #{region1DepthName},
                 #{region2DepthName},
                 #{region3DepthName},
@@ -89,6 +91,7 @@ public interface DamageMapper {
                 d.description,
                 d.address_name,
                 d.road_address_name,
+                d.region_code,
                 d.region_1depth_name,
                 d.region_2depth_name,
                 d.region_3depth_name,
@@ -111,6 +114,7 @@ public interface DamageMapper {
                 d.description,
                 d.address_name,
                 d.road_address_name,
+                d.region_code,
                 d.region_1depth_name,
                 d.region_2depth_name,
                 d.region_3depth_name,
@@ -130,6 +134,7 @@ public interface DamageMapper {
             @Arg(column = "description", javaType = String.class),
             @Arg(column = "address_name", javaType = String.class),
             @Arg(column = "road_address_name", javaType = String.class),
+            @Arg(column = "region_code", javaType = String.class),
             @Arg(column = "region_1depth_name", javaType = String.class),
             @Arg(column = "region_2depth_name", javaType = String.class),
             @Arg(column = "region_3depth_name", javaType = String.class),
@@ -154,6 +159,7 @@ public interface DamageMapper {
                 d.description,
                 d.address_name,
                 d.road_address_name,
+                d.region_code,
                 d.region_1depth_name,
                 d.region_2depth_name,
                 d.region_3depth_name,
@@ -198,6 +204,9 @@ public interface DamageMapper {
                 <if test="assignedTo != null">
                     AND d.assigned_to = #{assignedTo}
                 </if>
+                <if test="regionCode != null">
+                    AND d.region_code = #{regionCode}
+                </if>
                 <if test="caseNumber != null or addressKeyword != null">
                     AND (
                         <if test="caseNumber != null">
@@ -224,6 +233,7 @@ public interface DamageMapper {
             @Arg(column = "description", javaType = String.class),
             @Arg(column = "address_name", javaType = String.class),
             @Arg(column = "road_address_name", javaType = String.class),
+            @Arg(column = "region_code", javaType = String.class),
             @Arg(column = "region_1depth_name", javaType = String.class),
             @Arg(column = "region_2depth_name", javaType = String.class),
             @Arg(column = "region_3depth_name", javaType = String.class),
@@ -245,6 +255,7 @@ public interface DamageMapper {
             @Param("status") String status,
             @Param("robotId") Long robotId,
             @Param("assignedTo") Long assignedTo,
+            @Param("regionCode") String regionCode,
             @Param("caseNumber") Long caseNumber,
             @Param("addressKeyword") String addressKeyword,
             @Param("offset") long offset,
@@ -271,6 +282,9 @@ public interface DamageMapper {
                 <if test="assignedTo != null">
                     AND d.assigned_to = #{assignedTo}
                 </if>
+                <if test="regionCode != null">
+                    AND d.region_code = #{regionCode}
+                </if>
                 <if test="caseNumber != null or addressKeyword != null">
                     AND (
                         <if test="caseNumber != null">
@@ -294,6 +308,7 @@ public interface DamageMapper {
             @Param("status") String status,
             @Param("robotId") Long robotId,
             @Param("assignedTo") Long assignedTo,
+            @Param("regionCode") String regionCode,
             @Param("caseNumber") Long caseNumber,
             @Param("addressKeyword") String addressKeyword
     );
@@ -321,6 +336,9 @@ public interface DamageMapper {
                 <if test="assignedTo != null">
                     AND d.assigned_to = #{assignedTo}
                 </if>
+                <if test="regionCode != null">
+                    AND d.region_code = #{regionCode}
+                </if>
             </where>
             GROUP BY d.current_status
             </script>
@@ -335,7 +353,8 @@ public interface DamageMapper {
             @Param("to") LocalDateTime to,
             @Param("status") String status,
             @Param("robotId") Long robotId,
-            @Param("assignedTo") Long assignedTo
+            @Param("assignedTo") Long assignedTo,
+            @Param("regionCode") String regionCode
     );
 
     @Select("""
@@ -364,6 +383,9 @@ public interface DamageMapper {
                 <if test="assignedTo != null">
                     AND d.assigned_to = #{assignedTo}
                 </if>
+                <if test="regionCode != null">
+                    AND d.region_code = #{regionCode}
+                </if>
             </where>
             ORDER BY d.created_at DESC, d.id DESC
             </script>
@@ -380,6 +402,7 @@ public interface DamageMapper {
             @Param("status") String status,
             @Param("robotId") Long robotId,
             @Param("assignedTo") Long assignedTo,
+            @Param("regionCode") String regionCode,
             @Param("south") BigDecimal south,
             @Param("north") BigDecimal north,
             @Param("west") BigDecimal west,

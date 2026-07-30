@@ -116,6 +116,7 @@ class DamageDashboardQueryIntegrationTest {
                         "description",
                         "address_name",
                         "road_address_name",
+                        "region_code",
                         "region_1depth_name",
                         "region_2depth_name",
                         "region_3depth_name",
@@ -147,7 +148,8 @@ class DamageDashboardQueryIntegrationTest {
                         "idx_damages_reported_by_created_at",
                         "idx_damages_assigned_to_created_at",
                         "idx_damages_address_name",
-                        "idx_damages_road_address_name"
+                        "idx_damages_road_address_name",
+                        "idx_damages_region_code_created_at"
                 );
     }
 
@@ -212,7 +214,7 @@ class DamageDashboardQueryIntegrationTest {
         var byAddress = damageService.search(new DamageSearchCriteria(
                 FROM,
                 TO,
-                null,
+                "REVIEW_REQUIRED",
                 null,
                 null,
                 "Juksan",
@@ -221,6 +223,25 @@ class DamageDashboardQueryIntegrationTest {
         ));
 
         assertThat(byAddress.content())
+                .extracting(damage -> damage.id())
+                .containsExactly(newerDamageId, olderDamageId);
+    }
+
+    @Test
+    void searchFiltersByRegionCodeAndPeriod() {
+        var result = damageService.search(new DamageSearchCriteria(
+                FROM,
+                TO,
+                null,
+                null,
+                null,
+                "41550",
+                null,
+                0,
+                20
+        ));
+
+        assertThat(result.content())
                 .extracting(damage -> damage.id())
                 .containsExactly(newerDamageId, olderDamageId);
     }
@@ -302,6 +323,7 @@ class DamageDashboardQueryIntegrationTest {
                     description,
                     address_name,
                     road_address_name,
+                    region_code,
                     region_1depth_name,
                     region_2depth_name,
                     region_3depth_name,
@@ -313,7 +335,7 @@ class DamageDashboardQueryIntegrationTest {
                     created_at,
                     updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 robotId,
                 reportedBy,
@@ -321,6 +343,7 @@ class DamageDashboardQueryIntegrationTest {
                 description,
                 "Gyeonggi Anseong Juksan " + UUID.randomUUID(),
                 "Gyeonggi Anseong Juksanchogyogil " + UUID.randomUUID(),
+                status.equals("REVIEW_REQUIRED") ? "41550" : "41111",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",

@@ -50,6 +50,28 @@ class KakaoReverseGeocodingClientTest {
                         """,
                         MediaType.APPLICATION_JSON
                 ));
+        server.expect(requestTo(
+                        "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json"
+                                + "?x=127.1234567&y=37.1234567&input_coord=WGS84"
+                ))
+                .andExpect(header("Authorization", "KakaoAK test-key"))
+                .andRespond(withSuccess(
+                        """
+                        {
+                          "documents": [
+                            {
+                              "region_type": "B",
+                              "code": "4155010100"
+                            },
+                            {
+                              "region_type": "H",
+                              "code": "4155052000"
+                            }
+                          ]
+                        }
+                        """,
+                        MediaType.APPLICATION_JSON
+                ));
 
         var result = client.reverseGeocode(
                 BigDecimal.valueOf(37.1234567),
@@ -59,6 +81,7 @@ class KakaoReverseGeocodingClientTest {
         assertThat(result).isPresent();
         assertThat(result.get().addressName()).isEqualTo("Gyeonggi Anseong Juksan 343-1");
         assertThat(result.get().roadAddressName()).isEqualTo("Gyeonggi Anseong Juksanchogyogil 69-4");
+        assertThat(result.get().regionCode()).isEqualTo("41550");
         assertThat(result.get().region1DepthName()).isEqualTo("Gyeonggi");
         assertThat(result.get().region2DepthName()).isEqualTo("Anseong");
         assertThat(result.get().region3DepthName()).isEqualTo("Juksan");

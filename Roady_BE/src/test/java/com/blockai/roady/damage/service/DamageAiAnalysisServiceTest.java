@@ -93,6 +93,7 @@ class DamageAiAnalysisServiceTest {
                 null,
                 null,
                 null,
+                null,
                 now,
                 "COLLECTED",
                 1L,

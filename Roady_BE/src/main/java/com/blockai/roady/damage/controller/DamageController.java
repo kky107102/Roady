@@ -88,6 +88,7 @@ public class DamageController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "robotId", required = false) Long robotId,
             @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam(value = "regionCode", required = false) String regionCode,
             @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "20") int size
@@ -98,6 +99,7 @@ public class DamageController {
                 status,
                 robotId,
                 assignedTo,
+                regionCode,
                 keyword,
                 page,
                 size
@@ -116,12 +118,13 @@ public class DamageController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "robotId", required = false) Long robotId,
             @RequestParam(value = "assignedTo", required = false) Long assignedTo,
+            @RequestParam(value = "regionCode", required = false) String regionCode,
             @RequestParam("south") BigDecimal south,
             @RequestParam("north") BigDecimal north,
             @RequestParam("west") BigDecimal west,
             @RequestParam("east") BigDecimal east
     ) {
-        var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo);
+        var criteria = new DamageFilterCriteria(from, to, status, robotId, assignedTo, regionCode);
         var bounds = new DamageMapBounds(south, north, west, east);
         return damageService.findMapMarkers(criteria, bounds).stream()
                 .map(DamageMapMarkerResponse::from)

@@ -64,6 +64,7 @@ class DamageServiceTest {
         )).thenReturn(Optional.of(new GeocodedAddress(
                 ADDRESS_NAME,
                 ROAD_ADDRESS_NAME,
+                "41550",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
@@ -82,6 +83,7 @@ class DamageServiceTest {
                 "tactile block damage",
                 ADDRESS_NAME,
                 ROAD_ADDRESS_NAME,
+                "41550",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
@@ -117,6 +119,7 @@ class DamageServiceTest {
         assertThat(savedDamage.getAssignedTo()).isEqualTo(3L);
         assertThat(savedDamage.getAddressName()).isEqualTo(ADDRESS_NAME);
         assertThat(savedDamage.getRoadAddressName()).isEqualTo(ROAD_ADDRESS_NAME);
+        assertThat(savedDamage.getRegionCode()).isEqualTo("41550");
         assertThat(savedDamage.getRegion1DepthName()).isEqualTo("Gyeonggi");
         assertThat(savedDamage.getRegion2DepthName()).isEqualTo("Anseong");
         assertThat(savedDamage.getRegion3DepthName()).isEqualTo("Juksan");
@@ -142,6 +145,7 @@ class DamageServiceTest {
                 1L,
                 null,
                 2L,
+                null,
                 null,
                 null,
                 null,
@@ -205,6 +209,7 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
                 "Juksan",
                 1,
                 20
@@ -216,6 +221,7 @@ class DamageServiceTest {
                 "tactile block damage",
                 ADDRESS_NAME,
                 ROAD_ADDRESS_NAME,
+                "41550",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
@@ -238,6 +244,7 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
                 null,
                 "Juksan",
                 20L,
@@ -249,6 +256,7 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
                 null,
                 "Juksan"
         )).thenReturn(41L);
@@ -274,9 +282,9 @@ class DamageServiceTest {
                 0,
                 20
         );
-        when(damageMapper.searchSummaries(null, null, null, null, null, null, null, 0L, 20))
+        when(damageMapper.searchSummaries(null, null, null, null, null, null, null, null, 0L, 20))
                 .thenReturn(List.of());
-        when(damageMapper.countSummaries(null, null, null, null, null, null, null))
+        when(damageMapper.countSummaries(null, null, null, null, null, null, null, null))
                 .thenReturn(0L);
 
         DamageSearchPage result = damageService.search(criteria);
@@ -360,7 +368,7 @@ class DamageServiceTest {
         LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
         LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
         DamageFilterCriteria criteria = new DamageFilterCriteria(from, to, null, 10L, null);
-        when(damageMapper.summarizeByStatus(from, to, null, 10L, null))
+        when(damageMapper.summarizeByStatus(from, to, null, 10L, null, null))
                 .thenReturn(List.of(
                         new DamageStatusCount("COLLECTED", 3, 2),
                         new DamageStatusCount("REVIEW_REQUIRED", 2, 1)
@@ -380,7 +388,7 @@ class DamageServiceTest {
     @Test
     void summarizeReturnsZeroFilledResponseForEmptyResult() {
         DamageFilterCriteria criteria = new DamageFilterCriteria(null, null, null, null, null);
-        when(damageMapper.summarizeByStatus(null, null, null, null, null))
+        when(damageMapper.summarizeByStatus(null, null, null, null, null, null))
                 .thenReturn(List.of());
 
         DamageDashboardSummary result = damageService.summarize(criteria);
@@ -401,7 +409,8 @@ class DamageServiceTest {
                 to,
                 "REVIEW_REQUIRED",
                 10L,
-                3L
+                3L,
+                "41550"
         );
         DamageMapMarker marker = new DamageMapMarker(
                 1L,
@@ -421,6 +430,7 @@ class DamageServiceTest {
                 "REVIEW_REQUIRED",
                 10L,
                 3L,
+                "41550",
                 bounds.south(),
                 bounds.north(),
                 bounds.west(),
