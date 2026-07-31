@@ -14,6 +14,7 @@ import com.blockai.roady.damage.dto.DamageSummaryResponse;
 import com.blockai.roady.damage.dto.UpdateDamageReviewRequest;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
+import com.blockai.roady.robot.service.RobotService;
 import com.blockai.roady.security.AuthenticatedUser;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
@@ -44,10 +45,16 @@ public class DamageController {
 
     private final DamageService damageService;
     private final DamageAiAnalysisService aiAnalysisService;
+    private final RobotService robotService;
 
-    public DamageController(DamageService damageService, DamageAiAnalysisService aiAnalysisService) {
+    public DamageController(
+            DamageService damageService,
+            DamageAiAnalysisService aiAnalysisService,
+            RobotService robotService
+    ) {
         this.damageService = damageService;
         this.aiAnalysisService = aiAnalysisService;
+        this.robotService = robotService;
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -66,7 +73,7 @@ public class DamageController {
     ) {
         var damage = damageService.create(
                 robotId,
-                user.id(),
+                resolveReportedBy(user, robotId),
                 assignedTo,
                 description,
                 latitude,
@@ -78,6 +85,16 @@ public class DamageController {
                 .map(DamageImageResponse::from)
                 .toList();
         return DamageResponse.from(damage, imageResponses);
+    }
+
+    private Long resolveReportedBy(AuthenticatedUser user, Long robotId) {
+        if (user != null && user.id() != null) {
+            return user.id();
+        }
+        if (robotId == null) {
+            throw new IllegalArgumentException("robotId is required for unauthenticated robot damage uploads.");
+        }
+        return robotService.get(robotId).getUserId();
     }
 
     @GetMapping
