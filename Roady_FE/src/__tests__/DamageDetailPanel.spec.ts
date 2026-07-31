@@ -10,7 +10,12 @@ const mockApi = vi.hoisted(() => ({
   getImageContent: vi.fn<(damageId: number, imageId: number) => Promise<Blob>>(),
 }))
 
+const mockRobotsApi = vi.hoisted(() => ({
+  get: vi.fn(),
+}))
+
 vi.mock('@/api/damages', () => ({ damagesApi: mockApi }))
+vi.mock('@/api/robots', () => ({ robotsApi: mockRobotsApi }))
 
 // ── URL mock (jsdom에서 지원하지 않음) ───────────────────────────────────────
 
@@ -25,9 +30,7 @@ afterAll(() => {
 
 // ── 컴포넌트 지연 임포트 (mock 등록 후) ─────────────────────────────────────
 
-const { default: DamageDetailPanel } = await import(
-  '@/components/damages/DamageDetailPanel.vue'
-)
+const { default: DamageDetailPanel } = await import('@/components/damages/DamageDetailPanel.vue')
 
 // ── 테스트 픽스처 ────────────────────────────────────────────────────────────
 
@@ -51,8 +54,24 @@ const detailWithImages: DamageDetail = {
   ...baseDetail,
   imageCount: 2,
   images: [
-    { id: 1, damageId: 42, sortOrder: 1, originalFilename: 'a.jpg', contentType: 'image/jpeg', sizeBytes: 1024, createdAt: '2026-07-01T10:00:00' },
-    { id: 2, damageId: 42, sortOrder: 2, originalFilename: 'b.jpg', contentType: 'image/jpeg', sizeBytes: 1024, createdAt: '2026-07-01T10:00:00' },
+    {
+      id: 1,
+      damageId: 42,
+      sortOrder: 1,
+      originalFilename: 'a.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1024,
+      createdAt: '2026-07-01T10:00:00',
+    },
+    {
+      id: 2,
+      damageId: 42,
+      sortOrder: 2,
+      originalFilename: 'b.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1024,
+      createdAt: '2026-07-01T10:00:00',
+    },
   ],
 }
 
@@ -61,6 +80,7 @@ const successAnalysis: DamageAnalysis = {
   damageId: 42,
   damaged: true,
   damageScore: 85,
+  damageType: 'CRACK',
   repairRequired: true,
   repairPriority: 'HIGH',
   confidenceScore: 0.92,
@@ -77,12 +97,12 @@ function mountPanel(damageId: number | null = 42) {
     global: {
       stubs: {
         LoadingSpinner: {
-          // label prop을 텍스트로 렌더링해 전체 로딩과 이미지 로딩을 구분할 수 있게 함
           template: '<div role="status" data-testid="loading-spinner">{{ label }}</div>',
           props: ['label'],
         },
         ErrorState: {
-          template: '<div data-testid="error-state"><button type="button" @click="$emit(\'retry\')">재시도</button></div>',
+          template:
+            '<div data-testid="error-state"><button type="button" @click="$emit(\'retry\')">재시도</button></div>',
           emits: ['retry'],
         },
         StatusBadge: {
@@ -99,6 +119,10 @@ function mountPanel(damageId: number | null = 42) {
 describe('DamageDetailPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockRobotsApi.get.mockResolvedValue({
+      id: 7,
+      name: 'Roady-Unit-07',
+    })
   })
 
   // ── 로딩 상태 ──────────────────────────────────────────────────────────────
@@ -119,21 +143,16 @@ describe('DamageDetailPanel', () => {
   it('이미지 로드 중에는 상세 내용을 표시하며 이미지 로딩 문구만 보여준다', async () => {
     mockApi.getDetail.mockResolvedValue(detailWithImages)
     mockApi.getAnalysisJobs.mockResolvedValue([])
-    // getImageContent는 영원히 응답하지 않음 → 이미지만 로딩 중 상태 유지
     mockApi.getImageContent.mockReturnValue(new Promise(() => {}))
 
     const wrapper = mountPanel(42)
-    await flushPromises() // detail + analyses 완료, 이미지 로드 진행 중
+    await flushPromises()
 
-    // 전체 로딩 오버레이 없음 → 상세 내용이 보임
     expect(wrapper.text()).toContain('도로 균열 발생')
 
     const spinners = wrapper.findAll('[data-testid="loading-spinner"]')
 
-    // 전체 로딩 스피너("사건 정보 불러오는 중")는 없음
     expect(spinners.some((s) => s.text().includes('사건 정보 불러오는 중'))).toBe(false)
-
-    // 이미지 로딩 스피너("이미지 불러오는 중")는 있음
     expect(spinners.some((s) => s.text().includes('이미지 불러오는 중'))).toBe(true)
   })
 
@@ -151,9 +170,7 @@ describe('DamageDetailPanel', () => {
   })
 
   it('재시도 버튼 클릭 시 데이터를 다시 조회한다', async () => {
-    mockApi.getDetail
-      .mockRejectedValueOnce(new Error('fail'))
-      .mockResolvedValueOnce(baseDetail)
+    mockApi.getDetail.mockRejectedValueOnce(new Error('fail')).mockResolvedValueOnce(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
     const wrapper = mountPanel(42)
@@ -166,7 +183,17 @@ describe('DamageDetailPanel', () => {
     expect(wrapper.text()).toContain('도로 균열 발생')
   })
 
-  // ── 기본 정보 렌더링 ───────────────────────────────────────────────────────
+  // ── 헤더 및 사건 기본 정보 렌더링 ────────────────────────────────────────
+
+  it('헤더 제목 "사건 상세 정보"를 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('사건 상세 정보')
+  })
 
   it('사건 기본 정보를 올바르게 렌더링한다', async () => {
     mockApi.getDetail.mockResolvedValue(baseDetail)
@@ -178,7 +205,42 @@ describe('DamageDetailPanel', () => {
     expect(wrapper.text()).toContain('도로 균열 발생')
     expect(wrapper.text()).toContain('RD-2026-000042')
     expect(wrapper.text()).toContain('37.5665')
-    expect(wrapper.text()).toContain('미배정')
+  })
+
+  it('도로명 주소가 있으면 좌표 대신 주소와 "주변"을 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue({
+      ...baseDetail,
+      addressName: '서울특별시 강남구 역삼동 123',
+      roadAddressName: '서울특별시 강남구 역삼대로13길 23',
+    })
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('서울특별시 강남구 역삼대로13길 23 주변')
+    expect(wrapper.text()).not.toContain('위도 37.5665')
+  })
+
+  it('robotId로 조회한 탐지 로봇 이름을 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(mockRobotsApi.get).toHaveBeenCalledWith(7)
+    expect(wrapper.text()).toContain('탐지 로봇: Roady-Unit-07')
+  })
+
+  it('탐지 일시를 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('2026')
   })
 
   // ── 이미지 상태 ────────────────────────────────────────────────────────────
@@ -197,16 +259,16 @@ describe('DamageDetailPanel', () => {
     mockApi.getDetail.mockResolvedValue(detailWithImages)
     mockApi.getAnalysisJobs.mockResolvedValue([])
     mockApi.getImageContent
-      .mockResolvedValueOnce(new Blob(['img1'])) // 이미지 1 성공
-      .mockRejectedValueOnce(new Error('img2 failed')) // 이미지 2 실패
+      .mockResolvedValueOnce(new Blob(['img1']))
+      .mockRejectedValueOnce(new Error('img2 failed'))
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    // "불러올 수 없습니다"는 전체 실패일 때만 표시 → 일부 성공이면 없어야 함
     expect(wrapper.text()).not.toContain('이미지를 불러올 수 없습니다')
-    // 성공한 이미지의 src가 blob:mock으로 설정됨
-    const images = wrapper.findAll('img.detail-img').filter((img) => img.attributes('src') === 'blob:mock')
+    const images = wrapper
+      .findAll('img.detail-img')
+      .filter((img) => img.attributes('src') === 'blob:mock')
     expect(images.length).toBe(1)
   })
 
@@ -230,24 +292,22 @@ describe('DamageDetailPanel', () => {
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    // 상세 정보는 계속 표시됨
     expect(wrapper.text()).toContain('도로 균열 발생')
-    // AI 오류 메시지 표시
     expect(wrapper.text()).toContain('AI 분석 결과를 불러오지 못했습니다')
-    // 재시도 버튼 존재
     expect(wrapper.find('[data-testid="analysis-retry-btn"]').exists()).toBe(true)
-    // "분석 결과가 없습니다"는 표시 안 됨
     expect(wrapper.text()).not.toContain('분석 결과가 없습니다')
   })
 
-  it('AI API가 빈 배열을 반환하면 "분석 결과가 없습니다"를 표시한다', async () => {
+  it('AI API가 빈 배열을 반환하면 보류 상태의 요약 카드를 표시한다', async () => {
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('분석 결과가 없습니다')
+    expect(wrapper.text()).toContain('AI 판독 요약')
+    expect(wrapper.find('.ai-card-body').text()).toContain('보류')
+    expect(wrapper.text()).not.toContain('분석 결과가 없습니다')
     expect(wrapper.text()).not.toContain('불러오지 못했습니다')
     expect(wrapper.find('[data-testid="analysis-retry-btn"]').exists()).toBe(false)
   })
@@ -267,16 +327,14 @@ describe('DamageDetailPanel', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="analysis-retry-btn"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('분석 완료')
-    expect(wrapper.text()).toContain('85점')
+    expect(wrapper.text()).toContain('85%')
+    expect(wrapper.text()).toContain('92%')
   })
 
   it('사건 변경 시 이전 AI 분석 오류 상태를 초기화한다', async () => {
     const detail2: DamageDetail = { ...baseDetail, id: 2, description: '두 번째 사건' }
 
-    mockApi.getDetail
-      .mockResolvedValueOnce(baseDetail)
-      .mockResolvedValueOnce(detail2)
+    mockApi.getDetail.mockResolvedValueOnce(baseDetail).mockResolvedValueOnce(detail2)
     mockApi.getAnalysisJobs
       .mockRejectedValueOnce(new Error('analysis error'))
       .mockResolvedValueOnce([])
@@ -290,54 +348,245 @@ describe('DamageDetailPanel', () => {
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('AI 분석 결과를 불러오지 못했습니다')
-    expect(wrapper.text()).toContain('분석 결과가 없습니다')
+    expect(wrapper.find('.ai-card-body').text()).toContain('보류')
   })
 
-  // ── AI 분석 상태 라벨 ─────────────────────────────────────────────────────
+  // ── AI 판독 요약 카드 ─────────────────────────────────────────────────────
 
-  it('SUCCESS 분석 상태를 "분석 완료"로 표시한다', async () => {
+  it('파손률을 % 단위로 표시한다', async () => {
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('분석 완료')
-    expect(wrapper.text()).toContain('85점')
+    expect(wrapper.text()).toContain('85%')
+  })
+
+  it('신뢰도를 %로 변환해 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
     expect(wrapper.text()).toContain('92%')
   })
 
-  it('PENDING 분석 상태를 "분석 대기"로 표시한다', async () => {
-    const pendingAnalysis: DamageAnalysis = { ...successAnalysis, analysisStatus: 'PENDING', damageScore: null, confidenceScore: null, repairRequired: null }
+  it('파손 유형 코드를 한글로 변환해 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis]) // damageType: 'CRACK'
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('균열')
+  })
+
+  it('HIGH 우선순위 코드를 "높음"으로 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis]) // repairPriority: 'HIGH'
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('높음')
+  })
+
+  it('URGENT 우선순위를 "긴급"으로 표시한다', async () => {
+    const urgentAnalysis: DamageAnalysis = { ...successAnalysis, repairPriority: 'URGENT' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([urgentAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('긴급')
+  })
+
+  it('NORMAL 우선순위를 "보통"으로 표시한다', async () => {
+    const normalAnalysis: DamageAnalysis = { ...successAnalysis, repairPriority: 'NORMAL' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([normalAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('보통')
+  })
+
+  it('LOW 우선순위를 "낮음"으로 표시한다', async () => {
+    const lowAnalysis: DamageAnalysis = { ...successAnalysis, repairPriority: 'LOW' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([lowAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('낮음')
+  })
+
+  it('우선순위 값이 없으면 "보류"로 표시한다', async () => {
+    const pendingPriorityAnalysis: DamageAnalysis = {
+      ...successAnalysis,
+      repairPriority: null,
+    }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([pendingPriorityAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.get('.badge-priority').text()).toBe('보류')
+    expect(wrapper.find('.ai-card-body').text()).toContain('보류')
+  })
+
+  it('MISSING 파손 유형을 "유실"로 표시한다', async () => {
+    const missingAnalysis: DamageAnalysis = { ...successAnalysis, damageType: 'MISSING' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([missingAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('유실')
+  })
+
+  it('WEAR 파손 유형을 "마모"로 표시한다', async () => {
+    const wearAnalysis: DamageAnalysis = { ...successAnalysis, damageType: 'WEAR' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([wearAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('마모')
+  })
+
+  it('BREAKAGE 파손 유형을 "파손"으로 표시한다', async () => {
+    const breakageAnalysis: DamageAnalysis = { ...successAnalysis, damageType: 'BREAKAGE' }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([breakageAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('파손')
+  })
+
+  it('분석값이 없을 때 우선순위는 "보류", 나머지 값은 "-"로 표시한다', async () => {
+    const emptyAnalysis: DamageAnalysis = {
+      ...successAnalysis,
+      damageScore: null,
+      damageType: null,
+      repairPriority: null,
+      confidenceScore: null,
+    }
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([emptyAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    expect(wrapper.find('.ai-card-body').text()).toContain('보류')
+    expect(wrapper.find('.ai-card-body').text()).toContain('-')
+  })
+
+  it('PENDING 상태에서 데이터가 없으면 "-"를 표시한다', async () => {
+    const pendingAnalysis: DamageAnalysis = {
+      ...successAnalysis,
+      analysisStatus: 'PENDING',
+      damageScore: null,
+      damageType: null,
+      confidenceScore: null,
+      repairPriority: null,
+      repairRequired: null,
+    }
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([pendingAnalysis])
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('분석 대기')
+    const text = wrapper.text()
+    const dashCount = (text.match(/-/g) ?? []).length
+    expect(dashCount).toBeGreaterThanOrEqual(4)
   })
 
-  it('IN_PROGRESS 분석 상태를 "분석 중"으로 표시한다', async () => {
-    const inProgressAnalysis: DamageAnalysis = { ...successAnalysis, analysisStatus: 'IN_PROGRESS', damageScore: null, confidenceScore: null }
+  it('IN_PROGRESS 상태에서 데이터가 없으면 "-"를 표시한다', async () => {
+    const inProgressAnalysis: DamageAnalysis = {
+      ...successAnalysis,
+      analysisStatus: 'IN_PROGRESS',
+      damageScore: null,
+      damageType: null,
+      confidenceScore: null,
+    }
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([inProgressAnalysis])
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('분석 중')
+    const text = wrapper.text()
+    expect((text.match(/-/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 
-  it('FAILED 분석 상태를 "분석 실패"로 표시한다', async () => {
-    const failedAnalysis: DamageAnalysis = { ...successAnalysis, analysisStatus: 'FAILED', damageScore: null, confidenceScore: null }
+  it('FAILED 상태에서 데이터가 없으면 "-"를 표시한다', async () => {
+    const failedAnalysis: DamageAnalysis = {
+      ...successAnalysis,
+      analysisStatus: 'FAILED',
+      damageScore: null,
+      damageType: null,
+      confidenceScore: null,
+    }
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([failedAnalysis])
 
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('분석 실패')
+    const text = wrapper.text()
+    expect((text.match(/-/g) ?? []).length).toBeGreaterThanOrEqual(2)
+  })
+
+  // ── 판정 버튼 ──────────────────────────────────────────────────────────────
+
+  it('"보수 불필요"와 "보수 필요" 버튼을 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    const labels = wrapper.findAll('button').map((b) => b.text())
+    expect(labels).toContain('보수 불필요')
+    expect(labels).toContain('보수 필요')
+  })
+
+  it('"보수 불필요" 클릭 시 verdict-no-repair 이벤트를 발생시킨다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    const btn = wrapper.findAll('button').find((b) => b.text() === '보수 불필요')
+    await btn!.trigger('click')
+
+    expect(wrapper.emitted('verdict-no-repair')).toBeTruthy()
+  })
+
+  it('"보수 필요" 클릭 시 verdict-repair 이벤트를 발생시킨다', async () => {
+    mockApi.getDetail.mockResolvedValue(baseDetail)
+    mockApi.getAnalysisJobs.mockResolvedValue([])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    const btn = wrapper.findAll('button').find((b) => b.text() === '보수 필요')
+    await btn!.trigger('click')
+
+    expect(wrapper.emitted('verdict-repair')).toBeTruthy()
   })
 
   // ── 닫기 ───────────────────────────────────────────────────────────────────
@@ -383,20 +632,18 @@ describe('DamageDetailPanel', () => {
     const detail2: DamageDetail = { ...baseDetail, id: 2, description: '두 번째 사건' }
 
     let resolveFirst!: (d: DamageDetail) => void
-    const firstPromise = new Promise<DamageDetail>((res) => { resolveFirst = res })
+    const firstPromise = new Promise<DamageDetail>((res) => {
+      resolveFirst = res
+    })
 
-    mockApi.getDetail
-      .mockReturnValueOnce(firstPromise)
-      .mockResolvedValueOnce(detail2)
+    mockApi.getDetail.mockReturnValueOnce(firstPromise).mockResolvedValueOnce(detail2)
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
     const wrapper = mountPanel(1)
 
-    // 첫 번째 요청 응답 전에 두 번째 사건으로 전환
     await wrapper.setProps({ damageId: 2 })
     await flushPromises()
 
-    // stale 첫 번째 응답 도착
     resolveFirst(detail1)
     await flushPromises()
 
@@ -405,9 +652,7 @@ describe('DamageDetailPanel', () => {
   })
 
   it('사건 전환 시 이전 상세 데이터가 즉시 제거된다', async () => {
-    mockApi.getDetail
-      .mockResolvedValueOnce(baseDetail)
-      .mockReturnValueOnce(new Promise(() => {}))
+    mockApi.getDetail.mockResolvedValueOnce(baseDetail).mockReturnValueOnce(new Promise(() => {}))
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
     const wrapper = mountPanel(42)
@@ -417,7 +662,6 @@ describe('DamageDetailPanel', () => {
 
     await wrapper.setProps({ damageId: 99 })
 
-    // 두 번째 로딩 중: 이전 내용이 없고 전체 로딩 스피너가 보여야 함
     expect(wrapper.text()).not.toContain('도로 균열 발생')
     const spinners = wrapper.findAll('[data-testid="loading-spinner"]')
     expect(spinners.some((s) => s.text().includes('사건 정보 불러오는 중'))).toBe(true)
@@ -445,22 +689,21 @@ describe('DamageDetailPanel', () => {
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
     let resolveImage!: (b: Blob) => void
-    const imagePromise = new Promise<Blob>((res) => { resolveImage = res })
+    const imagePromise = new Promise<Blob>((res) => {
+      resolveImage = res
+    })
     mockApi.getImageContent.mockReturnValue(imagePromise)
 
     const wrapper = mountPanel(42)
-    await flushPromises() // detail/analyses 완료, 이미지 로드 진행 중
+    await flushPromises()
 
-    // 언마운트 전 시점의 createObjectURL 호출 횟수 기록
     const callCountBeforeUnmount = vi.mocked(URL.createObjectURL).mock.calls.length
 
     wrapper.unmount()
 
-    // 언마운트 후 지연된 이미지 응답 도착
     resolveImage(new Blob(['img']))
     await flushPromises()
 
-    // createObjectURL은 추가 호출되지 않아야 함
     expect(vi.mocked(URL.createObjectURL).mock.calls.length).toBe(callCountBeforeUnmount)
   })
 })

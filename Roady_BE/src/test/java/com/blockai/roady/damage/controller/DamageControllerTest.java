@@ -5,11 +5,13 @@ import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
+import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -20,8 +22,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -170,6 +174,29 @@ class DamageControllerTest {
     @Test
     void getMapMarkersRequiresBounds() throws Exception {
         mockMvc.perform(get("/api/damages/map-markers"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDamageStatusAppliesAdministratorVerdict() throws Exception {
+        mockMvc.perform(patch("/api/damages/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "REQUESTED",
+                                  "comment": "Administrator verdict: repair required"
+                                }
+                                """))
+                .andExpect(status().isNoContent());
+
+        verify(damageService).updateReviewStatus(1L, DamageStatus.REQUESTED);
+    }
+
+    @Test
+    void updateDamageStatusRejectsMissingStatus() throws Exception {
+        mockMvc.perform(patch("/api/damages/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
                 .andExpect(status().isBadRequest());
     }
 }

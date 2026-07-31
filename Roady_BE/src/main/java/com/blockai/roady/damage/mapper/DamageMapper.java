@@ -14,6 +14,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -148,6 +149,19 @@ public interface DamageMapper {
             @Arg(column = "updated_at", javaType = LocalDateTime.class)
     })
     DamageSummary findSummaryById(@Param("id") Long id);
+
+    @Update("""
+            UPDATE damages
+            SET current_status = #{nextStatus},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = #{id}
+              AND current_status = #{currentStatus}
+            """)
+    int updateStatusIfCurrent(
+            @Param("id") Long id,
+            @Param("currentStatus") String currentStatus,
+            @Param("nextStatus") String nextStatus
+    );
 
     @Select("""
             <script>

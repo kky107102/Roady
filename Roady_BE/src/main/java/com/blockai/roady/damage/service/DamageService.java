@@ -149,6 +149,33 @@ public class DamageService {
                 .orElseThrow(() -> new IllegalArgumentException("Damage not found."));
     }
 
+    @Transactional
+    public void updateReviewStatus(Long damageId, DamageStatus nextStatus) {
+        if (nextStatus != DamageStatus.REQUESTED && nextStatus != DamageStatus.CANCELED) {
+            throw new IllegalArgumentException(
+                    "Administrator verdict status must be REQUESTED or CANCELED."
+            );
+        }
+
+        DamageSummary damage = getSummary(damageId);
+        if (!DamageStatus.AI_ANALYZED.name().equals(damage.currentStatus())) {
+            throw new IllegalArgumentException(
+                    "Only AI_ANALYZED damage can receive an administrator verdict."
+            );
+        }
+
+        int updated = damageMapper.updateStatusIfCurrent(
+                damageId,
+                DamageStatus.AI_ANALYZED.name(),
+                nextStatus.name()
+        );
+        if (updated != 1) {
+            throw new IllegalArgumentException(
+                    "Damage status changed while processing the administrator verdict."
+            );
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<DamageImageMetadata> getImageMetadata(Long damageId) {
         getSummary(damageId);

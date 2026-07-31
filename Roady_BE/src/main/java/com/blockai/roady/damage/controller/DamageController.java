@@ -11,18 +11,23 @@ import com.blockai.roady.damage.dto.DamageMapMarkerResponse;
 import com.blockai.roady.damage.dto.DamageResponse;
 import com.blockai.roady.damage.dto.DamageSearchResponse;
 import com.blockai.roady.damage.dto.DamageSummaryResponse;
+import com.blockai.roady.damage.dto.UpdateDamageStatusRequest;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import com.blockai.roady.security.AuthenticatedUser;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -138,6 +143,16 @@ public class DamageController {
                 .map(DamageImageResponse::from)
                 .toList();
         return DamageResponse.from(damage, imageResponses);
+    }
+
+    @PatchMapping("/{damageId}/status")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public void updateDamageStatus(
+            @PathVariable Long damageId,
+            @Valid @RequestBody UpdateDamageStatusRequest request
+    ) {
+        damageService.updateReviewStatus(damageId, request.status());
     }
 
     @PostMapping("/{damageId}/analysis-jobs")

@@ -10,6 +10,7 @@ import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatusCount;
+import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.geocoding.GeocodedAddress;
 import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
@@ -440,6 +441,66 @@ class DamageServiceTest {
                 .thenReturn(List.of(marker));
 
         assertThat(damageService.findMapMarkers(criteria, bounds)).containsExactly(marker);
+    }
+
+    @Test
+    void updateReviewStatusChangesAiAnalyzedDamageToRequested() {
+        when(damageMapper.findSummaryById(1L)).thenReturn(damageSummary("AI_ANALYZED"));
+        when(damageMapper.updateStatusIfCurrent(1L, "AI_ANALYZED", "REQUESTED"))
+                .thenReturn(1);
+
+        damageService.updateReviewStatus(1L, DamageStatus.REQUESTED);
+
+        verify(damageMapper).updateStatusIfCurrent(1L, "AI_ANALYZED", "REQUESTED");
+    }
+
+    @Test
+    void updateReviewStatusRejectsNonVerdictTarget() {
+        assertThatThrownBy(
+                () -> damageService.updateReviewStatus(1L, DamageStatus.REPAIR_COMPLETED)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Administrator verdict status must be REQUESTED or CANCELED.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+    }
+
+    @Test
+    void updateReviewStatusRejectsDamageThatIsAlreadyReviewed() {
+        when(damageMapper.findSummaryById(1L)).thenReturn(damageSummary("REQUESTED"));
+
+        assertThatThrownBy(
+                () -> damageService.updateReviewStatus(1L, DamageStatus.CANCELED)
+        )
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only AI_ANALYZED damage can receive an administrator verdict.");
+
+        verify(damageMapper, never()).updateStatusIfCurrent(any(), any(), any());
+    }
+
+    private DamageSummary damageSummary(String status) {
+        LocalDateTime timestamp = LocalDateTime.of(2026, 7, 31, 10, 0);
+        return new DamageSummary(
+                1L,
+                10L,
+                2L,
+                null,
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                timestamp,
+                BigDecimal.valueOf(37.5665),
+                BigDecimal.valueOf(126.978),
+                timestamp,
+                status,
+                1L,
+                timestamp,
+                timestamp
+        );
     }
 
     private MockMultipartFile image(String filename) {

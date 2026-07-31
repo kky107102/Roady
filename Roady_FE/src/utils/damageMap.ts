@@ -3,6 +3,11 @@ import type { MapMarkerItem } from '@/types/map'
 
 const statusLabels: Record<DamageStatus, string> = {
   COLLECTED: '수집 완료',
+  AI_ANALYZING: 'AI 분석중',
+  AI_ANALYZED: 'AI 분석완료',
+  REQUESTED: '요청 전',
+  REPAIR_IN_PROGRESS: '요청 완료',
+  CANCELED: '취소',
   REVIEW_REQUIRED: '검토 필요',
   RECEIVED: '접수 완료',
   REPAIR_SCHEDULED: '보수 예정',
@@ -25,9 +30,18 @@ function isValidCoordinate(latitude: number | null, longitude: number | null): b
 }
 
 function markerTone(status: DamageStatus): MapMarkerItem['tone'] {
-  if (status === 'REVIEW_REQUIRED') return 'danger'
-  if (status === 'REPAIRING' || status === 'REPAIR_SCHEDULED') return 'warning'
-  if (status === 'REPAIR_COMPLETED' || status === 'REPAIR_NOT_REQUIRED') return 'success'
+  if (status === 'AI_ANALYZED' || status === 'REVIEW_REQUIRED') return 'danger'
+  if (
+    status === 'REQUESTED' ||
+    status === 'REPAIR_IN_PROGRESS' ||
+    status === 'REPAIRING' ||
+    status === 'REPAIR_SCHEDULED'
+  ) return 'warning'
+  if (
+    status === 'REPAIR_COMPLETED' ||
+    status === 'CANCELED' ||
+    status === 'REPAIR_NOT_REQUIRED'
+  ) return 'success'
   return 'primary'
 }
 
