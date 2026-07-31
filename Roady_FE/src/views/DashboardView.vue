@@ -7,10 +7,10 @@ import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import RecentDamageList from '@/components/damages/RecentDamageList.vue'
-import { toRobotMapMarkers } from '@/utils/robotMap'
+import { toDamageMapMarkers } from '@/utils/damageMap'
 
 const store = useDashboardStore()
-const robotMarkers = computed(() => toRobotMapMarkers(store.robots))
+const damageMarkers = computed(() => toDamageMapMarkers(store.damages))
 
 const REFRESH_MS = 5 * 60 * 1000
 
@@ -108,21 +108,21 @@ onUnmounted(() => {
 
       <!-- 메인 콘텐츠 영역 -->
       <div class="dashboard__main">
-        <section class="dashboard__map-section" aria-label="로봇 위치 현황">
+        <section class="dashboard__map-section" aria-label="실시간 탐지 현황">
           <div class="section-header">
             <div>
-              <h2 class="section-title">로봇 위치 현황</h2>
+              <h2 class="section-title">실시간 탐지 현황</h2>
               <p class="section-subtitle">
-                마지막으로 수집된 로봇 위치입니다. 마커를 선택하면 상태를 확인할 수 있습니다.
+                현재 조회 기간에 수집된 탐지 사건 위치입니다. 마커를 선택하면 상태를 확인할 수 있습니다.
               </p>
             </div>
-            <span class="map-marker-count">위치 확인 {{ robotMarkers.length }}대</span>
+            <span class="map-marker-count">위치 확인 {{ damageMarkers.length }}건</span>
           </div>
           <CommonMap
             class="dashboard-map"
-            :markers="robotMarkers"
-            map-label="대시보드 로봇 위치 지도"
-            empty-message="위치 정보가 수집된 로봇이 없습니다."
+            :markers="damageMarkers"
+            map-label="대시보드 실시간 탐지 현황 지도"
+            empty-message="위치 정보가 있는 탐지 사건이 없습니다."
           />
         </section>
 
