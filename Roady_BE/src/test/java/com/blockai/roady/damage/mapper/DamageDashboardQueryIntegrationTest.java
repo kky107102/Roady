@@ -360,6 +360,11 @@ class DamageDashboardQueryIntegrationTest {
             boolean hasCoordinates
     ) {
         String description = "dashboard-query-" + UUID.randomUUID();
+        String addressSuffix = switch (createdAt.getHour()) {
+            case 10 -> "Alpha";
+            case 11 -> "Beta";
+            default -> "Gamma";
+        };
         jdbcTemplate.update(
                 """
                 INSERT INTO damages (
@@ -387,8 +392,8 @@ class DamageDashboardQueryIntegrationTest {
                 reportedBy,
                 assignedTo,
                 description,
-                "Gyeonggi Anseong Juksan " + UUID.randomUUID(),
-                "Gyeonggi Anseong Juksanchogyogil " + UUID.randomUUID(),
+                "Gyeonggi Anseong Juksan " + addressSuffix,
+                "Gyeonggi Anseong Juksanchogyogil " + addressSuffix,
                 status.equals("AI_ANALYZED") ? "41550" : "41111",
                 "Gyeonggi",
                 "Anseong",
