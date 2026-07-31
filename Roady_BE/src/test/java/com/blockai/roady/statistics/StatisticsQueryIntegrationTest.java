@@ -46,7 +46,7 @@ class StatisticsQueryIntegrationTest {
         );
         insertDamage(
                 reportedBy,
-                "REPAIR_NOT_REQUIRED",
+                "CANCELED",
                 LocalDateTime.of(2098, 7, 3, 9, 0)
         );
         insertDamage(
@@ -110,7 +110,7 @@ class StatisticsQueryIntegrationTest {
         assertThat(statuses.counts())
                 .containsEntry("COLLECTED", 1L)
                 .containsEntry("REPAIR_COMPLETED", 1L)
-                .containsEntry("REPAIR_NOT_REQUIRED", 1L);
+                .containsEntry("CANCELED", 1L);
 
         assertThat(priorities.totalCount()).isEqualTo(3);
         assertThat(priorities.classifiedCount()).isEqualTo(2);
@@ -122,7 +122,7 @@ class StatisticsQueryIntegrationTest {
 
         assertThat(completion.totalCount()).isEqualTo(3);
         assertThat(completion.completedCount()).isEqualTo(1);
-        assertThat(completion.notRequiredCount()).isEqualTo(1);
+        assertThat(completion.canceledCount()).isEqualTo(1);
         assertThat(completion.completionRate()).isEqualByComparingTo("33.33");
     }
 

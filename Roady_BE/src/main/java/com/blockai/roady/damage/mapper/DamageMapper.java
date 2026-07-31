@@ -174,6 +174,7 @@ public interface DamageMapper {
                     WHERE di.damage_id = d.id
                 ) AS image_count,
                 ai.damage_score,
+                ai.damage_type,
                 ai.repair_required,
                 ai.repair_priority,
                 ai.confidence_score,
@@ -244,6 +245,7 @@ public interface DamageMapper {
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "damage_score", javaType = Integer.class),
+            @Arg(column = "damage_type", javaType = String.class),
             @Arg(column = "repair_required", javaType = Boolean.class),
             @Arg(column = "repair_priority", javaType = String.class),
             @Arg(column = "confidence_score", javaType = BigDecimal.class),

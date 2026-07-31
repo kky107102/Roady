@@ -17,6 +17,7 @@ class AiImageAnalysisResultParserTest {
                 {
                   "damaged": true,
                   "damageScore": 82,
+                  "damageType": "CRACK",
                   "repairRequired": true,
                   "repairPriority": "HIGH",
                   "confidenceScore": 0.91
@@ -25,6 +26,7 @@ class AiImageAnalysisResultParserTest {
 
         assertThat(result.damaged()).isTrue();
         assertThat(result.damageScore()).isEqualTo(82);
+        assertThat(result.damageType()).isEqualTo("CRACK");
         assertThat(result.repairRequired()).isTrue();
         assertThat(result.repairPriority()).isEqualTo("HIGH");
         assertThat(result.confidenceScore()).isEqualByComparingTo(BigDecimal.valueOf(0.91));
@@ -36,6 +38,7 @@ class AiImageAnalysisResultParserTest {
                 {
                   "damage_detected": true,
                   "damage_score": "71",
+                  "damage_type": "마모",
                   "repair_required": "true",
                   "repair_priority": "URGENT",
                   "confidence": "0.875"
@@ -44,6 +47,7 @@ class AiImageAnalysisResultParserTest {
 
         assertThat(result.damaged()).isTrue();
         assertThat(result.damageScore()).isEqualTo(71);
+        assertThat(result.damageType()).isEqualTo("WEAR");
         assertThat(result.repairRequired()).isTrue();
         assertThat(result.repairPriority()).isEqualTo("URGENT");
         assertThat(result.confidenceScore()).isEqualByComparingTo(new BigDecimal("0.875"));
@@ -55,6 +59,7 @@ class AiImageAnalysisResultParserTest {
 
         assertThat(result.damaged()).isNull();
         assertThat(result.damageScore()).isNull();
+        assertThat(result.damageType()).isNull();
         assertThat(result.repairRequired()).isNull();
         assertThat(result.repairPriority()).isNull();
         assertThat(result.confidenceScore()).isNull();

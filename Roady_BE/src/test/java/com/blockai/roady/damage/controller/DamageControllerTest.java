@@ -58,9 +58,10 @@ class DamageControllerTest {
                 BigDecimal.valueOf(37.5665),
                 BigDecimal.valueOf(126.978),
                 LocalDateTime.of(2026, 7, 22, 14, 30),
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 2L,
                 82,
+                "CRACK",
                 true,
                 "URGENT",
                 BigDecimal.valueOf(0.91),
@@ -77,9 +78,10 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].roadAddressName").value("Gyeonggi Anseong Juksanchogyogil 69-4"))
                 .andExpect(jsonPath("$.content[0].regionCode").value("41550"))
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
-                .andExpect(jsonPath("$.content[0].currentStatus").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$.content[0].currentStatus").value("AI_ANALYZED"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
+                .andExpect(jsonPath("$.content[0].damageType").value("CRACK"))
                 .andExpect(jsonPath("$.content[0].repairRequired").value(true))
                 .andExpect(jsonPath("$.content[0].repairPriority").value("URGENT"))
                 .andExpect(jsonPath("$.content[0].confidenceScore").value(0.91))
@@ -136,11 +138,11 @@ class DamageControllerTest {
                         1L,
                         BigDecimal.valueOf(37.5665),
                         BigDecimal.valueOf(126.978),
-                        "REVIEW_REQUIRED"
+                        "AI_ANALYZED"
                 )));
 
         mockMvc.perform(get("/api/damages/map-markers")
-                        .param("status", "REVIEW_REQUIRED")
+                        .param("status", "AI_ANALYZED")
                         .param("south", "37.45")
                         .param("north", "37.62")
                         .param("west", "126.80")
@@ -149,7 +151,7 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].latitude").value(37.5665))
                 .andExpect(jsonPath("$[0].longitude").value(126.978))
-                .andExpect(jsonPath("$[0].currentStatus").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$[0].currentStatus").value("AI_ANALYZED"))
                 .andExpect(jsonPath("$[0].description").doesNotExist())
                 .andExpect(jsonPath("$[0].assignedTo").doesNotExist());
     }

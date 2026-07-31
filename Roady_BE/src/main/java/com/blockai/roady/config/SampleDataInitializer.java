@@ -65,8 +65,9 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("37.5006130"),
                 new BigDecimal("127.0364310"),
                 LocalDateTime.of(2026, 7, 27, 9, 30),
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 88,
+                "CRACK",
                 true,
                 "URGENT",
                 new BigDecimal("0.9300")
@@ -85,8 +86,9 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("37.2635730"),
                 new BigDecimal("127.0286010"),
                 LocalDateTime.of(2026, 7, 28, 14, 15),
-                "REPAIRING",
+                "REPAIR_IN_PROGRESS",
                 76,
+                "BREAKAGE",
                 true,
                 "HIGH",
                 new BigDecimal("0.8700")
@@ -107,6 +109,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 LocalDateTime.of(2026, 7, 29, 10, 5),
                 "REPAIR_COMPLETED",
                 42,
+                "WEAR",
                 true,
                 "NORMAL",
                 new BigDecimal("0.8100")
@@ -125,8 +128,9 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("37.3952280"),
                 new BigDecimal("127.1109030"),
                 LocalDateTime.of(2026, 7, 30, 8, 45),
-                "REPAIR_NOT_REQUIRED",
+                "CANCELED",
                 18,
+                "WEAR",
                 false,
                 "LOW",
                 new BigDecimal("0.7800")
@@ -246,10 +250,11 @@ public class SampleDataInitializer implements ApplicationRunner {
 
     private void seedDamageAiAnalysis(Long damageId, DamageSeed seed) {
         String rawResult = """
-                {"damaged":%s,"damageScore":%d,"repairRequired":%s,"repairPriority":"%s","confidenceScore":%s}
+                {"damaged":%s,"damageScore":%d,"damageType":"%s","repairRequired":%s,"repairPriority":"%s","confidenceScore":%s}
                 """.formatted(
                 seed.damageScore() > 0,
                 seed.damageScore(),
+                seed.damageType(),
                 seed.repairRequired(),
                 seed.repairPriority(),
                 seed.confidenceScore()
@@ -260,6 +265,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                     damage_id,
                     damaged,
                     damage_score,
+                    damage_type,
                     repair_required,
                     repair_priority,
                     confidence_score,
@@ -268,7 +274,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                     analyzed_at,
                     created_at
                 )
-                SELECT ?, ?, ?, ?, ?, ?, 'SUCCESS', ?, ?, ?
+                SELECT ?, ?, ?, ?, ?, ?, ?, 'SUCCESS', ?, ?, ?
                 FROM DUAL
                 WHERE NOT EXISTS (
                     SELECT 1
@@ -280,6 +286,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 damageId,
                 seed.damageScore() > 0,
                 seed.damageScore(),
+                seed.damageType(),
                 seed.repairRequired(),
                 seed.repairPriority(),
                 seed.confidenceScore(),
@@ -306,6 +313,7 @@ public class SampleDataInitializer implements ApplicationRunner {
             LocalDateTime capturedAt,
             String currentStatus,
             int damageScore,
+            String damageType,
             boolean repairRequired,
             String repairPriority,
             BigDecimal confidenceScore
