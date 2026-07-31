@@ -420,6 +420,10 @@ function closeDetail() {
 /* ── 지도 패널 ── */
 .map-panel {
   flex: 1;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  overflow: hidden;
   background: var(--roady-surface-background);
   min-width: 0;
 }
@@ -434,7 +438,7 @@ function closeDetail() {
   position: absolute;
   top: 0;
   right: 0;
-  width: 42rem;
+  width: min(42rem, 100%);
   height: 100%;
   z-index: 10;
   box-shadow: -4px 0 16px rgb(0 0 0 / 10%);
@@ -453,41 +457,6 @@ function closeDetail() {
 .slide-enter-to,
 .slide-leave-from {
   transform: translateX(0);
-}
-
-@media (max-width: 1024px) {
-  .list-panel {
-    width: 34rem;
-  }
-
-  .detail-panel-wrapper {
-    width: 38rem;
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .damage-body {
-    flex-direction: column;
-    overflow-y: auto;
-  }
-
-  .list-panel {
-    width: 100%;
-    height: 42rem;
-    flex: none;
-    border-right: 0;
-    border-bottom: 1px solid var(--roady-border-default);
-  }
-
-  .map-panel {
-    height: 42rem;
-    flex: none;
-  }
-
-  .detail-panel-wrapper {
-    width: 100%;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
