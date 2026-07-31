@@ -10,7 +10,6 @@ import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatusCount;
-import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.geocoding.GeocodedAddress;
 import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
@@ -93,6 +92,7 @@ class DamageServiceTest {
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
                 "COLLECTED",
+                null,
                 2L,
                 capturedAt,
                 capturedAt
@@ -159,6 +159,7 @@ class DamageServiceTest {
                 null,
                 null,
                 "COLLECTED",
+                null,
                 1L,
                 null,
                 null
@@ -231,6 +232,7 @@ class DamageServiceTest {
                 BigDecimal.valueOf(127.1234567),
                 LocalDateTime.of(2026, 7, 22, 10, 30),
                 "AI_ANALYZED",
+                "HIGH",
                 2L,
                 82,
                 "CRACK",
@@ -270,6 +272,63 @@ class DamageServiceTest {
         assertThat(result.size()).isEqualTo(20);
         assertThat(result.totalElements()).isEqualTo(41);
         assertThat(result.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    void updateReviewChangesStatusAndProcessingPriority() {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "REQUESTED", "URGENT"));
+        when(damageMapper.updateReview(1L, "REQUESTED", "URGENT")).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, " requested ", " urgent ");
+
+        verify(damageMapper).updateReview(1L, "REQUESTED", "URGENT");
+        assertThat(result.currentStatus()).isEqualTo("REQUESTED");
+        assertThat(result.processingPriority()).isEqualTo("URGENT");
+        assertThat(result.updatedAt()).isEqualTo(updatedAt);
+    }
+
+    @Test
+    void updateReviewAllowsProcessingPriorityOnly() {
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "AI_ANALYZED", "HIGH"));
+        when(damageMapper.updateReview(1L, null, "HIGH")).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, null, "HIGH");
+
+        verify(damageMapper).updateReview(1L, null, "HIGH");
+        assertThat(result.currentStatus()).isEqualTo("AI_ANALYZED");
+        assertThat(result.processingPriority()).isEqualTo("HIGH");
+    }
+
+    @Test
+    void updateReviewRejectsInvalidReviewStatus() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REPAIR_COMPLETED", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage review status.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsInvalidProcessingPriority() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, "CRITICAL"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage processing priority.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsEmptyRequest() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one review field is required.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
     }
 
     @Test
@@ -443,48 +502,13 @@ class DamageServiceTest {
         assertThat(damageService.findMapMarkers(criteria, bounds)).containsExactly(marker);
     }
 
-    @Test
-    void updateReviewStatusChangesAiAnalyzedDamageToRequested() {
-        when(damageMapper.findSummaryById(1L)).thenReturn(damageSummary("AI_ANALYZED"));
-        when(damageMapper.updateStatusIfCurrent(1L, "AI_ANALYZED", "REQUESTED"))
-                .thenReturn(1);
-
-        damageService.updateReviewStatus(1L, DamageStatus.REQUESTED);
-
-        verify(damageMapper).updateStatusIfCurrent(1L, "AI_ANALYZED", "REQUESTED");
-    }
-
-    @Test
-    void updateReviewStatusRejectsNonVerdictTarget() {
-        assertThatThrownBy(
-                () -> damageService.updateReviewStatus(1L, DamageStatus.REPAIR_COMPLETED)
-        )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Administrator verdict status must be REQUESTED or CANCELED.");
-
-        verify(damageMapper, never()).findSummaryById(any());
-    }
-
-    @Test
-    void updateReviewStatusRejectsDamageThatIsAlreadyReviewed() {
-        when(damageMapper.findSummaryById(1L)).thenReturn(damageSummary("REQUESTED"));
-
-        assertThatThrownBy(
-                () -> damageService.updateReviewStatus(1L, DamageStatus.CANCELED)
-        )
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Only AI_ANALYZED damage can receive an administrator verdict.");
-
-        verify(damageMapper, never()).updateStatusIfCurrent(any(), any(), any());
-    }
-
-    private DamageSummary damageSummary(String status) {
-        LocalDateTime timestamp = LocalDateTime.of(2026, 7, 31, 10, 0);
+    private DamageSummary summary(Long id, String status, String processingPriority) {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
         return new DamageSummary(
-                1L,
+                id,
                 10L,
                 2L,
-                null,
+                3L,
                 "tactile block damage",
                 ADDRESS_NAME,
                 ROAD_ADDRESS_NAME,
@@ -492,14 +516,15 @@ class DamageServiceTest {
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
-                timestamp,
-                BigDecimal.valueOf(37.5665),
-                BigDecimal.valueOf(126.978),
-                timestamp,
+                LocalDateTime.of(2026, 7, 22, 10, 31),
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567),
+                LocalDateTime.of(2026, 7, 22, 10, 30),
                 status,
-                1L,
-                timestamp,
-                timestamp
+                processingPriority,
+                2L,
+                updatedAt,
+                updatedAt
         );
     }
 

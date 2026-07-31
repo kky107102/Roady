@@ -198,17 +198,20 @@ function closeDetail() {
   selectedId.value = null
 }
 
-async function submitVerdict(status: 'REQUESTED' | 'CANCELED') {
+async function submitVerdict(
+  status: 'REQUESTED' | 'CANCELED',
+  processingPriority: string | null = null,
+) {
   const damageId = selectedId.value
   if (damageId == null || verdictSubmitting.value) return
 
   verdictSubmitting.value = true
   try {
     const isRepairRequired = status === 'REQUESTED'
-    await damagesApi.updateStatus(
+    await damagesApi.updateReview(
       damageId,
       status,
-      isRepairRequired ? '관리자 판정: 보수 필요' : '관리자 판정: 보수 불필요',
+      isRepairRequired ? processingPriority : null,
     )
     notification.success(
       isRepairRequired
@@ -386,7 +389,7 @@ function selectReviewTab(tab: ReviewTab) {
             :verdict-submitting="verdictSubmitting"
             @close="closeDetail"
             @verdict-no-repair="submitVerdict('CANCELED')"
-            @verdict-repair="submitVerdict('REQUESTED')"
+            @verdict-repair="submitVerdict('REQUESTED', $event)"
           />
         </div>
       </Transition>

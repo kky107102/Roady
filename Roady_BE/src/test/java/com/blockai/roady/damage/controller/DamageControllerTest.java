@@ -5,12 +5,16 @@ import com.blockai.roady.damage.domain.DamageMapMarker;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
-import com.blockai.roady.damage.domain.DamageStatus;
+import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
+import com.blockai.roady.robot.domain.Robot;
+import com.blockai.roady.robot.domain.RobotStatus;
+import com.blockai.roady.robot.service.RobotService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -21,10 +25,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -32,16 +38,100 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DamageControllerTest {
 
     private DamageService damageService;
+    private RobotService robotService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         damageService = mock(DamageService.class);
         DamageAiAnalysisService aiAnalysisService = mock(DamageAiAnalysisService.class);
-        DamageController controller = new DamageController(damageService, aiAnalysisService);
+        robotService = mock(RobotService.class);
+        DamageController controller = new DamageController(damageService, aiAnalysisService, robotService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
+    }
+
+    @Test
+    void createDamageWithoutTokenUsesRobotUserIdAsReporter() throws Exception {
+        MockMultipartFile image = new MockMultipartFile(
+                "images",
+                "damage.jpg",
+                "image/jpeg",
+                new byte[]{1, 2, 3}
+        );
+        LocalDateTime capturedAt = LocalDateTime.of(2026, 7, 22, 14, 30);
+        when(robotService.get(10L)).thenReturn(new Robot(
+                10L,
+                2L,
+                "Inspection Robot",
+                "RB-001",
+                RobotStatus.STANDBY,
+                true,
+                capturedAt,
+                capturedAt
+        ));
+        when(damageService.create(
+                eq(10L),
+                eq(2L),
+                eq(null),
+                eq("tactile block crack"),
+                eq(new BigDecimal("37.5665000")),
+                eq(new BigDecimal("126.9780000")),
+                eq(capturedAt),
+                any()
+        )).thenReturn(new DamageSummary(
+                1L,
+                10L,
+                2L,
+                null,
+                "tactile block crack",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"),
+                capturedAt,
+                "COLLECTED",
+                null,
+                1L,
+                capturedAt,
+                capturedAt
+        ));
+        when(damageService.getImageMetadata(1L)).thenReturn(List.of());
+
+        mockMvc.perform(multipart("/api/damages")
+                        .file(image)
+                        .param("robotId", "10")
+                        .param("description", "tactile block crack")
+                        .param("latitude", "37.5665000")
+                        .param("longitude", "126.9780000")
+                        .param("capturedAt", "2026-07-22T14:30:00"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.robotId").value(10))
+                .andExpect(jsonPath("$.reportedBy").value(2));
+
+        verify(robotService).get(10L);
+    }
+
+    @Test
+    void createDamageWithoutTokenRequiresRobotId() throws Exception {
+        MockMultipartFile image = new MockMultipartFile(
+                "images",
+                "damage.jpg",
+                "image/jpeg",
+                new byte[]{1, 2, 3}
+        );
+
+        mockMvc.perform(multipart("/api/damages").file(image))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("robotId is required for unauthenticated robot damage uploads."));
     }
 
     @Test
@@ -63,6 +153,7 @@ class DamageControllerTest {
                 BigDecimal.valueOf(126.978),
                 LocalDateTime.of(2026, 7, 22, 14, 30),
                 "AI_ANALYZED",
+                "URGENT",
                 2L,
                 82,
                 "CRACK",
@@ -83,6 +174,7 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].regionCode").value("41550"))
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("AI_ANALYZED"))
+                .andExpect(jsonPath("$.content[0].processingPriority").value("URGENT"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
                 .andExpect(jsonPath("$.content[0].damageType").value("CRACK"))
@@ -178,25 +270,59 @@ class DamageControllerTest {
     }
 
     @Test
-    void updateDamageStatusAppliesAdministratorVerdict() throws Exception {
-        mockMvc.perform(patch("/api/damages/1/status")
+    void updateDamageReviewChangesStatusAndProcessingPriority() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        when(damageService.updateReview(eq(1L), eq("REQUESTED"), eq("URGENT")))
+                .thenReturn(new DamageSummary(
+                        1L,
+                        10L,
+                        2L,
+                        5L,
+                        "tactile block crack",
+                        "Gyeonggi Anseong Juksan 343-1",
+                        "Gyeonggi Anseong Juksanchogyogil 69-4",
+                        "41550",
+                        "Gyeonggi",
+                        "Anseong",
+                        "Juksan",
+                        LocalDateTime.of(2026, 7, 22, 14, 31),
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 7, 22, 14, 30),
+                        "REQUESTED",
+                        "URGENT",
+                        2L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        mockMvc.perform(patch("/api/damages/{damageId}/review", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
                                   "status": "REQUESTED",
-                                  "comment": "Administrator verdict: repair required"
+                                  "processingPriority": "URGENT"
                                 }
                                 """))
-                .andExpect(status().isNoContent());
-
-        verify(damageService).updateReviewStatus(1L, DamageStatus.REQUESTED);
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.currentStatus").value("REQUESTED"))
+                .andExpect(jsonPath("$.processingPriority").value("URGENT"));
     }
 
     @Test
-    void updateDamageStatusRejectsMissingStatus() throws Exception {
-        mockMvc.perform(patch("/api/damages/1/status")
+    void updateDamageReviewRejectsInvalidStatus() throws Exception {
+        when(damageService.updateReview(eq(1L), eq("REPAIR_COMPLETED"), eq(null)))
+                .thenThrow(new IllegalArgumentException("Invalid damage review status."));
+
+        mockMvc.perform(patch("/api/damages/{damageId}/review", 1L)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest());
+                        .content("""
+                                {
+                                  "status": "REPAIR_COMPLETED"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid damage review status."));
     }
 }

@@ -58,10 +58,20 @@ function formatLocation(item: DamageListItem): string {
 }
 
 const confirmed = computed(
-  () => props.item.currentStatus !== 'COLLECTED' && props.item.currentStatus !== 'REVIEW_REQUIRED',
+  () =>
+    !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED', 'REVIEW_REQUIRED'].includes(
+      props.item.currentStatus,
+    ),
 )
 
-function formatPriorityLabel(priority: string): string {
+const displayedPriority = computed(() =>
+  confirmed.value
+    ? props.item.processingPriority || props.item.repairPriority
+    : props.item.repairPriority,
+)
+
+function formatPriorityLabel(priority: string | null): string {
+  if (!priority) return '보류'
   const label = PRIORITY_LABELS[priority] ?? priority
   return confirmed.value ? label : `AI 제안 · ${label}`
 }
@@ -81,9 +91,8 @@ function formatPriorityLabel(priority: string): string {
       <div class="card-header">
         <span class="card-id">{{ formatCaseId(item.id, item.createdAt) }}</span>
         <StatusBadge
-          v-if="item.repairPriority"
-          :type="PRIORITY_BADGE_TYPES[item.repairPriority] ?? 'neutral'"
-          :label="formatPriorityLabel(item.repairPriority)"
+          :type="displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'"
+          :label="formatPriorityLabel(displayedPriority)"
         />
       </div>
 

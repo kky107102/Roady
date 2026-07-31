@@ -29,6 +29,7 @@ export interface DamageListItem {
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
   imageCount: number
   damageScore: number | null
   repairRequired: boolean | null
@@ -72,6 +73,7 @@ export interface DamageDetail {
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
   imageCount: number
   images: DamageImage[]
   createdAt: string

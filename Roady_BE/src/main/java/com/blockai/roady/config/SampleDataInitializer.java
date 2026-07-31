@@ -66,6 +66,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("127.0364310"),
                 LocalDateTime.of(2026, 7, 27, 9, 30),
                 "AI_ANALYZED",
+                "URGENT",
                 88,
                 "CRACK",
                 true,
@@ -87,6 +88,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("127.0286010"),
                 LocalDateTime.of(2026, 7, 28, 14, 15),
                 "REPAIR_IN_PROGRESS",
+                "HIGH",
                 76,
                 "BREAKAGE",
                 true,
@@ -108,6 +110,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("126.9567530"),
                 LocalDateTime.of(2026, 7, 29, 10, 5),
                 "REPAIR_COMPLETED",
+                "NORMAL",
                 42,
                 "WEAR",
                 true,
@@ -129,6 +132,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("127.1109030"),
                 LocalDateTime.of(2026, 7, 30, 8, 45),
                 "CANCELED",
+                "LOW",
                 18,
                 "WEAR",
                 false,
@@ -184,10 +188,11 @@ public class SampleDataInitializer implements ApplicationRunner {
                     longitude,
                     captured_at,
                     current_status,
+                    processing_priority,
                     created_at,
                     updated_at
                 )
-                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 FROM DUAL
                 WHERE NOT EXISTS (
                     SELECT 1
@@ -211,6 +216,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 seed.longitude(),
                 seed.capturedAt(),
                 seed.currentStatus(),
+                seed.processingPriority(),
                 seed.capturedAt().plusSeconds(5),
                 seed.capturedAt().plusSeconds(5),
                 seed.description(),
@@ -312,6 +318,7 @@ public class SampleDataInitializer implements ApplicationRunner {
             BigDecimal longitude,
             LocalDateTime capturedAt,
             String currentStatus,
+            String processingPriority,
             int damageScore,
             String damageType,
             boolean repairRequired,

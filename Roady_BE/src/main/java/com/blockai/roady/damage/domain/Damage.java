@@ -21,6 +21,7 @@ public class Damage {
     private BigDecimal longitude;
     private LocalDateTime capturedAt;
     private String currentStatus;
+    private String processingPriority;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -44,6 +45,7 @@ public class Damage {
             BigDecimal longitude,
             LocalDateTime capturedAt,
             String currentStatus,
+            String processingPriority,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
@@ -63,6 +65,7 @@ public class Damage {
         this.longitude = longitude;
         this.capturedAt = capturedAt;
         this.currentStatus = currentStatus;
+        this.processingPriority = processingPriority;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -193,6 +196,14 @@ public class Damage {
 
     public void setCurrentStatus(String currentStatus) {
         this.currentStatus = currentStatus;
+    }
+
+    public String getProcessingPriority() {
+        return processingPriority;
+    }
+
+    public void setProcessingPriority(String processingPriority) {
+        this.processingPriority = processingPriority;
     }
 
     public LocalDateTime getCreatedAt() {

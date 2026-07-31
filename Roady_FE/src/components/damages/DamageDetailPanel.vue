@@ -20,7 +20,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   close: []
   'verdict-no-repair': []
-  'verdict-repair': []
+  'verdict-repair': [processingPriority: string | null]
 }>()
 
 // ── 상태 ──────────────────────────────────────────────────
@@ -287,6 +287,10 @@ const robotDisplayName = computed(() => {
   return '-'
 })
 
+const displayedPriority = computed(
+  () => detail.value?.processingPriority || latestAnalysis.value?.repairPriority || null,
+)
+
 const canSubmitVerdict = computed(
   () =>
     detail.value?.currentStatus === 'AI_ANALYZED' ||
@@ -340,14 +344,14 @@ const canSubmitVerdict = computed(
             <span
               class="badge-priority"
               :class="
-                latestAnalysis?.repairPriority
-                  ? `badge-priority--${latestAnalysis.repairPriority.toLowerCase()}`
+                displayedPriority
+                  ? `badge-priority--${displayedPriority.toLowerCase()}`
                   : 'badge-priority--pending'
               "
             >
               {{
-                latestAnalysis?.repairPriority
-                  ? getPriorityLabel(latestAnalysis.repairPriority)
+                displayedPriority
+                  ? getPriorityLabel(displayedPriority)
                   : '보류'
               }}
             </span>
@@ -597,7 +601,7 @@ const canSubmitVerdict = computed(
           type="button"
           class="verdict-btn verdict-btn--primary"
           :disabled="verdictSubmitting"
-          @click="emit('verdict-repair')"
+          @click="emit('verdict-repair', displayedPriority)"
         >
           <!-- 렌치 아이콘 -->
           <svg

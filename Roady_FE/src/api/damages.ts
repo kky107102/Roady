@@ -39,10 +39,14 @@ export const damagesApi = {
     return data
   },
 
-  async updateStatus(damageId: number, status: DamageStatus, comment?: string): Promise<void> {
-    await http.patch(`/damages/${damageId}/status`, {
+  async updateReview(
+    damageId: number,
+    status: 'REQUESTED' | 'CANCELED',
+    processingPriority?: string | null,
+  ): Promise<void> {
+    await http.patch(`/damages/${damageId}/review`, {
       status,
-      ...(comment ? { comment } : {}),
+      processingPriority: processingPriority || null,
     })
     detailCache.delete(damageId)
   },
