@@ -1,0 +1,110 @@
+# ROADY AI — 장애물 탐지
+
+Jira `S15P11A404-215`의 YOLO11n-detect 기반 장애물 탐지 모델 개발 산출물이다.
+
+## 기능
+
+Jetson Orin Nano 8GB에 연결된 장애물용 USB 카메라에서 사람의 발과 하퇴를 탐지한다.
+
+```text
+USB 카메라
+→ YOLO11n Detect @640
+→ foot / lower_leg Bounding Box
+→ 하나 이상 탐지되면 human_lower_limb_detected=true
+```
+
+카메라 AI는 LiDAR의 CPU 기반 안전 정지 기능을 보조한다. 장애물 AI 결과만으로 로봇의 최종 안전을 보장하지 않는다.
+
+## 구성
+
+```text
+ROADY_AI/
+├─ obstacle_lower_limb/
+│  ├─ build_coco_body_part.py
+│  ├─ camera_test.py
+│  ├─ capture_frames.py
+│  ├─ dataset.yaml
+│  ├─ export_jetson.py
+│  ├─ train.py
+│  ├─ validate_dataset.py
+│  └─ README.md
+├─ models/edge/
+│  └─ obstacle_lower_limb_yolo11n_best.pt
+├─ .gitignore
+├─ requirements.txt
+└─ README.md
+```
+
+## 모델
+
+- 구조: YOLO11n Detect
+- 클래스: `foot`, `lower_leg`
+- 입력: 640
+- 초기 가중치: Ultralytics COCO 사전학습 `yolo11n.pt`
+- 배포 목표: Jetson TensorRT FP16
+
+최종 Test 결과:
+
+| Precision | Recall | mAP50 | mAP50-95 |
+|---:|---:|---:|---:|
+| 86.6% | 68.6% | 78.2% | 40.7% |
+
+클래스 Recall:
+
+- `foot`: 67.8%
+- `lower_leg`: 69.5%
+
+가중치:
+
+```text
+ROADY_AI/models/edge/obstacle_lower_limb_yolo11n_best.pt
+```
+
+SHA-256:
+
+```text
+072dc889d93b01274cf2fdb6cce1d1922b0da91aa8609c2dbcfa91a6d3cd7b44
+```
+
+## 설치
+
+```powershell
+cd ROADY_AI
+python -m venv .venv
+.venv\Scripts\python -m pip install --upgrade pip
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+Jetson에서는 JetPack에 맞는 PyTorch와 TensorRT를 먼저 설치한다.
+
+## 학습
+
+데이터셋은 Git에 포함하지 않는다. `dataset.yaml` 기준 구조로 준비한 후 저장소 루트에서 실행한다.
+
+```powershell
+python ROADY_AI/obstacle_lower_limb/train.py `
+  --data ROADY_AI/obstacle_lower_limb/dataset.yaml `
+  --weights yolo11n.pt `
+  --epochs 50 `
+  --imgsz 640
+```
+
+## 데이터 검증
+
+```powershell
+python ROADY_AI/obstacle_lower_limb/validate_dataset.py `
+  --dataset ROADY_AI/datasets/obstacle_lower_limb_v1
+```
+
+## 카메라 추론
+
+PyTorch 가중치 테스트:
+
+```powershell
+python ROADY_AI/obstacle_lower_limb/camera_test.py `
+  --model ROADY_AI/models/edge/obstacle_lower_limb_yolo11n_best.pt `
+  --camera 0 `
+  --imgsz 640
+```
+
+TensorRT 엔진은 실제 Jetson에서 생성하며 Git에 올리지 않는다.
