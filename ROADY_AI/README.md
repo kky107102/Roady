@@ -1,19 +1,26 @@
-# ROADY AI — 장애물 탐지
+# ROADY AI — Edge 모델
 
-Jira `S15P11A404-215`의 YOLO11n-detect 기반 장애물 탐지 모델 개발 산출물이다.
+ROADY 로봇의 Edge AI 학습·평가·배포 코드를 관리한다.
 
-## 기능
+## 현재 기능
 
-Jetson Orin Nano 8GB에 연결된 장애물용 USB 카메라에서 사람의 발과 하퇴를 탐지한다.
+Jetson Orin Nano 8GB에서 두 카메라를 분리해 사용한다.
 
 ```text
-USB 카메라
+장애물용 USB 카메라
 → YOLO11n Detect @640
 → foot / lower_leg Bounding Box
 → 하나 이상 탐지되면 human_lower_limb_detected=true
+
+점자블록용 카메라
+→ YOLO11n Detect @640
+→ tactile_block / damage_candidate Bounding Box
+→ 점자블록 ROI와 서버 전송 후보 생성
 ```
 
 카메라 AI는 LiDAR의 CPU 기반 안전 정지 기능을 보조한다. 장애물 AI 결과만으로 로봇의 최종 안전을 보장하지 않는다.
+
+손상 유무 분류기는 Detect가 만든 ROI를 재판정하는 별도 모델이며 현재 저장소 범위에 아직 포함하지 않는다.
 
 ## 구성
 
@@ -28,14 +35,22 @@ ROADY_AI/
 │  ├─ train.py
 │  ├─ validate_dataset.py
 │  └─ README.md
+├─ tactile_damage_detect/
+│  ├─ build_dataset.py
+│  ├─ validate_dataset.py
+│  ├─ train.py
+│  ├─ camera_test.py
+│  ├─ export_jetson.py
+│  └─ README.md
 ├─ models/edge/
-│  └─ obstacle_lower_limb_yolo11n_best.pt
+│  ├─ obstacle_lower_limb_yolo11n_best.pt
+│  └─ tactile_damage_candidate_yolo11n_best.pt
 ├─ .gitignore
 ├─ requirements.txt
 └─ README.md
 ```
 
-## 모델
+## 장애물 모델
 
 - 구조: YOLO11n Detect
 - 클래스: `foot`, `lower_leg`
@@ -108,3 +123,25 @@ python ROADY_AI/obstacle_lower_limb/camera_test.py `
 ```
 
 TensorRT 엔진은 실제 Jetson에서 생성하며 Git에 올리지 않는다.
+
+## 점자블록·파손 후보 모델
+
+- 구조: YOLO11n Detect
+- 클래스: `tactile_block`, `damage_candidate`
+- 입력: 640
+- 역할: 파손 최종 확정이 아닌 점자블록 ROI와 서버 전송 후보 생성
+
+Validation:
+
+| 클래스 | Precision | Recall | mAP50 | mAP50-95 |
+|---|---:|---:|---:|---:|
+| `tactile_block` | 94.5% | 94.8% | 97.0% | 90.7% |
+| `damage_candidate` | 59.9% | 44.7% | 46.1% | 23.7% |
+
+가중치:
+
+```text
+ROADY_AI/models/edge/tactile_damage_candidate_yolo11n_best.pt
+```
+
+자세한 학습·검증·카메라 실행 방법은 [`tactile_damage_detect/README.md`](tactile_damage_detect/README.md)를 확인한다.
