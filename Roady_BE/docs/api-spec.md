@@ -835,12 +835,13 @@ curl -X POST "http://localhost:8080/api/damages" \
   "unassigned": 12,
   "statusCounts": {
     "COLLECTED": 20,
-    "REVIEW_REQUIRED": 35,
-    "RECEIVED": 18,
+    "AI_ANALYZING": 12,
+    "AI_ANALYZED": 23,
+    "REQUESTED": 18,
     "REPAIR_SCHEDULED": 10,
-    "REPAIRING": 8,
+    "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
-    "REPAIR_NOT_REQUIRED": 5
+    "CANCELED": 5
   }
 }
 ```
@@ -889,7 +890,7 @@ curl -X POST "http://localhost:8080/api/damages" \
     "id": 1,
     "latitude": 37.5665,
     "longitude": 126.978,
-    "currentStatus": "REVIEW_REQUIRED"
+    "currentStatus": "AI_ANALYZED"
   }
 ]
 ```
@@ -1360,7 +1361,7 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 #### 요청
 
 ```http
-GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&robotId=1&assignedTo=5&regionCode=41550&keyword=죽산&page=0&size=20
+GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALYZED&robotId=1&assignedTo=5&regionCode=41550&keyword=죽산&page=0&size=20
 ```
 
 | Query | 필수 | 기본값 | 제약 |
@@ -1397,9 +1398,10 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
       "latitude": 37.5665,
       "longitude": 126.978,
       "capturedAt": "2026-07-22T14:30:00",
-      "currentStatus": "REVIEW_REQUIRED",
+      "currentStatus": "AI_ANALYZED",
       "imageCount": 2,
       "damageScore": 82,
+      "damageType": "CRACK",
       "repairRequired": true,
       "repairPriority": "URGENT",
       "confidenceScore": 0.91,
@@ -1433,6 +1435,7 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `content[].currentStatus` | string | 현재 파손 처리 상태 |
 | `content[].imageCount` | number | 등록된 이미지 수 |
 | `content[].damageScore` | number, null | 최신 성공 AI 분석의 파손 점수 |
+| `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
 | `content[].repairRequired` | boolean, null | 최신 성공 AI 분석의 보수 필요 여부 |
 | `content[].repairPriority` | string, null | 최신 성공 AI 분석의 보수 우선순위 |
 | `content[].confidenceScore` | number, null | 최신 성공 AI 분석의 신뢰도 |
@@ -1442,7 +1445,7 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_R
 | `totalElements` | number | 검색 조건에 해당하는 전체 데이터 수 |
 | `totalPages` | number | 전체 페이지 수. 결과가 없으면 0 |
 
-AI 분석 필드는 `analysisStatus`가 `SUCCESS`인 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 반환한다. 성공한 분석 결과가 없으면 `damageScore`, `repairRequired`, `repairPriority`, `confidenceScore`는 모두 `null`이다.
+AI 분석 필드는 `analysisStatus`가 `SUCCESS`인 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 반환한다. 성공한 분석 결과가 없으면 `damageScore`, `damageType`, `repairRequired`, `repairPriority`, `confidenceScore`는 모두 `null`이다.
 
 `severity`, `duplicateSuspected`, `delayed`는 현재 목록 응답에 포함하지 않는다. `severity` 대신 AI 분석 결과에 저장된 `damageScore`를 파손 정도로 사용한다.
 
@@ -1464,12 +1467,13 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
   "unassigned": 12,
   "statusCounts": {
     "COLLECTED": 20,
-    "REVIEW_REQUIRED": 35,
-    "RECEIVED": 18,
+    "AI_ANALYZING": 12,
+    "AI_ANALYZED": 23,
+    "REQUESTED": 18,
     "REPAIR_SCHEDULED": 10,
-    "REPAIRING": 8,
+    "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
-    "REPAIR_NOT_REQUIRED": 5
+    "CANCELED": 5
   }
 }
 ```
@@ -1489,7 +1493,7 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
 #### 요청
 
 ```http
-GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=REVIEW_REQUIRED&regionCode=41550
+GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALYZED&regionCode=41550
 ```
 
 프론트엔드는 최초 지도 로딩 및 `moveend`, `zoomend` 시 현재 화면 경계를 전달한다. 지도 이동 중인 요청은 취소하고 약 300ms debounce를 적용한다.
@@ -1502,7 +1506,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
     "id": 1,
     "latitude": 37.5665,
     "longitude": 126.978,
-    "currentStatus": "REVIEW_REQUIRED"
+    "currentStatus": "AI_ANALYZED"
   }
 ]
 ```
@@ -1523,7 +1527,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | AI 분석 요청 | `POST` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 저장된 이미지를 AI 분석 서비스에 전달하고 분석을 시작한다. |
-| AI 분석 결과 조회 | `GET` | `/api/damages/{damageId}/ai-analysis` | 로그인 사용자 | 파손 여부, 점수, 보수 필요성, 우선순위, 신뢰도를 조회한다. |
+| AI 분석 결과 조회 | `GET` | `/api/damages/{damageId}/ai-analysis` | 로그인 사용자 | 파손 여부, 유형, 점수, 보수 필요성, 우선순위, 신뢰도를 조회한다. |
 | AI 분석 재시도 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | `ADMIN`, `INSPECTOR` | 실패한 분석을 재시도한다. |
 | AI 분석 결과 수정 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 담당자가 AI 분석 결과를 수정한다. |
 | AI 분석 결과 확정 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | `ADMIN`, `INSPECTOR` | 검토 완료 처리한다. |
@@ -1536,6 +1540,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `damageId` | number | 파손 ID |
 | `damaged` | boolean | 파손 여부 |
 | `damageScore` | number | 파손 점수. 0~100 |
+| `damageType` | string, null | 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
 | `severity` | string | `NONE`, `LOW`, `MEDIUM`, `HIGH` |
 | `repairRequired` | boolean | 보수 필요 여부 |
 | `repairPriority` | string | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
@@ -1551,20 +1556,23 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | 상태 | 설명 |
 | --- | --- |
 | `COLLECTED` | 수집 완료 |
-| `REVIEW_REQUIRED` | 검토 필요 |
-| `RECEIVED` | 접수 완료 |
+| `AI_ANALYZING` | AI 분석중 |
+| `AI_ANALYZED` | AI 분석완료 |
+| `REQUESTED` | 요청 완료 |
 | `REPAIR_SCHEDULED` | 보수 예정 |
-| `REPAIRING` | 보수 진행 중 |
+| `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
-| `REPAIR_NOT_REQUIRED` | 보수 불필요 |
+| `CANCELED` | 취소 |
 
 권장 상태 전이는 다음과 같다.
 
 ```text
-COLLECTED -> REVIEW_REQUIRED -> RECEIVED -> REPAIR_SCHEDULED -> REPAIRING -> REPAIR_COMPLETED
-COLLECTED -> RECEIVED
-REVIEW_REQUIRED -> REPAIR_NOT_REQUIRED
-RECEIVED -> REPAIR_NOT_REQUIRED
+COLLECTED -> AI_ANALYZING -> AI_ANALYZED -> REQUESTED -> REPAIR_SCHEDULED -> REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
+COLLECTED -> CANCELED
+AI_ANALYZING -> CANCELED
+AI_ANALYZED -> CANCELED
+REQUESTED -> CANCELED
+REPAIR_SCHEDULED -> CANCELED
 ```
 
 | 기능 | Method | URL | 권한 | 설명 |
@@ -1576,8 +1584,8 @@ RECEIVED -> REPAIR_NOT_REQUIRED
 
 ```json
 {
-  "status": "RECEIVED",
-  "comment": "현장 확인 후 접수 완료"
+  "status": "REQUESTED",
+  "comment": "현장 확인 후 요청 완료"
 }
 ```
 
@@ -1683,12 +1691,13 @@ GET /api/statistics/damages/by-status?from=2026-07-01T00:00:00&to=2026-08-01T00:
   "totalCount": 38,
   "counts": {
     "COLLECTED": 5,
-    "REVIEW_REQUIRED": 8,
-    "RECEIVED": 4,
+    "AI_ANALYZING": 4,
+    "AI_ANALYZED": 4,
+    "REQUESTED": 4,
     "REPAIR_SCHEDULED": 3,
-    "REPAIRING": 2,
+    "REPAIR_IN_PROGRESS": 2,
     "REPAIR_COMPLETED": 12,
-    "REPAIR_NOT_REQUIRED": 4
+    "CANCELED": 4
   }
 }
 ```
@@ -1735,12 +1744,12 @@ GET /api/statistics/repair/completion-rate?from=2026-07-01T00:00:00&to=2026-08-0
 {
   "totalCount": 38,
   "completedCount": 12,
-  "notRequiredCount": 4,
+  "canceledCount": 4,
   "completionRate": 31.58
 }
 ```
 
-`completedCount`는 현재 상태가 `REPAIR_COMPLETED`, `notRequiredCount`는 `REPAIR_NOT_REQUIRED`인 파손 수다. `completionRate`는 `completedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다. 보수 결과 도메인이 구현되면 완료 시점 기반 통계로 확장한다.
+`completedCount`는 현재 상태가 `REPAIR_COMPLETED`, `canceledCount`는 `CANCELED`인 파손 수다. `completionRate`는 `completedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다. 보수 결과 도메인이 구현되면 완료 시점 기반 통계로 확장한다.
 
 ## 13. 행정문서 API 설계
 

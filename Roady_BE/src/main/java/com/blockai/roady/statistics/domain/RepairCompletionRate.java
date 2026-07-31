@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 public record RepairCompletionRate(
         long totalCount,
         long completedCount,
-        long notRequiredCount,
+        long canceledCount,
         BigDecimal completionRate
 ) {
 }

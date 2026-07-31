@@ -125,7 +125,7 @@ class StatisticsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalCount").value(38))
                 .andExpect(jsonPath("$.completedCount").value(12))
-                .andExpect(jsonPath("$.notRequiredCount").value(4))
+                .andExpect(jsonPath("$.canceledCount").value(4))
                 .andExpect(jsonPath("$.completionRate").value(31.58));
     }
 }

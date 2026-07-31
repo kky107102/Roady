@@ -12,7 +12,7 @@
 | `robot_route_points` | 점검 경로를 구성하는 좌표 목록을 순서대로 저장한다. |
 | `damages` | 점자블록 파손 1건의 중심 정보를 저장한다. 위도, 경도, 촬영 시각, 현재 처리 상태 등이 들어간다. |
 | `damage_images` | 파손 데이터에 연결된 이미지 파일 여러 장의 정보를 저장한다. |
-| `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
+| `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 유형, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
 | `damage_status_histories` | 파손 데이터의 처리 상태 변경 이력을 저장한다. |
 | `repair_assignments` | 파손 건에 대한 보수 담당자 배정과 보수 예정일을 저장한다. |
 | `repair_results` | 보수 완료 결과, 보수 내용, 완료 이미지 정보를 저장한다. |
@@ -151,6 +151,7 @@ erDiagram
         bigint damage_id FK
         boolean damaged
         int damage_score
+        varchar damage_type
         boolean repair_required
         varchar repair_priority
         decimal confidence_score
@@ -286,12 +287,13 @@ erDiagram
 | 값 | 의미 |
 | --- | --- |
 | `COLLECTED` | 수집 완료 |
-| `REVIEW_REQUIRED` | 검토 필요 |
-| `RECEIVED` | 접수 완료. 보수가 필요한 건으로 접수된 상태 |
+| `AI_ANALYZING` | AI 분석중 |
+| `AI_ANALYZED` | AI 분석완료 |
+| `REQUESTED` | 요청 완료 |
 | `REPAIR_SCHEDULED` | 보수 예정 |
-| `REPAIRING` | 보수 진행 중 |
+| `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
-| `REPAIR_NOT_REQUIRED` | 보수 불필요 |
+| `CANCELED` | 취소 |
 
 ### 파손 점수
 
@@ -301,6 +303,15 @@ erDiagram
 | `1~30` | 경미한 파손 |
 | `31~70` | 보통 수준의 파손 |
 | `71~100` | 심각한 파손 |
+
+### 파손 유형
+
+| 값 | 의미 |
+| --- | --- |
+| `MISSING` | 결손 |
+| `WEAR` | 마모 |
+| `BREAKAGE` | 깨짐 |
+| `CRACK` | 균열 |
 
 ### 보수 우선순위
 
@@ -348,6 +359,7 @@ erDiagram
 - `created_by`를 사용하는 구버전 `damages` 테이블: `docs/sql/migrate-damages-dashboard.sql`을 한 번 실행한다. 기존 `created_by` 값은 `reported_by`로 보존된다.
 - 담당 시군구 코드가 없는 구버전 `users` 테이블: `docs/sql/add-user-assigned-region-code-field.sql`을 한 번 실행한다.
 - 주소/행정구역 필드가 없는 구버전 `damages` 테이블: `docs/sql/add-damage-geocoding-fields.sql`, `docs/sql/add-damage-region-code-field.sql`을 순서대로 한 번 실행한다.
+- 파손 유형 컬럼이 없는 구버전 `damage_ai_analysis_results` 테이블: `docs/sql/add-damage-ai-analysis-damage-type.sql`을 한 번 실행한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 
@@ -363,7 +375,7 @@ LIMIT 0, 20;
 EXPLAIN
 SELECT d.id
 FROM damages d
-WHERE d.current_status = 'REVIEW_REQUIRED'
+WHERE d.current_status = 'AI_ANALYZED'
   AND d.created_at >= '2026-07-01 00:00:00'
   AND d.created_at < '2026-08-01 00:00:00'
 ORDER BY d.created_at DESC, d.id DESC

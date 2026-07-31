@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS damage_ai_analysis_results (
     damage_id BIGINT NOT NULL,
     damaged BOOLEAN NULL,
     damage_score INT NULL,
+    damage_type VARCHAR(30) NULL,
     repair_required BOOLEAN NULL,
     repair_priority VARCHAR(30) NULL,
     confidence_score DECIMAL(5, 4) NULL,

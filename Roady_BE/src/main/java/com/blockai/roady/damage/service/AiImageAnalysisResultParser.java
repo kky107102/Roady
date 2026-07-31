@@ -26,6 +26,7 @@ public class AiImageAnalysisResultParser {
             return new ParsedAiImageAnalysisResult(
                     booleanValue(root, "damaged", "isDamaged", "damageDetected", "damage_detected"),
                     integerValue(root, "damageScore", "damage_score", "score"),
+                    normalizeDamageType(textValue(root, "damageType", "damage_type", "type")),
                     booleanValue(root, "repairRequired", "repair_required"),
                     textValue(root, "repairPriority", "repair_priority"),
                     decimalValue(root, "confidenceScore", "confidence_score", "confidence")
@@ -76,6 +77,19 @@ public class AiImageAnalysisResultParser {
             return null;
         }
         return value.asText();
+    }
+
+    private String normalizeDamageType(String damageType) {
+        if (!StringUtils.hasText(damageType)) {
+            return null;
+        }
+        return switch (damageType.trim().toUpperCase()) {
+            case "MISSING", "결손" -> "MISSING";
+            case "WEAR", "마모" -> "WEAR";
+            case "BREAKAGE", "BROKEN", "깨짐" -> "BREAKAGE";
+            case "CRACK", "균열" -> "CRACK";
+            default -> damageType.trim();
+        };
     }
 
     private BigDecimal decimalValue(JsonNode root, String... fieldNames) {

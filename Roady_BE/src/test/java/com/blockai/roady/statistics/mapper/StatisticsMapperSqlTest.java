@@ -68,7 +68,7 @@ class StatisticsMapperSqlTest {
         assertThat(normalize(boundSql.getSql()))
                 .contains("COUNT(*) AS total_count")
                 .contains("d.current_status = 'REPAIR_COMPLETED'")
-                .contains("d.current_status = 'REPAIR_NOT_REQUIRED'")
+                .contains("d.current_status = 'CANCELED'")
                 .contains("d.created_at >= ?")
                 .contains("d.created_at < ?");
     }

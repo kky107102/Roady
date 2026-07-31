@@ -206,7 +206,7 @@ class DamageServiceTest {
         DamageSearchCriteria criteria = new DamageSearchCriteria(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -229,9 +229,10 @@ class DamageServiceTest {
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 LocalDateTime.of(2026, 7, 22, 10, 30),
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 2L,
                 82,
+                "CRACK",
                 true,
                 "HIGH",
                 BigDecimal.valueOf(0.91),
@@ -241,7 +242,7 @@ class DamageServiceTest {
         when(damageMapper.searchSummaries(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -253,7 +254,7 @@ class DamageServiceTest {
         when(damageMapper.countSummaries(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -371,7 +372,7 @@ class DamageServiceTest {
         when(damageMapper.summarizeByStatus(from, to, null, 10L, null, null))
                 .thenReturn(List.of(
                         new DamageStatusCount("COLLECTED", 3, 2),
-                        new DamageStatusCount("REVIEW_REQUIRED", 2, 1)
+                        new DamageStatusCount("AI_ANALYZED", 2, 1)
                 ));
 
         DamageDashboardSummary result = damageService.summarize(criteria);
@@ -380,9 +381,9 @@ class DamageServiceTest {
         assertThat(result.unassigned()).isEqualTo(3);
         assertThat(result.statusCounts())
                 .containsEntry("COLLECTED", 3L)
-                .containsEntry("REVIEW_REQUIRED", 2L)
+                .containsEntry("AI_ANALYZED", 2L)
                 .containsEntry("REPAIR_COMPLETED", 0L)
-                .hasSize(7);
+                .hasSize(8);
     }
 
     @Test
@@ -396,7 +397,7 @@ class DamageServiceTest {
         assertThat(result.total()).isZero();
         assertThat(result.unassigned()).isZero();
         assertThat(result.statusCounts())
-                .hasSize(7)
+                .hasSize(8)
                 .allSatisfy((status, count) -> assertThat(count).isZero());
     }
 
@@ -407,7 +408,7 @@ class DamageServiceTest {
         DamageFilterCriteria criteria = new DamageFilterCriteria(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550"
@@ -416,7 +417,7 @@ class DamageServiceTest {
                 1L,
                 BigDecimal.valueOf(37.5665),
                 BigDecimal.valueOf(126.978),
-                "REVIEW_REQUIRED"
+                "AI_ANALYZED"
         );
         DamageMapBounds bounds = new DamageMapBounds(
                 BigDecimal.valueOf(37.45),
@@ -427,7 +428,7 @@ class DamageServiceTest {
         when(damageMapper.findMapMarkers(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
