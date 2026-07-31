@@ -36,12 +36,13 @@ class DamageDashboardControllerTest {
     void getSummaryReturnsDashboardDamageCounts() throws Exception {
         var statusCounts = new LinkedHashMap<String, Long>();
         statusCounts.put("COLLECTED", 20L);
-        statusCounts.put("REVIEW_REQUIRED", 35L);
-        statusCounts.put("RECEIVED", 18L);
+        statusCounts.put("AI_ANALYZING", 12L);
+        statusCounts.put("AI_ANALYZED", 23L);
+        statusCounts.put("REQUESTED", 18L);
         statusCounts.put("REPAIR_SCHEDULED", 10L);
-        statusCounts.put("REPAIRING", 8L);
+        statusCounts.put("REPAIR_IN_PROGRESS", 8L);
         statusCounts.put("REPAIR_COMPLETED", 27L);
-        statusCounts.put("REPAIR_NOT_REQUIRED", 5L);
+        statusCounts.put("CANCELED", 5L);
         when(damageService.summarize(any(DamageFilterCriteria.class)))
                 .thenReturn(new DamageDashboardSummary(123, 12, statusCounts));
 
@@ -53,6 +54,9 @@ class DamageDashboardControllerTest {
                 .andExpect(jsonPath("$.total").value(123))
                 .andExpect(jsonPath("$.unassigned").value(12))
                 .andExpect(jsonPath("$.statusCounts.COLLECTED").value(20))
+                .andExpect(jsonPath("$.statusCounts.AI_ANALYZING").value(12))
+                .andExpect(jsonPath("$.statusCounts.AI_ANALYZED").value(23))
+                .andExpect(jsonPath("$.statusCounts.REQUESTED").value(18))
                 .andExpect(jsonPath("$.statusCounts.REPAIR_COMPLETED").value(27));
     }
 

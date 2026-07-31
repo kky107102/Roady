@@ -82,6 +82,7 @@ public class DamageAnalysisWorker {
                     analysisResult.getId(),
                     parsedResult.damaged(),
                     parsedResult.damageScore(),
+                    parsedResult.damageType(),
                     parsedResult.repairRequired(),
                     parsedResult.repairPriority(),
                     parsedResult.confidenceScore(),

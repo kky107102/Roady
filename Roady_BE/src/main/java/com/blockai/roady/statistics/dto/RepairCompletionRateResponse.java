@@ -7,7 +7,7 @@ import java.math.BigDecimal;
 public record RepairCompletionRateResponse(
         long totalCount,
         long completedCount,
-        long notRequiredCount,
+        long canceledCount,
         BigDecimal completionRate
 ) {
 
@@ -15,7 +15,7 @@ public record RepairCompletionRateResponse(
         return new RepairCompletionRateResponse(
                 statistics.totalCount(),
                 statistics.completedCount(),
-                statistics.notRequiredCount(),
+                statistics.canceledCount(),
                 statistics.completionRate()
         );
     }

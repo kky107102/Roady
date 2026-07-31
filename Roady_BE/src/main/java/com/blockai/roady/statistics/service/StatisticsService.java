@@ -112,7 +112,7 @@ public class StatisticsService {
         return new RepairCompletionRate(
                 counts.totalCount(),
                 counts.completedCount(),
-                counts.notRequiredCount(),
+                counts.canceledCount(),
                 percentage(counts.completedCount(), counts.totalCount())
         );
     }

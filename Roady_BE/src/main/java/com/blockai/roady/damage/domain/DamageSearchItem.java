@@ -21,6 +21,7 @@ public record DamageSearchItem(
         String currentStatus,
         long imageCount,
         Integer damageScore,
+        String damageType,
         Boolean repairRequired,
         String repairPriority,
         BigDecimal confidenceScore,

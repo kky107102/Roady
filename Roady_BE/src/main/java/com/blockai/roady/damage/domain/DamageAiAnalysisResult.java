@@ -9,6 +9,7 @@ public class DamageAiAnalysisResult {
     private Long damageId;
     private Boolean damaged;
     private Integer damageScore;
+    private String damageType;
     private Boolean repairRequired;
     private String repairPriority;
     private BigDecimal confidenceScore;
@@ -25,6 +26,7 @@ public class DamageAiAnalysisResult {
             Long damageId,
             Boolean damaged,
             Integer damageScore,
+            String damageType,
             Boolean repairRequired,
             String repairPriority,
             BigDecimal confidenceScore,
@@ -37,6 +39,7 @@ public class DamageAiAnalysisResult {
         this.damageId = damageId;
         this.damaged = damaged;
         this.damageScore = damageScore;
+        this.damageType = damageType;
         this.repairRequired = repairRequired;
         this.repairPriority = repairPriority;
         this.confidenceScore = confidenceScore;
@@ -76,6 +79,14 @@ public class DamageAiAnalysisResult {
 
     public void setDamageScore(Integer damageScore) {
         this.damageScore = damageScore;
+    }
+
+    public String getDamageType() {
+        return damageType;
+    }
+
+    public void setDamageType(String damageType) {
+        this.damageType = damageType;
     }
 
     public Boolean getRepairRequired() {

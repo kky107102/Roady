@@ -121,7 +121,7 @@ class DamageMapperSqlTest {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("from", LocalDateTime.of(2026, 7, 1, 0, 0));
         parameters.put("to", LocalDateTime.of(2026, 8, 1, 0, 0));
-        parameters.put("status", "REVIEW_REQUIRED");
+        parameters.put("status", "AI_ANALYZED");
         parameters.put("robotId", 1L);
         parameters.put("assignedTo", 5L);
         parameters.put("regionCode", "41550");

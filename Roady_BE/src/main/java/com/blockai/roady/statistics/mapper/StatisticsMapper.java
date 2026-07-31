@@ -115,9 +115,9 @@ public interface StatisticsMapper {
                     0
                 ) AS completed_count,
                 COALESCE(
-                    SUM(CASE WHEN d.current_status = 'REPAIR_NOT_REQUIRED' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN d.current_status = 'CANCELED' THEN 1 ELSE 0 END),
                     0
-                ) AS not_required_count
+                ) AS canceled_count
             FROM damages d
             WHERE d.created_at >= #{from}
               AND d.created_at < #{to}
@@ -125,7 +125,7 @@ public interface StatisticsMapper {
     @ConstructorArgs({
             @Arg(column = "total_count", javaType = long.class),
             @Arg(column = "completed_count", javaType = long.class),
-            @Arg(column = "not_required_count", javaType = long.class)
+            @Arg(column = "canceled_count", javaType = long.class)
     })
     RepairCompletionCounts countRepairCompletion(
             @Param("from") LocalDateTime from,
