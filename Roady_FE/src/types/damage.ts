@@ -1,5 +1,11 @@
 export type DamageStatus =
   | 'COLLECTED'
+  | 'AI_ANALYZING'
+  | 'AI_ANALYZED'
+  | 'REQUESTED'
+  | 'REPAIR_IN_PROGRESS'
+  | 'CANCELED'
+  // 이전 API 응답과 목 데이터 호환을 위한 레거시 상태
   | 'REVIEW_REQUIRED'
   | 'RECEIVED'
   | 'REPAIR_SCHEDULED'
@@ -12,10 +18,18 @@ export interface DamageListItem {
   robotId: number | null
   assignedTo: number | null
   description: string | null
+  addressName?: string | null
+  roadAddressName?: string | null
+  regionCode?: string | null
+  region1DepthName?: string | null
+  region2DepthName?: string | null
+  region3DepthName?: string | null
+  geocodedAt?: string | null
   latitude: number | null
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
   imageCount: number
   damageScore: number | null
   repairRequired: boolean | null
@@ -48,10 +62,18 @@ export interface DamageDetail {
   reportedBy: number | null
   assignedTo: number | null
   description: string | null
+  addressName?: string | null
+  roadAddressName?: string | null
+  regionCode?: string | null
+  region1DepthName?: string | null
+  region2DepthName?: string | null
+  region3DepthName?: string | null
+  geocodedAt?: string | null
   latitude: number | null
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
   imageCount: number
   images: DamageImage[]
   createdAt: string
@@ -63,6 +85,7 @@ export interface DamageAnalysis {
   damageId: number
   damaged: boolean | null
   damageScore: number | null
+  damageType: string | null
   repairRequired: boolean | null
   repairPriority: string | null
   confidenceScore: number | null

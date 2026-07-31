@@ -48,9 +48,19 @@ onUnmounted(() => {
     <div v-else-if="status === 'loading'" class="thumbnail__skeleton" aria-hidden="true" />
     <!-- 이미지 없음 / 오류 -->
     <div v-else class="thumbnail__empty" aria-hidden="true">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>
-        <polyline points="21 15 16 10 5 21"/>
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" />
       </svg>
     </div>
   </div>
@@ -58,10 +68,10 @@ onUnmounted(() => {
 
 <style scoped>
 .thumbnail {
-  width: 7.2rem;
-  height: 7.2rem;
+  width: 96px;
+  height: 96px;
   flex-shrink: 0;
-  border-radius: 0.6rem;
+  border-radius: 12px;
   overflow: hidden;
   background: var(--roady-surface-subtle);
 }
@@ -86,8 +96,12 @@ onUnmounted(() => {
 }
 
 @keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .thumbnail__empty {

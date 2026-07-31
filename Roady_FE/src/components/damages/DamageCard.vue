@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { DamageListItem, DamageStatus } from '@/types/damage'
+import { computed } from 'vue'
+import type { DamageListItem } from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import DamageThumbnail from './DamageThumbnail.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
@@ -11,29 +12,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [id: number] }>()
 
-const STATUS_LABELS: Record<DamageStatus, string> = {
-  COLLECTED: '탐지됨',
-  REVIEW_REQUIRED: '검토 필요',
-  RECEIVED: '접수됨',
-  REPAIR_SCHEDULED: '보수 예정',
-  REPAIRING: '보수 중',
-  REPAIR_COMPLETED: '보수 완료',
-  REPAIR_NOT_REQUIRED: '보수 불필요',
-}
-
-const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
-  COLLECTED: 'neutral',
-  REVIEW_REQUIRED: 'warning',
-  RECEIVED: 'info',
-  REPAIR_SCHEDULED: 'info',
-  REPAIRING: 'warning',
-  REPAIR_COMPLETED: 'success',
-  REPAIR_NOT_REQUIRED: 'neutral',
-}
-
 const PRIORITY_LABELS: Record<string, string> = {
   URGENT: '긴급',
   HIGH: '주의',
+  NORMAL: '보통',
   MEDIUM: '보통',
   LOW: '낮음',
 }
@@ -68,6 +50,31 @@ function formatCoords(lat: number | null, lng: number | null): string {
   if (lat == null || lng == null) return '위치 정보 없음'
   return `위도 ${lat.toFixed(4)}, 경도 ${lng.toFixed(4)}`
 }
+
+function formatLocation(item: DamageListItem): string {
+  const address = item.roadAddressName?.trim() || item.addressName?.trim()
+  if (address) return `${address} 주변`
+  return formatCoords(item.latitude, item.longitude)
+}
+
+const confirmed = computed(
+  () =>
+    !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED', 'REVIEW_REQUIRED'].includes(
+      props.item.currentStatus,
+    ),
+)
+
+const displayedPriority = computed(() =>
+  confirmed.value
+    ? props.item.processingPriority || props.item.repairPriority
+    : props.item.repairPriority,
+)
+
+function formatPriorityLabel(priority: string | null): string {
+  if (!priority) return '보류'
+  const label = PRIORITY_LABELS[priority] ?? priority
+  return confirmed.value ? label : `AI 제안 · ${label}`
+}
 </script>
 
 <template>
@@ -84,24 +91,20 @@ function formatCoords(lat: number | null, lng: number | null): string {
       <div class="card-header">
         <span class="card-id">{{ formatCaseId(item.id, item.createdAt) }}</span>
         <StatusBadge
-          v-if="item.repairPriority"
-          :type="PRIORITY_BADGE_TYPES[item.repairPriority] ?? 'neutral'"
-          :label="PRIORITY_LABELS[item.repairPriority] ?? item.repairPriority"
+          :type="displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'"
+          :label="formatPriorityLabel(displayedPriority)"
         />
       </div>
 
       <p class="card-desc">{{ item.description ?? '설명 없음' }}</p>
 
-      <p class="card-location">{{ formatCoords(item.latitude, item.longitude) }}</p>
+      <p class="card-location">{{ formatLocation(item) }}</p>
 
       <div class="card-footer">
         <time class="card-time" :datetime="(item.capturedAt ?? item.createdAt) || undefined">
           {{ formatDate(item.capturedAt ?? item.createdAt) }} 탐지
         </time>
-        <StatusBadge
-          :type="STATUS_BADGE_TYPES[item.currentStatus]"
-          :label="STATUS_LABELS[item.currentStatus]"
-        />
+        <span v-if="confirmed" class="confirmed-label">확인 완료</span>
       </div>
     </div>
   </button>
@@ -110,32 +113,44 @@ function formatCoords(lat: number | null, lng: number | null): string {
 <style scoped>
 .damage-card {
   display: flex;
-  gap: 1.2rem;
-  width: 100%;
-  padding: 1.2rem 1.6rem;
-  border: none;
-  border-bottom: 1px solid var(--roady-border-default);
+  gap: 16px;
+  width: calc(100% - 24px);
+  min-height: 132px;
+  margin: 0 12px 12px;
+  padding: 16px;
+  border: 1px solid var(--roady-border-default);
+  border-radius: 16px;
   background: var(--roady-surface-default);
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.12s;
+  box-shadow: 0 2px 5px rgb(15 23 42 / 6%);
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s,
+    transform 0.12s;
+}
+
+.damage-card:first-of-type {
+  margin-top: 12px;
 }
 
 .damage-card:hover {
-  background: var(--roady-surface-background);
+  border-color: color-mix(in srgb, var(--roady-brand-primary) 45%, var(--roady-border-default));
+  box-shadow: 0 5px 12px rgb(15 23 42 / 10%);
+  transform: translateY(-1px);
 }
 
 .damage-card.is-selected {
-  background: color-mix(in srgb, var(--roady-brand-secondary) 8%, transparent);
-  border-left: 3px solid var(--roady-brand-secondary);
-  padding-left: calc(1.6rem - 3px);
+  border: 2px solid var(--roady-brand-primary);
+  padding: 15px;
+  box-shadow: 0 5px 12px rgb(22 58 95 / 16%);
 }
 
 .card-body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 7px;
   min-width: 0;
 }
 
@@ -143,11 +158,11 @@ function formatCoords(lat: number | null, lng: number | null): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 10px;
 }
 
 .card-id {
-  font-size: var(--krds-pc-font-size-label-small);
+  font-size: 13px;
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-brand-secondary);
   font-family: monospace;
@@ -156,7 +171,7 @@ function formatCoords(lat: number | null, lng: number | null): string {
 
 .card-desc {
   margin: 0;
-  font-size: var(--krds-pc-font-size-body-small);
+  font-size: 18px;
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
   overflow: hidden;
@@ -166,7 +181,7 @@ function formatCoords(lat: number | null, lng: number | null): string {
 
 .card-location {
   margin: 0;
-  font-size: var(--krds-pc-font-size-label-xsmall);
+  font-size: 13px;
   color: var(--roady-text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -177,11 +192,26 @@ function formatCoords(lat: number | null, lng: number | null): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.8rem;
+  gap: 10px;
+  margin-top: auto;
 }
 
 .card-time {
-  font-size: var(--krds-pc-font-size-label-xsmall);
+  font-size: 13px;
   color: var(--roady-text-tertiary);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.confirmed-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: var(--krds-font-weight-bold);
+  color: var(--roady-brand-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .damage-card {
+    transition: none;
+  }
 }
 </style>

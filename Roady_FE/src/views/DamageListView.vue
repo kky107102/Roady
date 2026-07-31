@@ -14,29 +14,36 @@ import DamageCard from '@/components/damages/DamageCard.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
 import { toDamageMapMarkers } from '@/utils/damageMap'
+import { useNotificationStore } from '@/stores/notification'
 
 // ── 상수 ──────────────────────────────────────────────────
 
 const VALID_STATUSES: DamageStatus[] = [
-  'COLLECTED', 'REVIEW_REQUIRED', 'RECEIVED',
-  'REPAIR_SCHEDULED', 'REPAIRING', 'REPAIR_COMPLETED', 'REPAIR_NOT_REQUIRED',
+  'COLLECTED',
+  'AI_ANALYZING',
+  'AI_ANALYZED',
+  'REQUESTED',
+  'REPAIR_IN_PROGRESS',
+  'REPAIR_COMPLETED',
+  'CANCELED',
 ]
 
 const STATUS_OPTIONS = [
   { value: '', label: '전체 상태' },
-  { value: 'COLLECTED', label: '탐지됨' },
-  { value: 'REVIEW_REQUIRED', label: '검토 필요' },
-  { value: 'RECEIVED', label: '접수됨' },
-  { value: 'REPAIR_SCHEDULED', label: '보수 예정' },
-  { value: 'REPAIRING', label: '보수 중' },
+  { value: 'COLLECTED', label: '수집완료' },
+  { value: 'AI_ANALYZING', label: 'AI 분석중' },
+  { value: 'AI_ANALYZED', label: 'AI 분석완료' },
+  { value: 'REQUESTED', label: '요청 전' },
+  { value: 'REPAIR_IN_PROGRESS', label: '요청 완료' },
   { value: 'REPAIR_COMPLETED', label: '보수 완료' },
-  { value: 'REPAIR_NOT_REQUIRED', label: '보수 불필요' },
+  { value: 'CANCELED', label: '취소' },
 ]
 
 // ── URL 파싱 ───────────────────────────────────────────────
 
 const route = useRoute()
 const router = useRouter()
+const notification = useNotificationStore()
 
 function parseStatus(val: unknown): DamageStatus | undefined {
   const s = String(val || '')
@@ -48,6 +55,10 @@ function parseStatus(val: unknown): DamageStatus | undefined {
 const appliedFrom = computed(() => String(route.query.from || ''))
 const appliedTo = computed(() => String(route.query.to || ''))
 const appliedStatus = computed(() => parseStatus(route.query.status))
+type ReviewTab = 'pending' | 'confirmed'
+const reviewTab = computed<ReviewTab>(() =>
+  route.query.review === 'confirmed' ? 'confirmed' : 'pending',
+)
 
 // ── 폼 상태 (미적용 입력값) ───────────────────────────────
 
@@ -87,7 +98,19 @@ const totalPages = ref(0)
 const listLoading = ref(false)
 const listError = ref<string | null>(null)
 const hasMore = computed(() => currentPage.value + 1 < totalPages.value)
-const damageMarkers = computed(() => toDamageMapMarkers(items.value))
+
+function isConfirmed(item: DamageListItem): boolean {
+  return !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED', 'REVIEW_REQUIRED'].includes(
+    item.currentStatus,
+  )
+}
+
+const visibleItems = computed(() =>
+  items.value.filter((item) =>
+    reviewTab.value === 'confirmed' ? isConfirmed(item) : !isConfirmed(item),
+  ),
+)
+const damageMarkers = computed(() => toDamageMapMarkers(visibleItems.value))
 
 async function loadPage(page: number, append: boolean) {
   listLoading.value = true
@@ -146,12 +169,13 @@ function handleApply() {
   if (formFrom.value) query.from = formFrom.value
   if (formTo.value) query.to = formTo.value
   if (formStatus.value) query.status = formStatus.value
+  query.review = reviewTab.value
   router.push({ name: 'damages', query })
 }
 
 function handleReset() {
   activePreset.value = null
-  router.push({ name: 'damages' })
+  router.push({ name: 'damages', query: { review: reviewTab.value } })
 }
 
 function handlePresetApply({ from, to }: { from: string; to: string }) {
@@ -163,13 +187,55 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 // ── 선택된 사건 (상세 패널) ─────────────────────────────
 
 const selectedId = ref<number | null>(null)
+const verdictSubmitting = ref(false)
 
 function selectItem(id: number) {
   selectedId.value = id === selectedId.value ? null : id
 }
 
 function closeDetail() {
+  if (verdictSubmitting.value) return
   selectedId.value = null
+}
+
+async function submitVerdict(
+  status: 'REQUESTED' | 'CANCELED',
+  processingPriority: string | null = null,
+) {
+  const damageId = selectedId.value
+  if (damageId == null || verdictSubmitting.value) return
+
+  verdictSubmitting.value = true
+  try {
+    const isRepairRequired = status === 'REQUESTED'
+    await damagesApi.updateReview(
+      damageId,
+      status,
+      isRepairRequired ? processingPriority : null,
+    )
+    notification.success(
+      isRepairRequired
+        ? '보수 필요로 판정했습니다. 요청 전 목록에서 확인할 수 있습니다.'
+        : '보수 불필요로 판정했습니다.',
+    )
+    await loadPage(0, false)
+  } catch {
+    notification.error('판정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  } finally {
+    verdictSubmitting.value = false
+  }
+}
+
+function selectReviewTab(tab: ReviewTab) {
+  if (tab === reviewTab.value) return
+  selectedId.value = null
+  router.push({
+    path: route.path,
+    query: {
+      ...route.query,
+      review: tab,
+    },
+  })
 }
 </script>
 
@@ -227,9 +293,32 @@ function closeDetail() {
           <div>
             <h2 class="list-title">탐지된 사건</h2>
             <p class="list-subtitle">
-              전체 <strong>{{ totalElements.toLocaleString('ko-KR') }}</strong>건
+              현재 <strong>{{ visibleItems.length.toLocaleString('ko-KR') }}</strong>건
             </p>
           </div>
+        </div>
+
+        <div class="review-tabs" role="tablist" aria-label="관리자 확인 여부">
+          <button
+            type="button"
+            role="tab"
+            class="review-tab"
+            :class="{ 'is-active': reviewTab === 'pending' }"
+            :aria-selected="reviewTab === 'pending'"
+            @click="selectReviewTab('pending')"
+          >
+            미확인
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="review-tab"
+            :class="{ 'is-active': reviewTab === 'confirmed' }"
+            :aria-selected="reviewTab === 'confirmed'"
+            @click="selectReviewTab('confirmed')"
+          >
+            확인
+          </button>
         </div>
 
         <div class="list-body">
@@ -245,15 +334,15 @@ function closeDetail() {
 
           <!-- 빈 결과 -->
           <EmptyState
-            v-else-if="!listLoading && items.length === 0"
-            title="검색 결과가 없습니다"
-            description="조회 조건을 변경해 보세요."
+            v-else-if="!listLoading && visibleItems.length === 0"
+            :title="reviewTab === 'pending' ? '미확인 사건이 없습니다' : '확인된 사건이 없습니다'"
+            description="다른 탭이나 조회 조건을 확인해 보세요."
           />
 
           <!-- 카드 목록 -->
           <template v-else>
             <DamageCard
-              v-for="item in items"
+              v-for="item in visibleItems"
               :key="item.id"
               :item="item"
               :selected="selectedId === item.id"
@@ -274,7 +363,7 @@ function closeDetail() {
                 더 보기 ({{ totalElements - items.length }}건 남음)
               </button>
               <p v-else-if="items.length > 0" class="list-end">
-                전체 {{ totalElements.toLocaleString('ko-KR') }}건 표시 완료
+                현재 탭 {{ visibleItems.length.toLocaleString('ko-KR') }}건 표시
               </p>
             </div>
           </template>
@@ -297,7 +386,10 @@ function closeDetail() {
         <div v-if="selectedId != null" class="detail-panel-wrapper">
           <DamageDetailPanel
             :damage-id="selectedId"
+            :verdict-submitting="verdictSubmitting"
             @close="closeDetail"
+            @verdict-no-repair="submitVerdict('CANCELED')"
+            @verdict-repair="submitVerdict('REQUESTED', $event)"
           />
         </div>
       </Transition>
@@ -360,8 +452,48 @@ function closeDetail() {
   align-items: center;
   justify-content: space-between;
   padding: 1.4rem 1.6rem 1rem;
-  border-bottom: 1px solid var(--roady-border-default);
   flex-shrink: 0;
+}
+
+.review-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--roady-border-default);
+  background: var(--roady-surface-default);
+}
+
+.review-tab {
+  position: relative;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--roady-text-tertiary);
+  font-size: 14px;
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
+}
+
+.review-tab::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 3px;
+  background: transparent;
+  content: '';
+}
+
+.review-tab.is-active {
+  color: var(--roady-brand-primary);
+}
+
+.review-tab.is-active::after {
+  background: var(--roady-brand-primary);
+}
+
+.review-tab:hover {
+  background: var(--roady-surface-background);
 }
 
 .list-title {
@@ -438,7 +570,7 @@ function closeDetail() {
   position: absolute;
   top: 0;
   right: 0;
-  width: min(42rem, 100%);
+  width: min(520px, 100%);
   height: 100%;
   z-index: 10;
   box-shadow: -4px 0 16px rgb(0 0 0 / 10%);
