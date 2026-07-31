@@ -22,6 +22,7 @@ public record DamageSummaryResponse(
         BigDecimal longitude,
         LocalDateTime capturedAt,
         String currentStatus,
+        String processingPriority,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -45,6 +46,7 @@ public record DamageSummaryResponse(
                 damage.longitude(),
                 damage.capturedAt(),
                 damage.currentStatus(),
+                damage.processingPriority(),
                 damage.imageCount(),
                 damage.createdAt(),
                 damage.updatedAt()

@@ -29,6 +29,7 @@
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
 | 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색, 지역코드·기간 필터 및 페이지 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
+| 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태 및 처리 우선순위 수정 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
 | 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
 | 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
@@ -59,8 +60,7 @@
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | 설계안 | AI 분석 재시도 |
 | AI 분석 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 수정 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | 설계안 | AI 분석 결과 확정 |
-| 처리 상태 | `PATCH` | `/api/damages/{damageId}/status` | 설계안 | 파손 처리 상태 변경 |
-| 처리 상태 | `GET` | `/api/damages/{damageId}/status-histories` | 설계안 | 파손 처리 상태 이력 조회 |
+| 처리 상태 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 처리 상태 및 우선순위 수정 |
 | 보수 배정 | `POST` | `/api/repair-assignments` | 설계안 | 보수 담당자와 예정일 배정 |
 | 보수 배정 | `GET` | `/api/repair-assignments` | 설계안 | 보수 배정 목록 조회 |
 | 보수 배정 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 상세 조회 |
@@ -692,6 +692,7 @@ curl -X POST "http://localhost:8080/api/damages" \
   "longitude": 126.9780000,
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
+  "processingPriority": "URGENT",
   "imageCount": 2,
   "images": [
     {
@@ -761,6 +762,7 @@ curl -X POST "http://localhost:8080/api/damages" \
       "longitude": 126.9780000,
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "COLLECTED",
+      "processingPriority": "URGENT",
       "imageCount": 2,
       "createdAt": "2026-07-22T14:30:01"
     }
@@ -792,6 +794,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `content[].longitude` | decimal, null | 경도 |
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 처리 상태 |
+| `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | `content[].imageCount` | number | 연결된 이미지 수 |
 | `content[].createdAt` | string | 생성 일시 |
 | `page` | number | 현재 페이지 번호 |
@@ -947,6 +950,7 @@ curl -X POST "http://localhost:8080/api/damages" \
   "longitude": 126.9780000,
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
+  "processingPriority": "URGENT",
   "imageCount": 2,
   "images": [
     {
@@ -1399,6 +1403,7 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
       "longitude": 126.978,
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "AI_ANALYZED",
+      "processingPriority": "URGENT",
       "imageCount": 2,
       "damageScore": 82,
       "damageType": "CRACK",
@@ -1433,6 +1438,7 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
 | `content[].longitude` | number, null | 경도 |
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 파손 처리 상태 |
+| `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | `content[].imageCount` | number | 등록된 이미지 수 |
 | `content[].damageScore` | number, null | 최신 성공 AI 분석의 파손 점수 |
 | `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
@@ -1577,17 +1583,18 @@ REPAIR_SCHEDULED -> CANCELED
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 처리 상태 변경 | `PATCH` | `/api/damages/{damageId}/status` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 정의된 절차에 따라 상태를 변경한다. |
-| 처리 상태 이력 조회 | `GET` | `/api/damages/{damageId}/status-histories` | 로그인 사용자 | 변경 전/후 상태, 변경자, 변경 일시, 의견을 조회한다. |
+| 관리자 검토 수정 | `PATCH` | `/api/damages/{damageId}/review` | `ADMIN`, `INSPECTOR` | 검토 단계에서 처리 상태와 관리자 처리 우선순위를 수정한다. 변경 이력은 저장하지 않는다. |
 
-#### UpdateDamageStatusRequest
+#### UpdateDamageReviewRequest
 
 ```json
 {
   "status": "REQUESTED",
-  "comment": "현장 확인 후 요청 완료"
+  "processingPriority": "URGENT"
 }
 ```
+
+`status`와 `processingPriority`는 둘 중 하나 이상 전달해야 한다. `status`는 검토 단계에서 사용하는 `AI_ANALYZED`, `REQUESTED`, `CANCELED`만 허용한다. `processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`만 허용한다. 관리자가 보수 필요로 판단하면 `REQUESTED`, 보수 불필요 또는 오탐이면 `CANCELED`로 수정한다.
 
 ### 11.2 보수 배정
 

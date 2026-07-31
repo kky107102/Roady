@@ -131,6 +131,7 @@ erDiagram
         decimal longitude "NULL"
         datetime captured_at "NULL"
         varchar current_status "DEFAULT COLLECTED"
+        varchar processing_priority "NULL"
         datetime created_at
         datetime updated_at
     }
@@ -322,6 +323,15 @@ erDiagram
 | `HIGH` | 높음 |
 | `URGENT` | 긴급 |
 
+### 관리자 처리 우선순위
+
+| 값 | 의미 |
+| --- | --- |
+| `LOW` | 낮음 |
+| `NORMAL` | 보통 |
+| `HIGH` | 높음 |
+| `URGENT` | 긴급 |
+
 ### 파일 유형
 
 | 값 | 의미 |
@@ -360,6 +370,7 @@ erDiagram
 - 담당 시군구 코드가 없는 구버전 `users` 테이블: `docs/sql/add-user-assigned-region-code-field.sql`을 한 번 실행한다.
 - 주소/행정구역 필드가 없는 구버전 `damages` 테이블: `docs/sql/add-damage-geocoding-fields.sql`, `docs/sql/add-damage-region-code-field.sql`을 순서대로 한 번 실행한다.
 - 파손 유형 컬럼이 없는 구버전 `damage_ai_analysis_results` 테이블: `docs/sql/add-damage-ai-analysis-damage-type.sql`을 한 번 실행한다.
+- 관리자 처리 우선순위 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-processing-priority.sql`을 한 번 실행한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 

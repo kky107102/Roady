@@ -37,6 +37,7 @@ class DamageDashboardQueryIntegrationTest {
 
     @BeforeEach
     void setUpDamageData() {
+        ensureDamageSchema();
         assertDamageSchema();
         ensureDamageAiAnalysisSchema();
         assertDamageIndexes();
@@ -129,6 +130,7 @@ class DamageDashboardQueryIntegrationTest {
                         "longitude",
                         "captured_at",
                         "current_status",
+                        "processing_priority",
                         "created_at",
                         "updated_at"
                 );
@@ -155,6 +157,25 @@ class DamageDashboardQueryIntegrationTest {
                         "idx_damages_road_address_name",
                         "idx_damages_region_code_created_at"
                 );
+    }
+
+    private void ensureDamageSchema() {
+        Integer columnCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'damages'
+                  AND column_name = 'processing_priority'
+                """,
+                Integer.class
+        );
+        if (columnCount != null && columnCount == 0) {
+            jdbcTemplate.execute("""
+                    ALTER TABLE damages
+                        ADD COLUMN processing_priority VARCHAR(30) NULL AFTER current_status
+                    """);
+        }
     }
 
     private void ensureDamageAiAnalysisSchema() {

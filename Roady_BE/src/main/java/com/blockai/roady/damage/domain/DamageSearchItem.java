@@ -19,6 +19,7 @@ public record DamageSearchItem(
         BigDecimal longitude,
         LocalDateTime capturedAt,
         String currentStatus,
+        String processingPriority,
         long imageCount,
         Integer damageScore,
         String damageType,
