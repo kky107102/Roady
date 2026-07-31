@@ -11,6 +11,7 @@ import com.blockai.roady.damage.dto.DamageMapMarkerResponse;
 import com.blockai.roady.damage.dto.DamageResponse;
 import com.blockai.roady.damage.dto.DamageSearchResponse;
 import com.blockai.roady.damage.dto.DamageSummaryResponse;
+import com.blockai.roady.damage.dto.UpdateDamageReviewRequest;
 import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import com.blockai.roady.robot.service.RobotService;
@@ -23,8 +24,10 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -155,6 +158,18 @@ public class DamageController {
                 .map(DamageImageResponse::from)
                 .toList();
         return DamageResponse.from(damage, imageResponses);
+    }
+
+    @PatchMapping("/{damageId}/review")
+    public DamageSummaryResponse updateDamageReview(
+            @PathVariable Long damageId,
+            @RequestBody UpdateDamageReviewRequest request
+    ) {
+        return DamageSummaryResponse.from(damageService.updateReview(
+                damageId,
+                request.status(),
+                request.processingPriority()
+        ));
     }
 
     @PostMapping("/{damageId}/analysis-jobs")

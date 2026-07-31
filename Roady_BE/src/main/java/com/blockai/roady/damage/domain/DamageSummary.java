@@ -20,6 +20,7 @@ public record DamageSummary(
         BigDecimal longitude,
         LocalDateTime capturedAt,
         String currentStatus,
+        String processingPriority,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

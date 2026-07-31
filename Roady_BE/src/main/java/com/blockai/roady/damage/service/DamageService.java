@@ -7,6 +7,7 @@ import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageImageMetadata;
 import com.blockai.roady.damage.domain.DamageMapBounds;
 import com.blockai.roady.damage.domain.DamageMapMarker;
+import com.blockai.roady.damage.domain.DamageProcessingPriority;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
@@ -27,12 +28,18 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class DamageService {
 
     private static final int MAX_IMAGE_COUNT = 50;
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
+    private static final Set<String> REVIEW_STATUSES = Set.of(
+            "AI_ANALYZED",
+            "REQUESTED",
+            "CANCELED"
+    );
 
     private final DamageMapper damageMapper;
     private final KakaoReverseGeocodingClient geocodingClient;
@@ -149,6 +156,19 @@ public class DamageService {
                 .orElseThrow(() -> new IllegalArgumentException("Damage not found."));
     }
 
+    @Transactional
+    public DamageSummary updateReview(Long damageId, String status, String processingPriority) {
+        String normalizedStatus = normalizeReviewStatus(status);
+        String normalizedPriority = normalizeProcessingPriority(processingPriority);
+        if (normalizedStatus == null && normalizedPriority == null) {
+            throw new IllegalArgumentException("At least one review field is required.");
+        }
+
+        getSummary(damageId);
+        damageMapper.updateReview(damageId, normalizedStatus, normalizedPriority);
+        return getSummary(damageId);
+    }
+
     @Transactional(readOnly = true)
     public List<DamageImageMetadata> getImageMetadata(Long damageId) {
         getSummary(damageId);
@@ -206,6 +226,28 @@ public class DamageService {
                 throw new IllegalArgumentException("Only image files can be uploaded.");
             }
         }
+    }
+
+    private String normalizeReviewStatus(String status) {
+        if (!StringUtils.hasText(status)) {
+            return null;
+        }
+        String normalized = status.trim().toUpperCase(Locale.ROOT);
+        if (!DamageStatus.contains(normalized) || !REVIEW_STATUSES.contains(normalized)) {
+            throw new IllegalArgumentException("Invalid damage review status.");
+        }
+        return normalized;
+    }
+
+    private String normalizeProcessingPriority(String processingPriority) {
+        if (!StringUtils.hasText(processingPriority)) {
+            return null;
+        }
+        String normalized = processingPriority.trim().toUpperCase(Locale.ROOT);
+        if (!DamageProcessingPriority.contains(normalized)) {
+            throw new IllegalArgumentException("Invalid damage processing priority.");
+        }
+        return normalized;
     }
 
     private String cleanFilename(String originalFilename, int index) {

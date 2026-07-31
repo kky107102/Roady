@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -30,6 +31,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -95,6 +97,7 @@ class DamageControllerTest {
                 new BigDecimal("126.9780000"),
                 capturedAt,
                 "COLLECTED",
+                null,
                 1L,
                 capturedAt,
                 capturedAt
@@ -149,9 +152,11 @@ class DamageControllerTest {
                 BigDecimal.valueOf(37.5665),
                 BigDecimal.valueOf(126.978),
                 LocalDateTime.of(2026, 7, 22, 14, 30),
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
+                "URGENT",
                 2L,
                 82,
+                "CRACK",
                 true,
                 "URGENT",
                 BigDecimal.valueOf(0.91),
@@ -168,9 +173,11 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].roadAddressName").value("Gyeonggi Anseong Juksanchogyogil 69-4"))
                 .andExpect(jsonPath("$.content[0].regionCode").value("41550"))
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
-                .andExpect(jsonPath("$.content[0].currentStatus").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$.content[0].currentStatus").value("AI_ANALYZED"))
+                .andExpect(jsonPath("$.content[0].processingPriority").value("URGENT"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
+                .andExpect(jsonPath("$.content[0].damageType").value("CRACK"))
                 .andExpect(jsonPath("$.content[0].repairRequired").value(true))
                 .andExpect(jsonPath("$.content[0].repairPriority").value("URGENT"))
                 .andExpect(jsonPath("$.content[0].confidenceScore").value(0.91))
@@ -227,11 +234,11 @@ class DamageControllerTest {
                         1L,
                         BigDecimal.valueOf(37.5665),
                         BigDecimal.valueOf(126.978),
-                        "REVIEW_REQUIRED"
+                        "AI_ANALYZED"
                 )));
 
         mockMvc.perform(get("/api/damages/map-markers")
-                        .param("status", "REVIEW_REQUIRED")
+                        .param("status", "AI_ANALYZED")
                         .param("south", "37.45")
                         .param("north", "37.62")
                         .param("west", "126.80")
@@ -240,7 +247,7 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$[0].id").value(1))
                 .andExpect(jsonPath("$[0].latitude").value(37.5665))
                 .andExpect(jsonPath("$[0].longitude").value(126.978))
-                .andExpect(jsonPath("$[0].currentStatus").value("REVIEW_REQUIRED"))
+                .andExpect(jsonPath("$[0].currentStatus").value("AI_ANALYZED"))
                 .andExpect(jsonPath("$[0].description").doesNotExist())
                 .andExpect(jsonPath("$[0].assignedTo").doesNotExist());
     }
@@ -260,5 +267,62 @@ class DamageControllerTest {
     void getMapMarkersRequiresBounds() throws Exception {
         mockMvc.perform(get("/api/damages/map-markers"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateDamageReviewChangesStatusAndProcessingPriority() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        when(damageService.updateReview(eq(1L), eq("REQUESTED"), eq("URGENT")))
+                .thenReturn(new DamageSummary(
+                        1L,
+                        10L,
+                        2L,
+                        5L,
+                        "tactile block crack",
+                        "Gyeonggi Anseong Juksan 343-1",
+                        "Gyeonggi Anseong Juksanchogyogil 69-4",
+                        "41550",
+                        "Gyeonggi",
+                        "Anseong",
+                        "Juksan",
+                        LocalDateTime.of(2026, 7, 22, 14, 31),
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 7, 22, 14, 30),
+                        "REQUESTED",
+                        "URGENT",
+                        2L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        mockMvc.perform(patch("/api/damages/{damageId}/review", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "REQUESTED",
+                                  "processingPriority": "URGENT"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.currentStatus").value("REQUESTED"))
+                .andExpect(jsonPath("$.processingPriority").value("URGENT"));
+    }
+
+    @Test
+    void updateDamageReviewRejectsInvalidStatus() throws Exception {
+        when(damageService.updateReview(eq(1L), eq("REPAIR_COMPLETED"), eq(null)))
+                .thenThrow(new IllegalArgumentException("Invalid damage review status."));
+
+        mockMvc.perform(patch("/api/damages/{damageId}/review", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "status": "REPAIR_COMPLETED"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Invalid damage review status."));
     }
 }

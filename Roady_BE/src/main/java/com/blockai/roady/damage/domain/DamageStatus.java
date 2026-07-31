@@ -4,12 +4,13 @@ import java.util.Arrays;
 
 public enum DamageStatus {
     COLLECTED,
-    REVIEW_REQUIRED,
-    RECEIVED,
+    AI_ANALYZING,
+    AI_ANALYZED,
+    REQUESTED,
     REPAIR_SCHEDULED,
-    REPAIRING,
+    REPAIR_IN_PROGRESS,
     REPAIR_COMPLETED,
-    REPAIR_NOT_REQUIRED;
+    CANCELED;
 
     public static boolean contains(String value) {
         return Arrays.stream(values())

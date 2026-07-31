@@ -1,5 +1,7 @@
 # Roady 백엔드 ERD
 
+이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장하고, 별도 관리자 검토 이력은 저장하지 않는다. 보수 요청 시에는 보수 담당자 배정 정보와 요청/취소 이력을 별도 테이블에 저장한다.
+
 ## 1. 테이블 목록
 
 | 테이블 | 역할 |
@@ -12,21 +14,20 @@
 | `robot_route_points` | 점검 경로를 구성하는 좌표 목록을 순서대로 저장한다. |
 | `damages` | 점자블록 파손 1건의 중심 정보를 저장한다. 위도, 경도, 촬영 시각, 현재 처리 상태 등이 들어간다. |
 | `damage_images` | 파손 데이터에 연결된 이미지 파일 여러 장의 정보를 저장한다. |
-| `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
-| `damage_status_histories` | 파손 데이터의 처리 상태 변경 이력을 저장한다. |
-| `repair_assignments` | 파손 건에 대한 보수 담당자 배정과 보수 예정일을 저장한다. |
-| `repair_results` | 보수 완료 결과, 보수 내용, 완료 이미지 정보를 저장한다. |
+| `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 유형, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
+| `repair_assignments` | 보수 요청 시 담당자, 배정자, 예정일, 메모를 저장한다. |
+| `repair_request_histories` | 보수 요청/배정/취소 시점의 상태 변경과 담당자 배정 이력을 저장한다. |
 
 ## 2. 주요 관계
 
 ```text
-users 1:N damage_status_histories
-users 1:N repair_assignments
-users 1:N repair_results
 users 1:N robots (responsible)
 users 1:N robot_commands (requests)
 users 1:N damages (reports)
 users 1:N damages (assigned)
+users 1:N repair_assignments (assigns)
+users 1:N repair_assignments (repairs)
+users 1:N repair_request_histories (requests)
 
 robots 1:N robot_status_logs
 robots 1:N robot_commands
@@ -37,9 +38,9 @@ robot_routes 1:N robot_route_points
 
 damages 1:N damage_images
 damages 1:N damage_ai_analysis_results
-damages 1:N damage_status_histories
 damages 0:1 repair_assignments
-damages 0:1 repair_results
+damages 1:N repair_request_histories
+repair_assignments 1:N repair_request_histories
 ```
 
 ## 3. ERD
@@ -131,6 +132,7 @@ erDiagram
         decimal longitude "NULL"
         datetime captured_at "NULL"
         varchar current_status "DEFAULT COLLECTED"
+        varchar processing_priority "NULL"
         datetime created_at
         datetime updated_at
     }
@@ -151,6 +153,7 @@ erDiagram
         bigint damage_id FK
         boolean damaged
         int damage_score
+        varchar damage_type
         boolean repair_required
         varchar repair_priority
         decimal confidence_score
@@ -160,19 +163,9 @@ erDiagram
         datetime created_at
     }
 
-    damage_status_histories {
-        bigint id PK
-        bigint damage_id FK
-        bigint changed_by FK
-        varchar before_status
-        varchar after_status
-        text comment
-        datetime changed_at
-    }
-
     repair_assignments {
         bigint id PK
-        bigint damage_id FK
+        bigint damage_id FK "UK"
         bigint repairer_id FK
         bigint assigned_by FK
         date scheduled_date
@@ -181,25 +174,26 @@ erDiagram
         datetime updated_at
     }
 
-    repair_results {
+    repair_request_histories {
         bigint id PK
         bigint damage_id FK
+        bigint repair_assignment_id FK
+        bigint requested_by FK
         bigint repairer_id FK
-        varchar result_image_url
-        text result_content
-        datetime completed_at
-        datetime created_at
+        varchar before_status
+        varchar after_status
+        text note
+        datetime requested_at
     }
 
     users ||--o{ robot_routes : creates
-    users ||--o{ damage_status_histories : changes
-    users ||--o{ repair_assignments : assigns
-    users ||--o{ repair_assignments : repairs
-    users ||--o{ repair_results : completes
     users ||--o{ robots : responsible_for
     users ||--o{ robot_commands : requests
     users ||--o{ damages : reports
     users ||--o{ damages : assigned_to
+    users ||--o{ repair_assignments : assigns
+    users ||--o{ repair_assignments : repairs
+    users ||--o{ repair_request_histories : requests
 
     robots ||--o{ robot_status_logs : records
     robots ||--o{ robot_commands : receives
@@ -210,9 +204,9 @@ erDiagram
 
     damages ||--o{ damage_images : has
     damages ||--o{ damage_ai_analysis_results : analyzed_by
-    damages ||--o{ damage_status_histories : tracks
     damages ||--o| repair_assignments : assigned_to
-    damages ||--o| repair_results : repaired_by
+    damages ||--o{ repair_request_histories : requested_for
+    repair_assignments ||--o{ repair_request_histories : records
 ```
 
 ## 4. 상태 및 타입 후보
@@ -286,12 +280,13 @@ erDiagram
 | 값 | 의미 |
 | --- | --- |
 | `COLLECTED` | 수집 완료 |
-| `REVIEW_REQUIRED` | 검토 필요 |
-| `RECEIVED` | 접수 완료. 보수가 필요한 건으로 접수된 상태 |
+| `AI_ANALYZING` | AI 분석중 |
+| `AI_ANALYZED` | AI 분석완료 |
+| `REQUESTED` | 요청 완료 |
 | `REPAIR_SCHEDULED` | 보수 예정 |
-| `REPAIRING` | 보수 진행 중 |
+| `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
-| `REPAIR_NOT_REQUIRED` | 보수 불필요 |
+| `CANCELED` | 취소 |
 
 ### 파손 점수
 
@@ -302,7 +297,25 @@ erDiagram
 | `31~70` | 보통 수준의 파손 |
 | `71~100` | 심각한 파손 |
 
+### 파손 유형
+
+| 값 | 의미 |
+| --- | --- |
+| `MISSING` | 결손 |
+| `WEAR` | 마모 |
+| `BREAKAGE` | 깨짐 |
+| `CRACK` | 균열 |
+
 ### 보수 우선순위
+
+| 값 | 의미 |
+| --- | --- |
+| `LOW` | 낮음 |
+| `NORMAL` | 보통 |
+| `HIGH` | 높음 |
+| `URGENT` | 긴급 |
+
+### 관리자 처리 우선순위
 
 | 값 | 의미 |
 | --- | --- |
@@ -327,8 +340,11 @@ erDiagram
 | `damages.reported_by` | 파손을 시스템에 등록한 사용자 ID. 로봇 자동 업로드 시 로봇 책임자 ID를 사용하며 `NOT NULL` |
 | `damages.assigned_to` | 파손 처리 담당자 ID. 담당자 배정 전에는 `NULL` 가능 |
 | `damages.region_code` | 파손 좌표를 카카오 행정구역 API로 변환해 저장한 시군구 코드. 지역 필터 조건으로 사용하며 변환 전에는 `NULL` 가능 |
+| `repair_assignments.repairer_id` | 보수 요청을 배정받은 보수 담당자 ID |
+| `repair_assignments.assigned_by` | 보수 요청을 생성하거나 배정한 관리자/점검 담당자 ID |
+| `repair_request_histories` | 보수 요청/배정/취소 시점의 상태 변경과 담당자 배정 기록을 저장한다. 관리자 검토 이력과는 분리한다. |
 
-## 5. 파손 대시보드 조회 인덱스
+## 5. 주요 조회 인덱스
 
 | 인덱스 | 컬럼 | 대상 조회 |
 | --- | --- | --- |
@@ -341,13 +357,18 @@ erDiagram
 | `idx_damages_road_address_name` | `road_address_name` | 도로명 주소 키워드 검색 |
 | `idx_damages_region_code_created_at` | `region_code, created_at DESC, id DESC` | 시군구 코드와 기간 조건을 함께 사용하는 파손 검색 |
 | `idx_damage_images_damage_sort_order` | `damage_id, sort_order` | 목록의 파손별 이미지 수 및 이미지 순서 조회 |
+| `idx_repair_assignments_damage_id` | `damage_id` | 파손별 보수 배정 단건 조회. 보수 요청/배정 구현 시 추가 |
+| `idx_repair_assignments_repairer_created_at` | `repairer_id, created_at DESC` | 보수 담당자별 배정 목록 조회. 보수 요청/배정 구현 시 추가 |
+| `idx_repair_request_histories_assignment_requested_at` | `repair_assignment_id, requested_at DESC` | 보수 요청/배정/취소 이력 조회. 보수 요청/배정 구현 시 추가 |
 
-신규 데이터베이스에는 `schema.sql`의 테이블 생성 과정에서 인덱스가 적용된다.
+현재 구현된 테이블의 인덱스는 신규 데이터베이스에서 `schema.sql`의 테이블 생성 과정에 적용된다. 보수 요청/배정 관련 인덱스는 해당 기능 구현 시 `schema.sql`에 추가한다.
 
 - 최신 컬럼은 있지만 대시보드 인덱스만 없는 데이터베이스: `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행한다.
 - `created_by`를 사용하는 구버전 `damages` 테이블: `docs/sql/migrate-damages-dashboard.sql`을 한 번 실행한다. 기존 `created_by` 값은 `reported_by`로 보존된다.
 - 담당 시군구 코드가 없는 구버전 `users` 테이블: `docs/sql/add-user-assigned-region-code-field.sql`을 한 번 실행한다.
 - 주소/행정구역 필드가 없는 구버전 `damages` 테이블: `docs/sql/add-damage-geocoding-fields.sql`, `docs/sql/add-damage-region-code-field.sql`을 순서대로 한 번 실행한다.
+- 파손 유형 컬럼이 없는 구버전 `damage_ai_analysis_results` 테이블: `docs/sql/add-damage-ai-analysis-damage-type.sql`을 한 번 실행한다.
+- 관리자 처리 우선순위 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-processing-priority.sql`을 한 번 실행한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 
@@ -363,7 +384,7 @@ LIMIT 0, 20;
 EXPLAIN
 SELECT d.id
 FROM damages d
-WHERE d.current_status = 'REVIEW_REQUIRED'
+WHERE d.current_status = 'AI_ANALYZED'
   AND d.created_at >= '2026-07-01 00:00:00'
   AND d.created_at < '2026-08-01 00:00:00'
 ORDER BY d.created_at DESC, d.id DESC

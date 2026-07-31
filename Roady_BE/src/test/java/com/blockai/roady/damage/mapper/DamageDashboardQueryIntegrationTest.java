@@ -37,7 +37,9 @@ class DamageDashboardQueryIntegrationTest {
 
     @BeforeEach
     void setUpDamageData() {
+        ensureDamageSchema();
         assertDamageSchema();
+        ensureDamageAiAnalysisSchema();
         assertDamageIndexes();
         Long reportedBy = userId("admin");
         assignedUserId = userId("inspector");
@@ -46,14 +48,14 @@ class DamageDashboardQueryIntegrationTest {
         olderDamageId = insertDamage(
                 reportedBy,
                 assignedUserId,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 LocalDateTime.of(2099, 1, 1, 10, 0),
                 true
         );
         newerDamageId = insertDamage(
                 reportedBy,
                 null,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 LocalDateTime.of(2099, 1, 1, 11, 0),
                 false
         );
@@ -71,6 +73,7 @@ class DamageDashboardQueryIntegrationTest {
         insertAnalysis(
                 olderDamageId,
                 82,
+                "CRACK",
                 true,
                 "URGENT",
                 0.91,
@@ -80,6 +83,7 @@ class DamageDashboardQueryIntegrationTest {
         insertAnalysis(
                 newerDamageId,
                 55,
+                "WEAR",
                 true,
                 "NORMAL",
                 0.76,
@@ -88,6 +92,7 @@ class DamageDashboardQueryIntegrationTest {
         );
         insertAnalysis(
                 newerDamageId,
+                null,
                 null,
                 null,
                 null,
@@ -125,6 +130,7 @@ class DamageDashboardQueryIntegrationTest {
                         "longitude",
                         "captured_at",
                         "current_status",
+                        "processing_priority",
                         "created_at",
                         "updated_at"
                 );
@@ -153,12 +159,50 @@ class DamageDashboardQueryIntegrationTest {
                 );
     }
 
+    private void ensureDamageSchema() {
+        Integer columnCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'damages'
+                  AND column_name = 'processing_priority'
+                """,
+                Integer.class
+        );
+        if (columnCount != null && columnCount == 0) {
+            jdbcTemplate.execute("""
+                    ALTER TABLE damages
+                        ADD COLUMN processing_priority VARCHAR(30) NULL AFTER current_status
+                    """);
+        }
+    }
+
+    private void ensureDamageAiAnalysisSchema() {
+        Integer columnCount = jdbcTemplate.queryForObject(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.columns
+                WHERE table_schema = DATABASE()
+                  AND table_name = 'damage_ai_analysis_results'
+                  AND column_name = 'damage_type'
+                """,
+                Integer.class
+        );
+        if (columnCount != null && columnCount == 0) {
+            jdbcTemplate.execute("""
+                    ALTER TABLE damage_ai_analysis_results
+                        ADD COLUMN damage_type VARCHAR(30) NULL AFTER damage_score
+                    """);
+        }
+    }
+
     @Test
     void searchExecutesPagedFilterQueryWithImageCounts() {
         var firstPage = damageService.search(new DamageSearchCriteria(
                 FROM,
                 TO,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 robotId,
                 null,
                 null,
@@ -170,6 +214,7 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(firstPage.content().getFirst().id()).isEqualTo(newerDamageId);
         assertThat(firstPage.content().getFirst().imageCount()).isEqualTo(1);
         assertThat(firstPage.content().getFirst().damageScore()).isEqualTo(55);
+        assertThat(firstPage.content().getFirst().damageType()).isEqualTo("WEAR");
         assertThat(firstPage.content().getFirst().repairRequired()).isTrue();
         assertThat(firstPage.content().getFirst().repairPriority()).isEqualTo("NORMAL");
         assertThat(firstPage.content().getFirst().confidenceScore()).isEqualByComparingTo("0.7600");
@@ -179,7 +224,7 @@ class DamageDashboardQueryIntegrationTest {
         var secondPage = damageService.search(new DamageSearchCriteria(
                 FROM,
                 TO,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 robotId,
                 null,
                 null,
@@ -191,6 +236,7 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(secondPage.content().getFirst().id()).isEqualTo(olderDamageId);
         assertThat(secondPage.content().getFirst().imageCount()).isEqualTo(2);
         assertThat(secondPage.content().getFirst().damageScore()).isEqualTo(82);
+        assertThat(secondPage.content().getFirst().damageType()).isEqualTo("CRACK");
         assertThat(secondPage.content().getFirst().repairPriority()).isEqualTo("URGENT");
     }
 
@@ -214,7 +260,7 @@ class DamageDashboardQueryIntegrationTest {
         var byAddress = damageService.search(new DamageSearchCriteria(
                 FROM,
                 TO,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 null,
                 null,
                 "Juksan",
@@ -251,7 +297,7 @@ class DamageDashboardQueryIntegrationTest {
         var criteria = new DamageFilterCriteria(
                 FROM,
                 TO,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 robotId,
                 null
         );
@@ -273,7 +319,7 @@ class DamageDashboardQueryIntegrationTest {
         assertThat(summary.total()).isEqualTo(2);
         assertThat(summary.unassigned()).isEqualTo(1);
         assertThat(summary.statusCounts())
-                .containsEntry("REVIEW_REQUIRED", 2L)
+                .containsEntry("AI_ANALYZED", 2L)
                 .containsEntry("COLLECTED", 0L);
         assertThat(markers)
                 .extracting(marker -> marker.id())
@@ -314,6 +360,11 @@ class DamageDashboardQueryIntegrationTest {
             boolean hasCoordinates
     ) {
         String description = "dashboard-query-" + UUID.randomUUID();
+        String addressSuffix = switch (createdAt.getHour()) {
+            case 10 -> "Alpha";
+            case 11 -> "Beta";
+            default -> "Gamma";
+        };
         jdbcTemplate.update(
                 """
                 INSERT INTO damages (
@@ -341,9 +392,9 @@ class DamageDashboardQueryIntegrationTest {
                 reportedBy,
                 assignedTo,
                 description,
-                "Gyeonggi Anseong Juksan " + UUID.randomUUID(),
-                "Gyeonggi Anseong Juksanchogyogil " + UUID.randomUUID(),
-                status.equals("REVIEW_REQUIRED") ? "41550" : "41111",
+                "Gyeonggi Anseong Juksan " + addressSuffix,
+                "Gyeonggi Anseong Juksanchogyogil " + addressSuffix,
+                status.equals("AI_ANALYZED") ? "41550" : "41111",
                 "Gyeonggi",
                 "Anseong",
                 "Juksan",
@@ -385,6 +436,7 @@ class DamageDashboardQueryIntegrationTest {
     private void insertAnalysis(
             Long damageId,
             Integer damageScore,
+            String damageType,
             Boolean repairRequired,
             String repairPriority,
             Double confidenceScore,
@@ -397,6 +449,7 @@ class DamageDashboardQueryIntegrationTest {
                     damage_id,
                     damaged,
                     damage_score,
+                    damage_type,
                     repair_required,
                     repair_priority,
                     confidence_score,
@@ -404,10 +457,11 @@ class DamageDashboardQueryIntegrationTest {
                     analyzed_at,
                     created_at
                 )
-                VALUES (?, TRUE, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, TRUE, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 damageId,
                 damageScore,
+                damageType,
                 repairRequired,
                 repairPriority,
                 confidenceScore,

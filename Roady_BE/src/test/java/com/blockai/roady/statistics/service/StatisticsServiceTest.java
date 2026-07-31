@@ -57,8 +57,8 @@ class StatisticsServiceTest {
         assertThat(result.counts())
                 .containsEntry("COLLECTED", 3L)
                 .containsEntry("REPAIR_COMPLETED", 2L)
-                .containsEntry("REPAIRING", 0L)
-                .hasSize(7);
+                .containsEntry("REPAIR_IN_PROGRESS", 0L)
+                .hasSize(8);
     }
 
     @Test
@@ -93,7 +93,7 @@ class StatisticsServiceTest {
 
         assertThat(result.totalCount()).isEqualTo(38);
         assertThat(result.completedCount()).isEqualTo(12);
-        assertThat(result.notRequiredCount()).isEqualTo(4);
+        assertThat(result.canceledCount()).isEqualTo(4);
         assertThat(result.completionRate()).isEqualByComparingTo("31.58");
     }
 

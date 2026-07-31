@@ -63,11 +63,12 @@ class DamageAnalysisWorkerTest {
     void consumeQueuedJobsStoresAiResponseIntoAnalysisResult() {
         DamageAnalysisQueueMessage message = new DamageAnalysisQueueMessage(10L, 1L);
         String rawResult = """
-                {"damaged":true,"damageScore":82,"repairRequired":true,"repairPriority":"HIGH","confidenceScore":0.91}
+                {"damaged":true,"damageScore":82,"damageType":"CRACK","repairRequired":true,"repairPriority":"HIGH","confidenceScore":0.91}
                 """;
         ParsedAiImageAnalysisResult parsedResult = new ParsedAiImageAnalysisResult(
                 true,
                 82,
+                "CRACK",
                 true,
                 "HIGH",
                 BigDecimal.valueOf(0.91)
@@ -87,6 +88,7 @@ class DamageAnalysisWorkerTest {
                 10L,
                 true,
                 82,
+                "CRACK",
                 true,
                 "HIGH",
                 BigDecimal.valueOf(0.91),
@@ -151,6 +153,7 @@ class DamageAnalysisWorkerTest {
                 null,
                 now,
                 "COLLECTED",
+                null,
                 1L,
                 now,
                 now

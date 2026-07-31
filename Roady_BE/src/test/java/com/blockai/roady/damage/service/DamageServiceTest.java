@@ -92,6 +92,7 @@ class DamageServiceTest {
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
                 "COLLECTED",
+                null,
                 2L,
                 capturedAt,
                 capturedAt
@@ -158,6 +159,7 @@ class DamageServiceTest {
                 null,
                 null,
                 "COLLECTED",
+                null,
                 1L,
                 null,
                 null
@@ -206,7 +208,7 @@ class DamageServiceTest {
         DamageSearchCriteria criteria = new DamageSearchCriteria(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -229,9 +231,11 @@ class DamageServiceTest {
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 LocalDateTime.of(2026, 7, 22, 10, 30),
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
+                "HIGH",
                 2L,
                 82,
+                "CRACK",
                 true,
                 "HIGH",
                 BigDecimal.valueOf(0.91),
@@ -241,7 +245,7 @@ class DamageServiceTest {
         when(damageMapper.searchSummaries(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -253,7 +257,7 @@ class DamageServiceTest {
         when(damageMapper.countSummaries(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -268,6 +272,63 @@ class DamageServiceTest {
         assertThat(result.size()).isEqualTo(20);
         assertThat(result.totalElements()).isEqualTo(41);
         assertThat(result.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    void updateReviewChangesStatusAndProcessingPriority() {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "REQUESTED", "URGENT"));
+        when(damageMapper.updateReview(1L, "REQUESTED", "URGENT")).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, " requested ", " urgent ");
+
+        verify(damageMapper).updateReview(1L, "REQUESTED", "URGENT");
+        assertThat(result.currentStatus()).isEqualTo("REQUESTED");
+        assertThat(result.processingPriority()).isEqualTo("URGENT");
+        assertThat(result.updatedAt()).isEqualTo(updatedAt);
+    }
+
+    @Test
+    void updateReviewAllowsProcessingPriorityOnly() {
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "AI_ANALYZED", "HIGH"));
+        when(damageMapper.updateReview(1L, null, "HIGH")).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, null, "HIGH");
+
+        verify(damageMapper).updateReview(1L, null, "HIGH");
+        assertThat(result.currentStatus()).isEqualTo("AI_ANALYZED");
+        assertThat(result.processingPriority()).isEqualTo("HIGH");
+    }
+
+    @Test
+    void updateReviewRejectsInvalidReviewStatus() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REPAIR_COMPLETED", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage review status.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsInvalidProcessingPriority() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, "CRITICAL"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage processing priority.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsEmptyRequest() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("At least one review field is required.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any());
     }
 
     @Test
@@ -371,7 +432,7 @@ class DamageServiceTest {
         when(damageMapper.summarizeByStatus(from, to, null, 10L, null, null))
                 .thenReturn(List.of(
                         new DamageStatusCount("COLLECTED", 3, 2),
-                        new DamageStatusCount("REVIEW_REQUIRED", 2, 1)
+                        new DamageStatusCount("AI_ANALYZED", 2, 1)
                 ));
 
         DamageDashboardSummary result = damageService.summarize(criteria);
@@ -380,9 +441,9 @@ class DamageServiceTest {
         assertThat(result.unassigned()).isEqualTo(3);
         assertThat(result.statusCounts())
                 .containsEntry("COLLECTED", 3L)
-                .containsEntry("REVIEW_REQUIRED", 2L)
+                .containsEntry("AI_ANALYZED", 2L)
                 .containsEntry("REPAIR_COMPLETED", 0L)
-                .hasSize(7);
+                .hasSize(8);
     }
 
     @Test
@@ -396,7 +457,7 @@ class DamageServiceTest {
         assertThat(result.total()).isZero();
         assertThat(result.unassigned()).isZero();
         assertThat(result.statusCounts())
-                .hasSize(7)
+                .hasSize(8)
                 .allSatisfy((status, count) -> assertThat(count).isZero());
     }
 
@@ -407,7 +468,7 @@ class DamageServiceTest {
         DamageFilterCriteria criteria = new DamageFilterCriteria(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550"
@@ -416,7 +477,7 @@ class DamageServiceTest {
                 1L,
                 BigDecimal.valueOf(37.5665),
                 BigDecimal.valueOf(126.978),
-                "REVIEW_REQUIRED"
+                "AI_ANALYZED"
         );
         DamageMapBounds bounds = new DamageMapBounds(
                 BigDecimal.valueOf(37.45),
@@ -427,7 +488,7 @@ class DamageServiceTest {
         when(damageMapper.findMapMarkers(
                 from,
                 to,
-                "REVIEW_REQUIRED",
+                "AI_ANALYZED",
                 10L,
                 3L,
                 "41550",
@@ -439,6 +500,32 @@ class DamageServiceTest {
                 .thenReturn(List.of(marker));
 
         assertThat(damageService.findMapMarkers(criteria, bounds)).containsExactly(marker);
+    }
+
+    private DamageSummary summary(Long id, String status, String processingPriority) {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        return new DamageSummary(
+                id,
+                10L,
+                2L,
+                3L,
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                LocalDateTime.of(2026, 7, 22, 10, 31),
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567),
+                LocalDateTime.of(2026, 7, 22, 10, 30),
+                status,
+                processingPriority,
+                2L,
+                updatedAt,
+                updatedAt
+        );
     }
 
     private MockMultipartFile image(String filename) {
