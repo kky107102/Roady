@@ -14,6 +14,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -38,7 +39,8 @@ public interface DamageMapper {
                 latitude,
                 longitude,
                 captured_at,
-                current_status
+                current_status,
+                processing_priority
             )
             VALUES (
                 #{robotId},
@@ -55,7 +57,8 @@ public interface DamageMapper {
                 #{latitude},
                 #{longitude},
                 #{capturedAt},
-                #{currentStatus}
+                #{currentStatus},
+                #{processingPriority}
             )
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -100,6 +103,7 @@ public interface DamageMapper {
                 d.longitude,
                 d.captured_at,
                 d.current_status,
+                d.processing_priority,
                 COUNT(di.id) AS image_count,
                 d.created_at,
                 d.updated_at
@@ -123,6 +127,7 @@ public interface DamageMapper {
                 d.longitude,
                 d.captured_at,
                 d.current_status,
+                d.processing_priority,
                 d.created_at,
                 d.updated_at
             """)
@@ -143,6 +148,7 @@ public interface DamageMapper {
             @Arg(column = "longitude", javaType = BigDecimal.class),
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
+            @Arg(column = "processing_priority", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "created_at", javaType = LocalDateTime.class),
             @Arg(column = "updated_at", javaType = LocalDateTime.class)
@@ -168,6 +174,7 @@ public interface DamageMapper {
                 d.longitude,
                 d.captured_at,
                 d.current_status,
+                d.processing_priority,
                 (
                     SELECT COUNT(*)
                     FROM damage_images di
@@ -243,6 +250,7 @@ public interface DamageMapper {
             @Arg(column = "longitude", javaType = BigDecimal.class),
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
+            @Arg(column = "processing_priority", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "damage_score", javaType = Integer.class),
             @Arg(column = "damage_type", javaType = String.class),
@@ -262,6 +270,26 @@ public interface DamageMapper {
             @Param("addressKeyword") String addressKeyword,
             @Param("offset") long offset,
             @Param("size") int size
+    );
+
+    @Update("""
+            <script>
+            UPDATE damages
+            <set>
+                <if test="status != null">
+                    current_status = #{status},
+                </if>
+                <if test="processingPriority != null">
+                    processing_priority = #{processingPriority},
+                </if>
+            </set>
+            WHERE id = #{damageId}
+            </script>
+            """)
+    int updateReview(
+            @Param("damageId") Long damageId,
+            @Param("status") String status,
+            @Param("processingPriority") String processingPriority
     );
 
     @Select("""
