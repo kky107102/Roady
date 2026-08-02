@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 from datetime import datetime
 from typing import Any
@@ -31,3 +32,14 @@ class MockTelemetry:
             "errorMessage": None,
             "recordedAt": datetime.now().isoformat(timespec="seconds"),
         }
+
+    def set_location(self, latitude: float, longitude: float) -> None:
+        """Use a live location and stop advancing the mock coordinate."""
+        if not math.isfinite(latitude) or not -90.0 <= latitude <= 90.0:
+            raise ValueError("latitude must be between -90 and 90")
+        if not math.isfinite(longitude) or not -180.0 <= longitude <= 180.0:
+            raise ValueError("longitude must be between -180 and 180")
+        self._latitude = latitude
+        self._longitude = longitude
+        self._longitude_step = 0.0
+        self._sample_number = 0

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import NavSatFix
 
 from communication.clients.mqtt_client import MqttTelemetryClient
 from communication.telemetry import MockTelemetry
@@ -47,12 +49,24 @@ class TelemetryNode(Node):
             username=username or None,
             password=password or None,
         )
+        self._location_subscription = self.create_subscription(
+            NavSatFix,
+            "/location/fix",
+            self._on_location,
+            qos_profile_sensor_data,
+        )
 
         interval = max(float(self.get_parameter("publish_interval_sec").value), 1.0)
         self._timer = self.create_timer(interval, self._publish_telemetry)
         self.get_logger().info(
-            f"Mock telemetry ready: topic={self._topic}, interval={interval:.1f}s"
+            f"Telemetry ready: topic={self._topic}, interval={interval:.1f}s"
         )
+
+    def _on_location(self, message: NavSatFix) -> None:
+        try:
+            self._mock.set_location(message.latitude, message.longitude)
+        except ValueError as exc:
+            self.get_logger().warn(f"Ignored invalid location: {exc}")
 
     def _publish_telemetry(self) -> None:
         if not self._mqtt.connected:
