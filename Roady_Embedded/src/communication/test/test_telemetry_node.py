@@ -44,3 +44,15 @@ def test_longitude_increases_and_latitude_stays_fixed():
     assert second["longitude"] == 127.039725
     assert 20 <= first["batteryLevel"] <= 100
     assert 20 <= second["batteryLevel"] <= 100
+
+
+def test_live_location_replaces_mock_movement():
+    telemetry = MockTelemetry(37.5, 127.0)
+    telemetry.next_payload()
+    telemetry.set_location(35.1, 129.1)
+
+    first = telemetry.next_payload()
+    second = telemetry.next_payload()
+
+    assert first["latitude"] == second["latitude"] == 35.1
+    assert first["longitude"] == second["longitude"] == 129.1
