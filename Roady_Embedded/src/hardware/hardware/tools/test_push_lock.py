@@ -7,7 +7,7 @@ import time
 from hardware.devices.push_lock import PushLock
 from hardware.hal import create_gpio_backend
 
-DEFAULT_PINS = {"raspberry_pi": (17, 18), "jetson": (29, 32)}
+DEFAULT_PINS = {"raspberry_pi": (17, 18), "jetson": (31, 15)}
 
 
 def main() -> None:
@@ -20,7 +20,8 @@ def main() -> None:
     default_button, default_led = DEFAULT_PINS[args.platform]
     button_pin = args.button_pin if args.button_pin is not None else default_button
     led_pin = args.led_pin if args.led_pin is not None else default_led
-    pull_up = True if args.platform == "raspberry_pi" else None
+    # The verified Jetson wiring uses a pull-down: LOW=pressed/locked.
+    pull_up = True if args.platform == "raspberry_pi" else False
     running = True
 
     def stop(_signal, _frame) -> None:

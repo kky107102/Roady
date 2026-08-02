@@ -19,8 +19,8 @@ def main() -> None:
     args = parser.parse_args()
 
     pin = args.pin if args.pin is not None else DEFAULT_PINS[args.platform]
-    # Pi uses its 3.3 V internal pull-up. For Jetson use an external 10 kOhm
-    # pull-up from signal to 3.3 V, matching the existing input wiring policy.
+    # Pi uses its internal pull-up. The verified Jetson wiring uses an external
+    # 1 kOhm pull-up between BOARD 33 signal and 3.3 V.
     pull_up = True if args.platform == "raspberry_pi" else None
     running = True
 
@@ -38,6 +38,8 @@ def main() -> None:
     )
     numbering = "BCM" if args.platform == "raspberry_pi" else "BOARD"
     print(f"KY-003 테스트: {numbering} pin {pin}")
+    if args.platform == "jetson":
+        print("VCC=3.3 V / SIGNAL-3.3 V 사이 외부 1 kOhm pull-up")
     print("자석의 한쪽 극을 센서에 가까이 대세요. 종료는 Ctrl+C")
     previous_raw = None
     try:
