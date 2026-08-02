@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from hardware.hal.display import DotMatrixDisplay
@@ -88,6 +89,13 @@ class Max7219Matrix(DotMatrixDisplay):
         self._check_point(x, y)
         with self._canvas(self._device) as draw:
             draw.point((x, y), fill="white")
+
+    def pixels(self, points: Iterable[tuple[int, int]]) -> None:
+        points = tuple(points)
+        for x, y in points:
+            self._check_point(x, y)
+        with self._canvas(self._device) as draw:
+            draw.point(points, fill="white")
 
     def block_boundaries(self, block_width: int = 8) -> None:
         if block_width <= 0 or self.width % block_width:

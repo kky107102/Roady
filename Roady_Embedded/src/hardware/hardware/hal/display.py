@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 
 
 class DotMatrixDisplay(ABC):
@@ -34,6 +35,11 @@ class DotMatrixDisplay(ABC):
 
     @abstractmethod
     def pixel(self, x: int, y: int) -> None:
+        pass
+
+    @abstractmethod
+    def pixels(self, points: Iterable[tuple[int, int]]) -> None:
+        """Replace the frame with the supplied lit pixels."""
         pass
 
     @abstractmethod
