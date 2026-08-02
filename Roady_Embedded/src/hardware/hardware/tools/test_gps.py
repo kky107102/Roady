@@ -10,7 +10,7 @@ from hardware.hal.uart import LinuxUart
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="UART NMEA GPS test")
-    parser.add_argument("--port", default="/dev/serial0")
+    parser.add_argument("--port", default="/dev/ttyTHS1")
     parser.add_argument("--baud", type=int, default=115200)
     parser.add_argument("--timeout", type=float, default=1.0)
     parser.add_argument("--raw", action="store_true", help="print every NMEA sentence")
