@@ -10,7 +10,7 @@ setup(
         ("share/ament_index/resource_index/packages", [f"resource/{package_name}"]),
         (f"share/{package_name}", ["package.xml"]),
     ],
-    install_requires=["setuptools", "requests"],
+    install_requires=["setuptools", "requests", "paho-mqtt>=1.6,<3"],
     zip_safe=True,
     maintainer="Roady Team",
     maintainer_email="todo@example.com",
@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "image_upload_node = communication.nodes.image_upload_node:main",
+            "telemetry_node = communication.nodes.telemetry_node:main",
         ],
     },
 )
