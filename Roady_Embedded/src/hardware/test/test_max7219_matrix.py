@@ -17,10 +17,12 @@ class FakeDisplay:
     def close(self): self.calls.append(("close",))
 
 
-def test_default_config_matches_tested_raspberry_pi_wiring():
+def test_default_config_matches_tested_jetson_wiring():
     config = Max7219Config()
     assert (config.port, config.device, config.cascaded) == (0, 0, 4)
-    assert config.bus_speed_hz == 1_000_000
+    assert config.bus_speed_hz == 500_000
+    assert config.block_orientation == -90
+    assert config.contrast == 5
 
 
 def test_sequence_covers_entire_display():

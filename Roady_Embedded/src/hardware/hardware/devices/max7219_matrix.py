@@ -10,11 +10,11 @@ class Max7219Config:
     port: int = 0
     device: int = 0
     cascaded: int = 4
-    bus_speed_hz: int = 1_000_000
-    block_orientation: int = 0
+    bus_speed_hz: int = 500_000
+    block_orientation: int = -90
     rotate: int = 0
     blocks_reversed: bool = False
-    contrast: int = 16
+    contrast: int = 5
 
     def __post_init__(self) -> None:
         if self.cascaded <= 0:
