@@ -11,7 +11,7 @@ from hardware.hal import create_gpio_backend
 # Raspberry Pi uses BCM numbering; Jetson uses BOARD numbering.
 DEFAULT_PINS = {
     "raspberry_pi": (22, 6),
-    "jetson": (15, 31),
+    "jetson": (7, 29),
 }
 
 
