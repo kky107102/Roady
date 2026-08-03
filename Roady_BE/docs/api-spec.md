@@ -29,7 +29,7 @@
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
 | 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색, 지역코드·기간 필터 및 페이지 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
-| 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태 및 처리 우선순위 수정 |
+| 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태, 처리 우선순위, 판정 파손 유형, 비고 수정 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
 | 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
 | 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
@@ -63,7 +63,7 @@
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | 설계안 | AI 분석 재시도 |
 | AI 분석 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 수정 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | 설계안 | AI 분석 결과 확정 |
-| 처리 상태 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 처리 상태 및 우선순위 수정 |
+| 처리 상태 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 처리 상태, 우선순위, 판정 파손 유형, 비고 수정 |
 | 보수 배정 | `POST` | `/api/repair-assignments` | 설계안 | 보수 담당자와 예정일 배정, 파손 상태 변경, 요청 이력 저장 |
 | 보수 배정 | `GET` | `/api/repair-assignments` | 설계안 | 보수 배정 목록 조회 |
 | 보수 배정 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 상세 조회 |
@@ -699,6 +699,8 @@ curl -X POST "http://localhost:8080/api/damages" \
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
   "processingPriority": null,
+  "reviewDamageType": null,
+  "reviewNote": null,
   "imageCount": 2,
   "images": [
     {
@@ -769,6 +771,8 @@ curl -X POST "http://localhost:8080/api/damages" \
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "COLLECTED",
       "processingPriority": null,
+      "reviewDamageType": null,
+      "reviewNote": null,
       "imageCount": 2,
       "createdAt": "2026-07-22T14:30:01"
     }
@@ -801,6 +805,8 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 처리 상태 |
 | `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `content[].reviewDamageType` | string, null | 관리자가 판정한 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER` |
+| `content[].reviewNote` | string, null | 관리자 판정 비고. 공백은 `null`로 저장하며 최대 1,000자 |
 | `content[].imageCount` | number | 연결된 이미지 수 |
 | `content[].createdAt` | string | 생성 일시 |
 | `page` | number | 현재 페이지 번호 |
@@ -956,6 +962,8 @@ curl -X POST "http://localhost:8080/api/damages" \
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
   "processingPriority": null,
+  "reviewDamageType": null,
+  "reviewNote": null,
   "imageCount": 2,
   "images": [
     {
@@ -1410,6 +1418,8 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "AI_ANALYZED",
       "processingPriority": "URGENT",
+      "reviewDamageType": "CRACK",
+      "reviewNote": "현장 확인 필요",
       "imageCount": 2,
       "damageScore": 82,
       "damageType": "CRACK",
@@ -1445,9 +1455,11 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 파손 처리 상태 |
 | `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `content[].reviewDamageType` | string, null | 관리자가 판정한 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER` |
+| `content[].reviewNote` | string, null | 관리자 판정 비고. 공백은 `null`로 저장하며 최대 1,000자 |
 | `content[].imageCount` | number | 등록된 이미지 수 |
 | `content[].damageScore` | number, null | 최신 성공 AI 분석의 파손 점수 |
-| `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
+| `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK` |
 | `content[].repairRequired` | boolean, null | 최신 성공 AI 분석의 보수 필요 여부 |
 | `content[].repairPriority` | string, null | 최신 성공 AI 분석의 보수 우선순위 |
 | `content[].confidenceScore` | number, null | 최신 성공 AI 분석의 신뢰도 |
@@ -1554,7 +1566,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `damageId` | number | 파손 ID |
 | `damaged` | boolean | 파손 여부 |
 | `damageScore` | number | 파손 점수. 0~100 |
-| `damageType` | string, null | 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
+| `damageType` | string, null | 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK` |
 | `repairRequired` | boolean, null | 보수 필요 여부 |
 | `repairPriority` | string, null | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | `confidenceScore` | number, null | 분석 신뢰도. 0~1 |
@@ -1589,18 +1601,33 @@ REQUESTED -> CANCELED
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 관리자 검토 수정 | `PATCH` | `/api/damages/{damageId}/review` | `ADMIN`, `INSPECTOR` | 검토 단계에서 처리 상태와 관리자 처리 우선순위를 수정한다. 변경 이력은 저장하지 않는다. |
+| 관리자 검토 수정 | `PATCH` | `/api/damages/{damageId}/review` | `ADMIN`, `INSPECTOR` | 검토 단계에서 처리 상태, 관리자 처리 우선순위, 판정 파손 유형, 비고를 수정한다. 변경 이력은 저장하지 않는다. |
 
 #### UpdateDamageReviewRequest
 
 ```json
 {
   "status": "REQUESTED",
-  "processingPriority": "URGENT"
+  "processingPriority": "HIGH",
+  "reviewDamageType": "LARGE_MISSING",
+  "reviewNote": "현장 확인 필요"
 }
 ```
 
-`status`와 `processingPriority`는 둘 중 하나 이상 전달해야 한다. `status`는 검토 단계에서 사용하는 `AI_ANALYZED`, `REQUESTED`, `CANCELED`만 허용한다. `processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`만 허용한다. 관리자가 보수 필요로 판단하면 `REQUESTED`, 보수 불필요 또는 오탐이면 `CANCELED`로 수정한다.
+`status`는 필수이며 검토 단계에서 사용하는 `AI_ANALYZED`, `REQUESTED`, `CANCELED`만 허용한다. `REQUESTED`로 판정할 때는 `processingPriority`와 `reviewDamageType`이 필수다. `processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`만 허용한다. `reviewDamageType`은 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER`만 허용한다. `reviewNote`는 선택 입력이고 공백 문자열은 `null`로 저장하며 최대 1,000자까지 허용한다.
+
+판정을 되돌릴 때는 `status`를 `AI_ANALYZED`로 전달한다. 이때 `processingPriority`, `reviewDamageType`, `reviewNote`는 모두 `null`로 초기화한다. 보수 불필요 또는 오탐 판정은 `status`를 `CANCELED`로 변경하며, 이때도 관리자 판정 필드는 모두 `null`로 초기화한다.
+
+#### UpdateDamageReviewResponse
+
+성공 응답은 최신 상세 조회 응답과 같은 형태이며, 아래 필드를 반드시 포함한다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `currentStatus` | string | 변경된 현재 처리 상태 |
+| `processingPriority` | string, null | 관리자 처리 우선순위 |
+| `reviewDamageType` | string, null | 관리자 판정 파손 유형 |
+| `reviewNote` | string, null | 관리자 판정 비고 |
 
 ### 11.2 보수 요청 및 배정
 
