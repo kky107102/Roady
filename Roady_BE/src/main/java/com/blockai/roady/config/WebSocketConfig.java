@@ -1,6 +1,7 @@
 package com.blockai.roady.config;
 
 import com.blockai.roady.security.CorsProperties;
+import com.blockai.roady.robot.websocket.RobotWebSocketHandshakeInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
@@ -12,9 +13,14 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final CorsProperties corsProperties;
+    private final RobotWebSocketHandshakeInterceptor robotWebSocketHandshakeInterceptor;
 
-    public WebSocketConfig(CorsProperties corsProperties) {
+    public WebSocketConfig(
+            CorsProperties corsProperties,
+            RobotWebSocketHandshakeInterceptor robotWebSocketHandshakeInterceptor
+    ) {
         this.corsProperties = corsProperties;
+        this.robotWebSocketHandshakeInterceptor = robotWebSocketHandshakeInterceptor;
     }
 
     @Override
@@ -26,6 +32,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
+                .addInterceptors(robotWebSocketHandshakeInterceptor)
                 .setAllowedOrigins(corsProperties.allowedOrigins().toArray(String[]::new));
     }
 }
