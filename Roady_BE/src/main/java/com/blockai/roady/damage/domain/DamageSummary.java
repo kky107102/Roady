@@ -21,6 +21,8 @@ public record DamageSummary(
         LocalDateTime capturedAt,
         String currentStatus,
         String processingPriority,
+        String reviewDamageType,
+        String reviewNote,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt

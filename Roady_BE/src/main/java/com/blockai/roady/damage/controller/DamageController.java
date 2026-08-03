@@ -168,7 +168,9 @@ public class DamageController {
         return DamageSummaryResponse.from(damageService.updateReview(
                 damageId,
                 request.status(),
-                request.processingPriority()
+                request.processingPriority(),
+                request.reviewDamageType(),
+                request.reviewNote()
         ));
     }
 

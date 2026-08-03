@@ -133,6 +133,8 @@ erDiagram
         datetime captured_at "NULL"
         varchar current_status "DEFAULT COLLECTED"
         varchar processing_priority "NULL"
+        varchar review_damage_type "NULL"
+        varchar review_note "NULL"
         datetime created_at
         datetime updated_at
     }
@@ -300,10 +302,12 @@ erDiagram
 
 | 값 | 의미 |
 | --- | --- |
-| `MISSING` | 결손 |
+| `LARGE_MISSING` | 큰 결손 |
+| `SMALL_MISSING` | 작은 결손 |
 | `WEAR` | 마모 |
-| `BREAKAGE` | 깨짐 |
 | `CRACK` | 균열 |
+
+AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`으로 정규화한다. 기존 `MISSING`은 `LARGE_MISSING`, `BREAKAGE`는 `SMALL_MISSING`으로 해석한다.
 
 ### 보수 우선순위
 
@@ -323,6 +327,16 @@ erDiagram
 | `HIGH` | 높음 |
 | `URGENT` | 긴급 |
 
+### 관리자 판정 파손 유형
+
+| 값 | 의미 |
+| --- | --- |
+| `LARGE_MISSING` | 큰 결손 |
+| `SMALL_MISSING` | 작은 결손 |
+| `WEAR` | 마모 |
+| `CRACK` | 균열 |
+| `OTHER` | 기타 |
+
 ### 파일 유형
 
 | 값 | 의미 |
@@ -339,6 +353,9 @@ erDiagram
 | `damages.reported_by` | 파손을 시스템에 등록한 사용자 ID. 로봇 자동 업로드 시 로봇 책임자 ID를 사용하며 `NOT NULL` |
 | `damages.assigned_to` | 파손 처리 담당자 ID. 담당자 배정 전에는 `NULL` 가능 |
 | `damages.region_code` | 파손 좌표를 카카오 행정구역 API로 변환해 저장한 시군구 코드. 지역 필터 조건으로 사용하며 변환 전에는 `NULL` 가능 |
+| `damages.processing_priority` | 관리자가 보수 필요로 판정한 경우의 처리 우선순위. 판정 되돌리기 또는 취소 시 `NULL` |
+| `damages.review_damage_type` | 관리자가 판정한 파손 유형. 기존 데이터는 보정하지 않고 `NULL` 유지 |
+| `damages.review_note` | 관리자 판정 비고. 공백은 `NULL`, 최대 1,000자 |
 | `repair_assignments.repairer_id` | 보수 요청을 배정받은 보수 담당자 ID |
 | `repair_assignments.assigned_by` | 보수 요청을 생성하거나 배정한 관리자/점검 담당자 ID |
 | `repair_request_histories` | 보수 요청/배정/취소 시점의 상태 변경과 담당자 배정 기록을 저장한다. 관리자 검토 이력과는 분리한다. |
@@ -368,6 +385,7 @@ erDiagram
 - 주소/행정구역 필드가 없는 구버전 `damages` 테이블: `docs/sql/add-damage-geocoding-fields.sql`, `docs/sql/add-damage-region-code-field.sql`을 순서대로 한 번 실행한다.
 - 파손 유형 컬럼이 없는 구버전 `damage_ai_analysis_results` 테이블: `docs/sql/add-damage-ai-analysis-damage-type.sql`을 한 번 실행한다.
 - 관리자 처리 우선순위 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-processing-priority.sql`을 한 번 실행한다.
+- 관리자 판정 파손 유형/비고 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-review-fields.sql`을 한 번 실행한다. 기존 데이터의 판정값은 보정하지 않고 `NULL`로 유지한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 

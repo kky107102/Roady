@@ -23,6 +23,8 @@ public record DamageSummaryResponse(
         LocalDateTime capturedAt,
         String currentStatus,
         String processingPriority,
+        String reviewDamageType,
+        String reviewNote,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -47,6 +49,8 @@ public record DamageSummaryResponse(
                 damage.capturedAt(),
                 damage.currentStatus(),
                 damage.processingPriority(),
+                damage.reviewDamageType(),
+                damage.reviewNote(),
                 damage.imageCount(),
                 damage.createdAt(),
                 damage.updatedAt()

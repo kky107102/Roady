@@ -13,6 +13,7 @@ import com.blockai.roady.damage.domain.DamageSearchItem;
 import com.blockai.roady.damage.domain.DamageSearchPage;
 import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.domain.DamageSummary;
+import com.blockai.roady.damage.domain.ReviewDamageType;
 import com.blockai.roady.damage.geocoding.GeocodedAddress;
 import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
@@ -34,6 +35,7 @@ import java.util.Set;
 public class DamageService {
 
     private static final int MAX_IMAGE_COUNT = 50;
+    private static final int MAX_REVIEW_NOTE_LENGTH = 1000;
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
     private static final Set<String> REVIEW_STATUSES = Set.of(
             "AI_ANALYZED",
@@ -157,15 +159,32 @@ public class DamageService {
     }
 
     @Transactional
-    public DamageSummary updateReview(Long damageId, String status, String processingPriority) {
+    public DamageSummary updateReview(
+            Long damageId,
+            String status,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote
+    ) {
         String normalizedStatus = normalizeReviewStatus(status);
-        String normalizedPriority = normalizeProcessingPriority(processingPriority);
-        if (normalizedStatus == null && normalizedPriority == null) {
-            throw new IllegalArgumentException("At least one review field is required.");
+        String normalizedPriority = null;
+        String normalizedReviewDamageType = null;
+        String normalizedReviewNote = null;
+
+        if ("REQUESTED".equals(normalizedStatus)) {
+            normalizedPriority = normalizeRequiredProcessingPriority(processingPriority);
+            normalizedReviewDamageType = normalizeRequiredReviewDamageType(reviewDamageType);
+            normalizedReviewNote = normalizeReviewNote(reviewNote);
         }
 
         getSummary(damageId);
-        damageMapper.updateReview(damageId, normalizedStatus, normalizedPriority);
+        damageMapper.updateReview(
+                damageId,
+                normalizedStatus,
+                normalizedPriority,
+                normalizedReviewDamageType,
+                normalizedReviewNote
+        );
         return getSummary(damageId);
     }
 
@@ -230,11 +249,41 @@ public class DamageService {
 
     private String normalizeReviewStatus(String status) {
         if (!StringUtils.hasText(status)) {
-            return null;
+            throw new IllegalArgumentException("Damage review status is required.");
         }
         String normalized = status.trim().toUpperCase(Locale.ROOT);
         if (!DamageStatus.contains(normalized) || !REVIEW_STATUSES.contains(normalized)) {
             throw new IllegalArgumentException("Invalid damage review status.");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredProcessingPriority(String processingPriority) {
+        String normalized = normalizeProcessingPriority(processingPriority);
+        if (normalized == null) {
+            throw new IllegalArgumentException("processingPriority is required when status is REQUESTED.");
+        }
+        return normalized;
+    }
+
+    private String normalizeRequiredReviewDamageType(String reviewDamageType) {
+        if (!StringUtils.hasText(reviewDamageType)) {
+            throw new IllegalArgumentException("reviewDamageType is required when status is REQUESTED.");
+        }
+        String normalized = reviewDamageType.trim().toUpperCase(Locale.ROOT);
+        if (!ReviewDamageType.contains(normalized)) {
+            throw new IllegalArgumentException("Invalid review damage type.");
+        }
+        return normalized;
+    }
+
+    private String normalizeReviewNote(String reviewNote) {
+        if (!StringUtils.hasText(reviewNote)) {
+            return null;
+        }
+        String normalized = reviewNote.trim();
+        if (normalized.length() > MAX_REVIEW_NOTE_LENGTH) {
+            throw new IllegalArgumentException("reviewNote must be 1000 characters or less.");
         }
         return normalized;
     }

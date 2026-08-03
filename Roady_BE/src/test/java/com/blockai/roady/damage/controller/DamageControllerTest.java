@@ -98,6 +98,8 @@ class DamageControllerTest {
                 capturedAt,
                 "COLLECTED",
                 null,
+                null,
+                null,
                 1L,
                 capturedAt,
                 capturedAt
@@ -154,6 +156,8 @@ class DamageControllerTest {
                 LocalDateTime.of(2026, 7, 22, 14, 30),
                 "AI_ANALYZED",
                 "URGENT",
+                "CRACK",
+                "review note",
                 2L,
                 82,
                 "CRACK",
@@ -175,6 +179,8 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("AI_ANALYZED"))
                 .andExpect(jsonPath("$.content[0].processingPriority").value("URGENT"))
+                .andExpect(jsonPath("$.content[0].reviewDamageType").value("CRACK"))
+                .andExpect(jsonPath("$.content[0].reviewNote").value("review note"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
                 .andExpect(jsonPath("$.content[0].damageType").value("CRACK"))
@@ -272,7 +278,13 @@ class DamageControllerTest {
     @Test
     void updateDamageReviewChangesStatusAndProcessingPriority() throws Exception {
         LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
-        when(damageService.updateReview(eq(1L), eq("REQUESTED"), eq("URGENT")))
+        when(damageService.updateReview(
+                eq(1L),
+                eq("REQUESTED"),
+                eq("URGENT"),
+                eq("LARGE_MISSING"),
+                eq("현장 확인 필요")
+        ))
                 .thenReturn(new DamageSummary(
                         1L,
                         10L,
@@ -291,6 +303,8 @@ class DamageControllerTest {
                         LocalDateTime.of(2026, 7, 22, 14, 30),
                         "REQUESTED",
                         "URGENT",
+                        "LARGE_MISSING",
+                        "현장 확인 필요",
                         2L,
                         updatedAt,
                         updatedAt
@@ -301,18 +315,22 @@ class DamageControllerTest {
                         .content("""
                                 {
                                   "status": "REQUESTED",
-                                  "processingPriority": "URGENT"
+                                  "processingPriority": "URGENT",
+                                  "reviewDamageType": "LARGE_MISSING",
+                                  "reviewNote": "현장 확인 필요"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.currentStatus").value("REQUESTED"))
-                .andExpect(jsonPath("$.processingPriority").value("URGENT"));
+                .andExpect(jsonPath("$.processingPriority").value("URGENT"))
+                .andExpect(jsonPath("$.reviewDamageType").value("LARGE_MISSING"))
+                .andExpect(jsonPath("$.reviewNote").value("현장 확인 필요"));
     }
 
     @Test
     void updateDamageReviewRejectsInvalidStatus() throws Exception {
-        when(damageService.updateReview(eq(1L), eq("REPAIR_COMPLETED"), eq(null)))
+        when(damageService.updateReview(eq(1L), eq("REPAIR_COMPLETED"), eq(null), eq(null), eq(null)))
                 .thenThrow(new IllegalArgumentException("Invalid damage review status."));
 
         mockMvc.perform(patch("/api/damages/{damageId}/review", 1L)
