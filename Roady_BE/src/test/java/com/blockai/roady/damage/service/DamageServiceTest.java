@@ -281,60 +281,116 @@ class DamageServiceTest {
     }
 
     @Test
-    void updateReviewChangesStatusAndProcessingPriority() {
+    void updateReviewStoresRequestedReviewFields() {
         LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
         when(damageMapper.findSummaryById(1L))
                 .thenReturn(summary(1L, "AI_ANALYZED", null))
-                .thenReturn(summary(1L, "REQUESTED", "URGENT"));
-        when(damageMapper.updateReview(1L, "REQUESTED", "URGENT")).thenReturn(1);
+                .thenReturn(summary(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요"));
+        when(damageMapper.updateReview(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요"))
+                .thenReturn(1);
 
-        DamageSummary result = damageService.updateReview(1L, " requested ", " urgent ");
+        DamageSummary result = damageService.updateReview(
+                1L,
+                " requested ",
+                " urgent ",
+                " large_missing ",
+                "  현장 확인 필요  "
+        );
 
-        verify(damageMapper).updateReview(1L, "REQUESTED", "URGENT");
+        verify(damageMapper).updateReview(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요");
         assertThat(result.currentStatus()).isEqualTo("REQUESTED");
         assertThat(result.processingPriority()).isEqualTo("URGENT");
+        assertThat(result.reviewDamageType()).isEqualTo("LARGE_MISSING");
+        assertThat(result.reviewNote()).isEqualTo("현장 확인 필요");
         assertThat(result.updatedAt()).isEqualTo(updatedAt);
     }
 
     @Test
-    void updateReviewAllowsProcessingPriorityOnly() {
+    void updateReviewClearsReviewFieldsWhenRevertedToAiAnalyzed() {
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "REQUESTED", "HIGH", "CRACK", "old note"))
+                .thenReturn(summary(1L, "AI_ANALYZED", null, null, null));
+        when(damageMapper.updateReview(1L, "AI_ANALYZED", null, null, null)).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, "AI_ANALYZED", null, null, null);
+
+        verify(damageMapper).updateReview(1L, "AI_ANALYZED", null, null, null);
+        assertThat(result.currentStatus()).isEqualTo("AI_ANALYZED");
+        assertThat(result.processingPriority()).isNull();
+        assertThat(result.reviewDamageType()).isNull();
+        assertThat(result.reviewNote()).isNull();
+    }
+
+    @Test
+    void updateReviewClearsReviewFieldsWhenCanceled() {
         when(damageMapper.findSummaryById(1L))
                 .thenReturn(summary(1L, "AI_ANALYZED", null))
-                .thenReturn(summary(1L, "AI_ANALYZED", "HIGH"));
-        when(damageMapper.updateReview(1L, null, "HIGH")).thenReturn(1);
+                .thenReturn(summary(1L, "CANCELED", null, null, null));
+        when(damageMapper.updateReview(1L, "CANCELED", null, null, null)).thenReturn(1);
 
-        DamageSummary result = damageService.updateReview(1L, null, "HIGH");
+        DamageSummary result = damageService.updateReview(1L, "CANCELED", "HIGH", "CRACK", "ignored");
 
-        verify(damageMapper).updateReview(1L, null, "HIGH");
-        assertThat(result.currentStatus()).isEqualTo("AI_ANALYZED");
-        assertThat(result.processingPriority()).isEqualTo("HIGH");
+        verify(damageMapper).updateReview(1L, "CANCELED", null, null, null);
+        assertThat(result.currentStatus()).isEqualTo("CANCELED");
+        assertThat(result.processingPriority()).isNull();
+        assertThat(result.reviewDamageType()).isNull();
+        assertThat(result.reviewNote()).isNull();
     }
 
     @Test
     void updateReviewRejectsInvalidReviewStatus() {
-        assertThatThrownBy(() -> damageService.updateReview(1L, "REPAIR_COMPLETED", null))
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REPAIR_COMPLETED", null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid damage review status.");
 
-        verify(damageMapper, never()).updateReview(any(), any(), any());
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
     }
 
     @Test
     void updateReviewRejectsInvalidProcessingPriority() {
-        assertThatThrownBy(() -> damageService.updateReview(1L, null, "CRITICAL"))
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "CRITICAL", "CRACK", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Invalid damage processing priority.");
 
-        verify(damageMapper, never()).updateReview(any(), any(), any());
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
     }
 
     @Test
-    void updateReviewRejectsEmptyRequest() {
-        assertThatThrownBy(() -> damageService.updateReview(1L, null, null))
+    void updateReviewRejectsMissingStatus() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, "HIGH", "CRACK", null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("At least one review field is required.");
+                .hasMessage("Damage review status is required.");
 
-        verify(damageMapper, never()).updateReview(any(), any(), any());
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsRequestedWithoutProcessingPriority() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", null, "CRACK", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("processingPriority is required when status is REQUESTED.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsRequestedWithoutReviewDamageType() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "HIGH", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("reviewDamageType is required when status is REQUESTED.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsTooLongReviewNote() {
+        String tooLongNote = "a".repeat(1001);
+
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "HIGH", "CRACK", tooLongNote))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("reviewNote must be 1000 characters or less.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -509,6 +565,16 @@ class DamageServiceTest {
     }
 
     private DamageSummary summary(Long id, String status, String processingPriority) {
+        return summary(id, status, processingPriority, null, null);
+    }
+
+    private DamageSummary summary(
+            Long id,
+            String status,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote
+    ) {
         LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
         return new DamageSummary(
                 id,
@@ -528,8 +594,8 @@ class DamageServiceTest {
                 LocalDateTime.of(2026, 7, 22, 10, 30),
                 status,
                 processingPriority,
-                null,
-                null,
+                reviewDamageType,
+                reviewNote,
                 2L,
                 updatedAt,
                 updatedAt

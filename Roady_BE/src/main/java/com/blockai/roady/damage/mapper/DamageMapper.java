@@ -283,23 +283,20 @@ public interface DamageMapper {
     );
 
     @Update("""
-            <script>
             UPDATE damages
-            <set>
-                <if test="status != null">
-                    current_status = #{status},
-                </if>
-                <if test="processingPriority != null">
-                    processing_priority = #{processingPriority},
-                </if>
-            </set>
+            SET
+                current_status = #{status},
+                processing_priority = #{processingPriority},
+                review_damage_type = #{reviewDamageType},
+                review_note = #{reviewNote}
             WHERE id = #{damageId}
-            </script>
             """)
     int updateReview(
             @Param("damageId") Long damageId,
             @Param("status") String status,
-            @Param("processingPriority") String processingPriority
+            @Param("processingPriority") String processingPriority,
+            @Param("reviewDamageType") String reviewDamageType,
+            @Param("reviewNote") String reviewNote
     );
 
     @Select("""
