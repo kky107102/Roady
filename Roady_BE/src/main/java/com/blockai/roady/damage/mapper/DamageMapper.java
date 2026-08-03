@@ -104,6 +104,8 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
                 COUNT(di.id) AS image_count,
                 d.created_at,
                 d.updated_at
@@ -128,6 +130,8 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
                 d.created_at,
                 d.updated_at
             """)
@@ -149,6 +153,8 @@ public interface DamageMapper {
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "processing_priority", javaType = String.class),
+            @Arg(column = "review_damage_type", javaType = String.class),
+            @Arg(column = "review_note", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "created_at", javaType = LocalDateTime.class),
             @Arg(column = "updated_at", javaType = LocalDateTime.class)
@@ -175,6 +181,8 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
                 (
                     SELECT COUNT(*)
                     FROM damage_images di
@@ -251,6 +259,8 @@ public interface DamageMapper {
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "processing_priority", javaType = String.class),
+            @Arg(column = "review_damage_type", javaType = String.class),
+            @Arg(column = "review_note", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "damage_score", javaType = Integer.class),
             @Arg(column = "damage_type", javaType = String.class),

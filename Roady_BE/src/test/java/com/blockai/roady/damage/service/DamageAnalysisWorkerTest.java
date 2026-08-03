@@ -154,6 +154,8 @@ class DamageAnalysisWorkerTest {
                 now,
                 "COLLECTED",
                 null,
+                null,
+                null,
                 1L,
                 now,
                 now

@@ -98,6 +98,8 @@ class DamageControllerTest {
                 capturedAt,
                 "COLLECTED",
                 null,
+                null,
+                null,
                 1L,
                 capturedAt,
                 capturedAt
@@ -154,6 +156,8 @@ class DamageControllerTest {
                 LocalDateTime.of(2026, 7, 22, 14, 30),
                 "AI_ANALYZED",
                 "URGENT",
+                "CRACK",
+                "review note",
                 2L,
                 82,
                 "CRACK",
@@ -175,6 +179,8 @@ class DamageControllerTest {
                 .andExpect(jsonPath("$.content[0].region1DepthName").value("Gyeonggi"))
                 .andExpect(jsonPath("$.content[0].currentStatus").value("AI_ANALYZED"))
                 .andExpect(jsonPath("$.content[0].processingPriority").value("URGENT"))
+                .andExpect(jsonPath("$.content[0].reviewDamageType").value("CRACK"))
+                .andExpect(jsonPath("$.content[0].reviewNote").value("review note"))
                 .andExpect(jsonPath("$.content[0].imageCount").value(2))
                 .andExpect(jsonPath("$.content[0].damageScore").value(82))
                 .andExpect(jsonPath("$.content[0].damageType").value("CRACK"))
@@ -291,6 +297,8 @@ class DamageControllerTest {
                         LocalDateTime.of(2026, 7, 22, 14, 30),
                         "REQUESTED",
                         "URGENT",
+                        null,
+                        null,
                         2L,
                         updatedAt,
                         updatedAt

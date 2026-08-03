@@ -20,6 +20,8 @@ public record DamageSearchItem(
         LocalDateTime capturedAt,
         String currentStatus,
         String processingPriority,
+        String reviewDamageType,
+        String reviewNote,
         long imageCount,
         Integer damageScore,
         String damageType,

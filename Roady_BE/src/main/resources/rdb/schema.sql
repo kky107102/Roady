@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS damages (
     captured_at DATETIME(6) NULL,
     current_status VARCHAR(30) NOT NULL DEFAULT 'COLLECTED',
     processing_priority VARCHAR(30) NULL,
+    review_damage_type VARCHAR(30) NULL,
+    review_note VARCHAR(1000) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
