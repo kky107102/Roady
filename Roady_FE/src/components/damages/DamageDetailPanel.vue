@@ -2,8 +2,15 @@
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { damagesApi } from '@/api/damages'
 import { robotsApi } from '@/api/robots'
-import type { DamageDetail, DamageImage, DamageAnalysis, DamageStatus } from '@/types/damage'
+import type {
+  DamageDetail,
+  DamageImage,
+  DamageAnalysis,
+  DamageStatus,
+  DamageListItem,
+} from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
+import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
@@ -12,16 +19,27 @@ const props = withDefaults(
   defineProps<{
     damageId: number | null
     verdictSubmitting?: boolean
+    summary?: DamageListItem | null
+    refreshKey?: number
   }>(),
   {
     verdictSubmitting: false,
+    summary: null,
+    refreshKey: 0,
   },
 )
 const emit = defineEmits<{
   close: []
   'verdict-no-repair': []
-  'verdict-repair': [processingPriority: string | null]
+  'verdict-repair': [payload: ReviewDecisionPayload]
+  'verdict-reset': []
 }>()
+
+export interface ReviewDecisionPayload {
+  processingPriority: string
+  reviewDamageType: string
+  reviewNote: string | null
+}
 
 // ── 상태 ──────────────────────────────────────────────────
 
@@ -34,18 +52,41 @@ const imagesLoading = ref(false)
 const robotName = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const reviewModalOpen = ref(false)
+const reviewPriority = ref('')
+const reviewDamageType = ref('')
+const reviewNote = ref('')
+const reviewFormError = ref('')
 
 // 경쟁 조건 방지: 가장 최근 요청의 순번만 결과를 반영함
 let fetchSeq = 0
 
-const latestAnalysis = computed<DamageAnalysis | null>(
-  () =>
-    analyses.value.find(
-      (a) => a.analysisStatus === 'SUCCESS' || a.analysisStatus === 'CONFIRMED',
-    ) ??
-    analyses.value[0] ??
-    null,
-)
+const summaryAnalysis = computed<DamageAnalysis | null>(() => {
+  const summary = props.summary
+  if (!summary || summary.id !== props.damageId) return null
+  if (['COLLECTED', 'AI_ANALYZING'].includes(summary.currentStatus)) return null
+
+  return {
+    id: 0,
+    damageId: summary.id,
+    damaged: summary.repairRequired,
+    damageScore: summary.damageScore,
+    damageType: summary.damageType ?? null,
+    repairRequired: summary.repairRequired,
+    repairPriority: summary.repairPriority,
+    confidenceScore: summary.confidenceScore,
+    analysisStatus: 'SUCCESS',
+    analyzedAt: null,
+    createdAt: summary.createdAt,
+  }
+})
+
+const latestAnalysis = computed<DamageAnalysis | null>(() => {
+  const successful = analyses.value.find(
+    (analysis) => analysis.analysisStatus === 'SUCCESS' || analysis.analysisStatus === 'CONFIRMED',
+  )
+  return successful ?? summaryAnalysis.value ?? analyses.value[0] ?? null
+})
 
 // ── 이미지 로드 (fire-and-forget) ─────────────────────────
 
@@ -153,8 +194,8 @@ async function retryAnalysis() {
 }
 
 watch(
-  () => props.damageId,
-  (id) => {
+  () => [props.damageId, props.refreshKey] as const,
+  ([id]) => {
     if (id != null) fetchDetail(id)
   },
   { immediate: true },
@@ -163,7 +204,12 @@ watch(
 // ── 키보드 접근성 ─────────────────────────────────────────
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key !== 'Escape') return
+  if (reviewModalOpen.value) {
+    reviewModalOpen.value = false
+    return
+  }
+  emit('close')
 }
 
 onMounted(() => document.addEventListener('keydown', handleKeydown))
@@ -192,11 +238,29 @@ const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
 }
 
 const DAMAGE_TYPE_LABELS: Record<string, string> = {
-  MISSING: '유실',
+  LARGE_MISSING: '큰 결손',
+  SMALL_MISSING: '작은 결손',
+  MISSING: '큰 결손',
   WEAR: '마모',
-  BREAKAGE: '파손',
+  BREAKAGE: '작은 결손',
   CRACK: '균열',
+  OTHER: '기타',
 }
+
+const REVIEW_PRIORITY_OPTIONS = [
+  { value: 'URGENT', label: '긴급' },
+  { value: 'HIGH', label: '높음' },
+  { value: 'NORMAL', label: '보통' },
+  { value: 'LOW', label: '낮음' },
+]
+
+const REVIEW_DAMAGE_TYPE_OPTIONS = [
+  { value: 'LARGE_MISSING', label: '큰 결손' },
+  { value: 'SMALL_MISSING', label: '작은 결손' },
+  { value: 'WEAR', label: '마모' },
+  { value: 'CRACK', label: '균열' },
+  { value: 'OTHER', label: '기타' },
+]
 
 const STATUS_LABELS: Record<DamageStatus, string> = {
   COLLECTED: '수집완료',
@@ -211,21 +275,6 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   REPAIRING: '보수 중',
   REPAIR_COMPLETED: '보수 완료',
   REPAIR_NOT_REQUIRED: '보수 불필요',
-}
-
-const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
-  COLLECTED: 'neutral',
-  AI_ANALYZING: 'info',
-  AI_ANALYZED: 'warning',
-  REQUESTED: 'info',
-  REPAIR_IN_PROGRESS: 'warning',
-  CANCELED: 'neutral',
-  REVIEW_REQUIRED: 'warning',
-  RECEIVED: 'info',
-  REPAIR_SCHEDULED: 'info',
-  REPAIRING: 'warning',
-  REPAIR_COMPLETED: 'success',
-  REPAIR_NOT_REQUIRED: 'neutral',
 }
 
 function formatCaseId(id: number, createdAt: string): string {
@@ -287,14 +336,143 @@ const robotDisplayName = computed(() => {
   return '-'
 })
 
-const displayedPriority = computed(
-  () => detail.value?.processingPriority || latestAnalysis.value?.repairPriority || null,
+const detailConfirmed = computed(() => {
+  const status = detail.value?.currentStatus
+  return status != null && !['AI_ANALYZED', 'REVIEW_REQUIRED'].includes(status)
+})
+
+const displayedPriority = computed(() =>
+  detailConfirmed.value
+    ? (detail.value?.processingPriority ?? props.summary?.processingPriority ?? null)
+    : (latestAnalysis.value?.repairPriority ?? null),
 )
+
+const managerReviewDamageType = computed(
+  () => detail.value?.reviewDamageType ?? props.summary?.reviewDamageType ?? null,
+)
+const managerReviewNote = computed(
+  () => detail.value?.reviewNote ?? props.summary?.reviewNote ?? null,
+)
+
+const displayedPriorityLabel = computed(() => {
+  if (!displayedPriority.value) {
+    if (detailConfirmed.value) return '미지정'
+    return latestAnalysis.value ? '보류' : '-'
+  }
+  return getPriorityLabel(displayedPriority.value)
+})
+
+const displayedPriorityType = computed<BadgeType>(() =>
+  displayedPriority.value
+    ? (PRIORITY_BADGE_TYPES[displayedPriority.value] ?? 'neutral')
+    : 'neutral',
+)
+
+const analysisPriorityLabel = computed(() =>
+  latestAnalysis.value ? getPriorityLabel(latestAnalysis.value.repairPriority) : '-',
+)
+
+const analysisPriorityType = computed<BadgeType>(() => {
+  const priority = latestAnalysis.value?.repairPriority
+  return priority ? (PRIORITY_BADGE_TYPES[priority] ?? 'neutral') : 'neutral'
+})
+
+const analysisDamageTypeLabel = computed(() =>
+  getDamageTypeLabel(latestAnalysis.value?.damageType),
+)
+
+const analysisDamageTypeType = computed<BadgeType>(() => 'neutral')
 
 const canSubmitVerdict = computed(
   () =>
     detail.value?.currentStatus === 'AI_ANALYZED' ||
     detail.value?.currentStatus === 'REVIEW_REQUIRED',
+)
+
+const canResetVerdict = computed(() =>
+  ['REQUESTED', 'CANCELED', 'REPAIR_NOT_REQUIRED', 'REPAIR_SCHEDULED'].includes(
+    detail.value?.currentStatus ?? '',
+  ),
+)
+
+const canManagePendingRequest = computed(() =>
+  ['REQUESTED', 'REPAIR_SCHEDULED'].includes(detail.value?.currentStatus ?? ''),
+)
+
+const hasManagerReview = computed(
+  () =>
+    detailConfirmed.value &&
+    Boolean(
+      detail.value?.processingPriority ||
+      props.summary?.processingPriority ||
+      managerReviewDamageType.value ||
+      managerReviewNote.value,
+    ),
+)
+
+function confirmNoRepair() {
+  if (window.confirm('이 사건을 보수 불필요로 판정하시겠습니까?')) {
+    emit('verdict-no-repair')
+  }
+}
+
+function openReviewModal() {
+  const suggestedPriority =
+    detail.value?.processingPriority ??
+    props.summary?.processingPriority ??
+    latestAnalysis.value?.repairPriority
+  const suggestedDamageType = managerReviewDamageType.value ?? latestAnalysis.value?.damageType
+  reviewPriority.value = REVIEW_PRIORITY_OPTIONS.some((option) => option.value === suggestedPriority)
+    ? (suggestedPriority ?? '')
+    : ''
+  reviewDamageType.value = REVIEW_DAMAGE_TYPE_OPTIONS.some(
+    (option) => option.value === suggestedDamageType,
+  )
+    ? (suggestedDamageType ?? '')
+    : ''
+  reviewNote.value = managerReviewNote.value ?? ''
+  reviewFormError.value = ''
+  reviewModalOpen.value = true
+}
+
+function submitReviewDecision() {
+  if (!reviewPriority.value || !reviewDamageType.value) {
+    reviewFormError.value = '우선순위와 파손 유형을 모두 선택해 주세요.'
+    return
+  }
+  emit('verdict-repair', {
+    processingPriority: reviewPriority.value,
+    reviewDamageType: reviewDamageType.value,
+    reviewNote: reviewNote.value.trim() || null,
+  })
+  reviewModalOpen.value = false
+}
+
+function confirmResetVerdict() {
+  if (window.confirm('관리자 판정을 되돌리시겠습니까? 사건이 미확인 목록으로 이동합니다.')) {
+    emit('verdict-reset')
+  }
+}
+
+const reviewActionMode = computed<'ready' | 'waiting' | 'completed'>(() => {
+  const status = detail.value?.currentStatus
+  if (status === 'AI_ANALYZED' || status === 'REVIEW_REQUIRED') return 'ready'
+  if (status === 'COLLECTED' || status === 'AI_ANALYZING') return 'waiting'
+  return 'completed'
+})
+
+const reviewActionMessage = computed(() => {
+  const status = detail.value?.currentStatus
+  if (status === 'COLLECTED') return 'AI 분석 대기 중입니다. 분석 완료 후 판정할 수 있습니다.'
+  if (status === 'AI_ANALYZING') return 'AI 분석 중입니다. 분석 완료 후 판정할 수 있습니다.'
+  if (status && reviewActionMode.value === 'completed') {
+    return `${STATUS_LABELS[status]} · 관리자 확인 완료`
+  }
+  return 'AI 판독 결과를 확인하고 보수 필요 여부를 판정해 주세요.'
+})
+
+const loadedImages = computed(() =>
+  (detail.value?.images ?? []).filter((image) => imageBlobUrls.value.has(image.id)),
 )
 </script>
 
@@ -341,20 +519,16 @@ const canSubmitVerdict = computed(
           <!-- 사건번호(outline 배지) + 긴급도(filled 배지) -->
           <div class="case-badges">
             <span class="badge-case-id">{{ formatCaseId(detail.id, detail.createdAt) }}</span>
-            <span
-              class="badge-priority"
-              :class="
-                displayedPriority
-                  ? `badge-priority--${displayedPriority.toLowerCase()}`
-                  : 'badge-priority--pending'
-              "
-            >
-              {{
-                displayedPriority
-                  ? getPriorityLabel(displayedPriority)
-                  : '보류'
-              }}
-            </span>
+            <AiResultBadge
+              v-if="!detailConfirmed"
+              :type="displayedPriorityType"
+              :label="displayedPriorityLabel"
+            />
+            <StatusBadge
+              v-else
+              :type="displayedPriorityType"
+              :label="displayedPriorityLabel"
+            />
           </div>
 
           <!-- 사건명 (큰 제목) -->
@@ -406,29 +580,52 @@ const canSubmitVerdict = computed(
             <span class="robot-label"> 탐지 로봇: {{ robotDisplayName }} </span>
           </div>
 
-          <template v-if="detail.imageCount > 0">
-            <div v-if="imagesLoading" class="image-loading">
+          <div class="image-frame">
+            <div v-if="detail.imageCount > 0 && imagesLoading" class="image-loading">
               <LoadingSpinner label="이미지 불러오는 중" />
             </div>
             <div
-              v-else-if="imageBlobUrls.size > 0"
-              :class="['image-grid', { 'image-grid--single': imageBlobUrls.size === 1 }]"
+              v-else-if="loadedImages.length > 0"
+              :class="['image-grid', { 'image-grid--single': loadedImages.length === 1 }]"
             >
               <img
-                v-for="img in detail.images"
+                v-for="img in loadedImages"
                 :key="img.id"
                 :src="imageBlobUrls.get(img.id)"
                 :alt="`파손 이미지 ${img.sortOrder}`"
                 class="detail-img"
-                v-show="imageBlobUrls.has(img.id)"
               />
             </div>
-            <div v-else class="no-image-notice">이미지를 불러올 수 없습니다.</div>
-          </template>
-          <div v-else class="no-image-notice">이미지 없음</div>
+            <div v-else-if="detail.imageCount > 0" class="no-image-notice">
+              이미지를 불러올 수 없습니다.
+            </div>
+            <div v-else class="no-image-notice">등록된 탐지 이미지가 없습니다.</div>
+          </div>
         </div>
 
-        <!-- 3. AI 판독 요약 (통합 카드) -->
+        <!-- 3. 관리자 판정 -->
+        <section v-if="hasManagerReview" class="manager-review-card" aria-label="관리자 판정">
+          <h3 class="manager-review-title">관리자 판정</h3>
+          <div class="manager-review-grid">
+            <div class="manager-review-item">
+              <span class="manager-review-label">우선순위</span>
+              <StatusBadge :type="displayedPriorityType" :label="displayedPriorityLabel" />
+            </div>
+            <div class="manager-review-item">
+              <span class="manager-review-label">파손 유형</span>
+              <StatusBadge
+                type="neutral"
+                :label="getDamageTypeLabel(managerReviewDamageType)"
+              />
+            </div>
+            <div v-if="managerReviewNote" class="manager-review-item manager-review-note">
+              <span class="manager-review-label">비고</span>
+              <p>{{ managerReviewNote }}</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. AI 판독 요약 (통합 카드) -->
         <div class="ai-card">
           <!-- AI 카드 헤더 -->
           <div class="ai-card-head">
@@ -467,162 +664,232 @@ const canSubmitVerdict = computed(
           <!-- AI 카드 상태별 본문 -->
 
           <!-- 분석 API 오류 -->
-          <template v-if="analysisError">
-            <div class="ai-card-state">
-              <p class="analysis-error-msg">{{ analysisError }}</p>
-              <button
-                type="button"
-                data-testid="analysis-retry-btn"
-                class="krds-btn small outline analysis-retry-btn"
-                @click="retryAnalysis"
-              >
-                다시 시도
-              </button>
-            </div>
-          </template>
+          <div v-if="analysisError && !latestAnalysis" class="ai-card-state ai-card-state--error">
+            <p class="analysis-error-msg">{{ analysisError }}</p>
+            <button
+              type="button"
+              data-testid="analysis-retry-btn"
+              class="krds-btn small outline analysis-retry-btn"
+              @click="retryAnalysis"
+            >
+              다시 시도
+            </button>
+          </div>
 
           <!-- 분석 재시도 로딩 -->
-          <div v-else-if="analysisLoading" class="ai-card-state analysis-loading">
+          <div
+            v-if="analysisLoading && !latestAnalysis"
+            class="ai-card-state analysis-loading"
+          >
             <LoadingSpinner label="AI 분석 결과 조회 중" />
           </div>
 
-          <!-- 분석 요약 (결과가 없을 때도 보류 상태로 동일한 구조 유지) -->
+          <!-- 분석 요약 (결과가 없어도 항목 구조와 자리표시자를 유지) -->
           <div v-else class="ai-card-body">
             <!-- 우선순위 -->
             <div class="ai-item">
-              <div class="ai-icon-wrap ai-icon-wrap--priority" aria-hidden="true">
-                <!-- 경고 삼각형 -->
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <path
-                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
-                  />
-                  <line x1="12" y1="9" x2="12" y2="13" />
-                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                </svg>
-              </div>
               <span class="ai-label">우선순위</span>
-              <span
-                class="ai-value"
-                :class="{
-                  'ai-value--urgent': latestAnalysis?.repairPriority === 'URGENT',
-                  'ai-value--high': latestAnalysis?.repairPriority === 'HIGH',
-                }"
-              >
-                {{ getPriorityLabel(latestAnalysis?.repairPriority) }}
-              </span>
+              <AiResultBadge
+                class="ai-result-badge"
+                :type="analysisPriorityType"
+                :label="analysisPriorityLabel"
+                size="medium"
+              />
             </div>
 
             <div class="ai-divider" aria-hidden="true"></div>
 
             <!-- 파손 유형 -->
             <div class="ai-item">
-              <div class="ai-icon-wrap ai-icon-wrap--type" aria-hidden="true">
-                <!-- 태그 아이콘 -->
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <path
-                    d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
-                  />
-                  <line x1="7" y1="7" x2="7.01" y2="7" />
-                </svg>
-              </div>
               <span class="ai-label">파손 유형</span>
-              <span class="ai-value">{{ getDamageTypeLabel(latestAnalysis?.damageType) }}</span>
+              <AiResultBadge
+                class="ai-result-badge"
+                :type="analysisDamageTypeType"
+                :label="analysisDamageTypeLabel"
+                size="medium"
+              />
             </div>
 
             <div class="ai-divider" aria-hidden="true"></div>
 
-            <!-- 파손률 -->
+            <!-- 파손율 -->
             <div class="ai-item">
-              <div class="ai-icon-wrap ai-icon-wrap--score" aria-hidden="true">
-                <!-- 막대그래프 아이콘 -->
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                >
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-              </div>
-              <span class="ai-label">파손률</span>
-              <span class="ai-value">{{
-                formatDamageScore(latestAnalysis?.damageScore ?? null)
-              }}</span>
-              <div
-                v-if="latestAnalysis?.damageScore != null"
-                class="score-bar"
-                aria-label="파손률 진행 막대"
-                role="img"
-              >
+              <span class="ai-label">파손율</span>
+              <div class="score-value-row">
+                <span class="ai-value">{{
+                  formatDamageScore(latestAnalysis?.damageScore ?? null)
+                }}</span>
                 <div
-                  class="score-bar-fill"
-                  :style="{ width: `${clampScore(latestAnalysis.damageScore)}%` }"
-                ></div>
+                  v-if="latestAnalysis?.damageScore != null"
+                  class="score-bar"
+                  :aria-label="`파손율 ${formatDamageScore(latestAnalysis.damageScore)}`"
+                  role="img"
+                >
+                  <div
+                    class="score-bar-fill"
+                    :style="{ width: `${clampScore(latestAnalysis.damageScore)}%` }"
+                  ></div>
+                </div>
               </div>
-              <span class="score-desc">탐지 영역 내 파손 비율</span>
             </div>
           </div>
         </div>
       </div>
       <!-- /detail-body -->
 
-      <!-- ── 고정 하단 판정 버튼 ── -->
-      <div v-if="canSubmitVerdict" class="detail-actions">
-        <button
-          type="button"
-          class="verdict-btn verdict-btn--secondary"
-          :disabled="verdictSubmitting"
-          @click="emit('verdict-no-repair')"
-        >
-          {{ verdictSubmitting ? '처리 중' : '보수 불필요' }}
-        </button>
-        <button
-          type="button"
-          class="verdict-btn verdict-btn--primary"
-          :disabled="verdictSubmitting"
-          @click="emit('verdict-repair', displayedPriority)"
-        >
-          <!-- 렌치 아이콘 -->
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            aria-hidden="true"
+      <!-- ── 고정 하단 판정 영역 ── -->
+      <div class="detail-actions" :data-action-mode="reviewActionMode">
+        <p class="action-guidance" role="status">{{ reviewActionMessage }}</p>
+
+        <template v-if="canSubmitVerdict">
+          <button
+            type="button"
+            class="verdict-btn verdict-btn--secondary"
+            :disabled="verdictSubmitting"
+            @click="confirmNoRepair"
           >
-            <path
-              d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
-            />
-          </svg>
-          {{ verdictSubmitting ? '처리 중' : '보수 필요' }}
-        </button>
+            {{ verdictSubmitting ? '처리 중' : '보수 불필요' }}
+          </button>
+          <button
+            type="button"
+            class="verdict-btn verdict-btn--primary"
+            :disabled="verdictSubmitting"
+            @click="openReviewModal"
+          >
+            <!-- 렌치 아이콘 -->
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
+              />
+            </svg>
+            {{ verdictSubmitting ? '처리 중' : '보수 필요' }}
+          </button>
+        </template>
+
+        <template v-else-if="reviewActionMode === 'waiting'">
+          <button type="button" class="verdict-btn verdict-btn--secondary" disabled>
+            보수 불필요
+          </button>
+          <button type="button" class="verdict-btn verdict-btn--primary" disabled>보수 필요</button>
+        </template>
+
+        <div v-else-if="canManagePendingRequest" class="pending-request-controls">
+          <button type="button" class="verdict-btn verdict-btn--secondary" @click="openReviewModal">
+            판정 수정하기
+          </button>
+          <button type="button" class="verdict-btn verdict-btn--secondary verdict-reset-btn" @click="confirmResetVerdict">
+            판정 되돌리기
+          </button>
+          <button
+            type="button"
+            class="request-create-btn"
+            disabled
+            title="보수 관리 요청서 작성 기능은 준비 중입니다."
+          >
+            요청 작성하기 · 준비 중
+          </button>
+        </div>
+
+        <div v-else class="review-completed-controls">
+          <div class="review-completed-state">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            확인 완료
+          </div>
+          <button
+            v-if="canResetVerdict"
+            type="button"
+            class="verdict-reset-btn"
+            :disabled="verdictSubmitting"
+            @click="confirmResetVerdict"
+          >
+            판정 되돌리기
+          </button>
+        </div>
       </div>
     </template>
   </aside>
+
+  <Teleport to="body">
+    <div
+      v-if="reviewModalOpen"
+      class="review-modal-backdrop"
+      @click.self="reviewModalOpen = false"
+    >
+      <form class="review-modal" role="dialog" aria-modal="true" @submit.prevent="submitReviewDecision">
+        <div class="review-modal-head">
+          <div>
+            <p class="review-modal-eyebrow">관리자 판정</p>
+            <h2>보수 필요 판정</h2>
+          </div>
+          <button type="button" class="review-modal-close" aria-label="판정 모달 닫기" @click="reviewModalOpen = false">×</button>
+        </div>
+
+        <p class="review-modal-description">AI 판독값을 참고해 최종 판정 내용을 입력해 주세요.</p>
+
+        <label class="review-field">
+          <span>우선순위 <strong aria-hidden="true">*</strong></span>
+          <select v-model="reviewPriority" class="krds-input" required>
+            <option value="" disabled>우선순위 선택</option>
+            <option v-for="option in REVIEW_PRIORITY_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="review-field">
+          <span>파손 유형 <strong aria-hidden="true">*</strong></span>
+          <select v-model="reviewDamageType" class="krds-input" required>
+            <option value="" disabled>파손 유형 선택</option>
+            <option v-for="option in REVIEW_DAMAGE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="review-field">
+          <span>비고 <small>(선택사항)</small></span>
+          <textarea
+            v-model="reviewNote"
+            class="krds-input review-note-input"
+            maxlength="1000"
+            rows="4"
+            placeholder="판정 근거나 요청 시 참고할 내용을 입력해 주세요."
+          ></textarea>
+          <span class="review-note-count">{{ reviewNote.length }}/1000</span>
+        </label>
+
+        <p v-if="reviewFormError" class="review-form-error" role="alert">{{ reviewFormError }}</p>
+
+        <div class="review-modal-actions">
+          <button type="button" class="krds-btn medium outline" @click="reviewModalOpen = false">취소</button>
+          <button type="submit" class="krds-btn medium filled primary" :disabled="verdictSubmitting">
+            {{ verdictSubmitting ? '저장 중' : '판정 저장' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -630,6 +897,7 @@ const canSubmitVerdict = computed(
 .detail-panel {
   display: flex;
   flex-direction: column;
+  container-type: inline-size;
   height: 100%;
   background: var(--roady-surface-default);
   border-left: 1px solid var(--roady-border-default);
@@ -695,6 +963,13 @@ const canSubmitVerdict = computed(
   min-height: 0;
 }
 
+/* 내용이 패널보다 길면 각 영역을 찌그러뜨리지 않고 본문을 스크롤한다. */
+.detail-body > .case-hero,
+.detail-body > .images-section,
+.detail-body > .ai-card {
+  flex-shrink: 0;
+}
+
 /* ── 사건 핵심 정보 (표 없음) ── */
 .case-hero {
   display: flex;
@@ -722,44 +997,6 @@ const canSubmitVerdict = computed(
   letter-spacing: 0.01em;
   background: var(--roady-surface-background);
   white-space: nowrap;
-}
-
-.badge-priority {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: var(--krds-font-weight-bold);
-  white-space: nowrap;
-  letter-spacing: 0.01em;
-}
-
-.badge-priority--urgent {
-  background: var(--roady-status-danger);
-  color: #fff;
-}
-
-.badge-priority--high {
-  background: var(--roady-status-warning);
-  color: #fff;
-}
-
-.badge-priority--normal,
-.badge-priority--medium {
-  background: var(--roady-status-info);
-  color: #fff;
-}
-
-.badge-priority--low {
-  background: var(--roady-text-tertiary);
-  color: #fff;
-}
-
-.badge-priority--pending {
-  background: #f1f3f5;
-  color: var(--roady-text-secondary);
 }
 
 /* 사건명 — 패널에서 가장 크고 굵은 텍스트 */
@@ -821,38 +1058,56 @@ const canSubmitVerdict = computed(
   color: var(--roady-text-tertiary);
 }
 
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+.image-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--roady-surface-background);
 }
 
-.image-grid--single {
-  grid-template-columns: 1fr;
+.image-grid {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+}
+
+.image-grid--single .detail-img {
+  flex-basis: 100%;
 }
 
 .detail-img {
   width: 100%;
+  height: 100%;
+  flex: 0 0 calc((100% - 8px) / 2);
   min-width: 0;
-  border-radius: 8px;
   object-fit: cover;
-  aspect-ratio: 1 / 1;
   background: var(--roady-surface-subtle);
   display: block;
-}
-
-.image-grid--single .detail-img {
-  aspect-ratio: 16 / 9;
-  max-height: 280px;
+  scroll-snap-align: start;
 }
 
 .image-loading {
   display: flex;
   justify-content: center;
-  padding: 32px;
+  align-items: center;
+  width: 100%;
+  height: 100%;
 }
 
 .no-image-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   font-size: 14px;
   color: var(--roady-text-tertiary);
   text-align: center;
@@ -863,6 +1118,53 @@ const canSubmitVerdict = computed(
 }
 
 /* ── AI 판독 요약 — 통합 카드 ── */
+.manager-review-card {
+  padding: 14px 16px;
+  border: 1px solid var(--roady-brand-secondary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--roady-brand-primary-subtle) 55%, #fff);
+}
+
+.manager-review-title {
+  margin: 0 0 12px;
+  color: var(--roady-text-primary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.manager-review-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+
+.manager-review-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.manager-review-label {
+  flex-shrink: 0;
+  color: var(--roady-text-tertiary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.manager-review-note {
+  grid-column: 1 / -1;
+  align-items: flex-start;
+}
+
+.manager-review-note p {
+  margin: 0;
+  color: var(--roady-text-secondary);
+  font-size: var(--krds-pc-font-size-body-small);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .ai-card {
   border: 1px solid var(--roady-border-default);
   border-radius: 8px;
@@ -875,7 +1177,7 @@ const canSubmitVerdict = computed(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 12px;
   background: transparent;
   border-bottom: 0;
 }
@@ -884,7 +1186,7 @@ const canSubmitVerdict = computed(
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -897,7 +1199,7 @@ const canSubmitVerdict = computed(
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 11px;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-text-secondary);
   font-weight: var(--krds-font-weight-bold);
 }
@@ -908,7 +1210,7 @@ const canSubmitVerdict = computed(
 
 /* 카드 상태 (오류/로딩/빈 결과) */
 .ai-card-state {
-  min-height: 72px;
+  min-height: 116px;
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -917,6 +1219,14 @@ const canSubmitVerdict = computed(
 
 .analysis-loading {
   justify-content: center;
+}
+
+.ai-card-state--error {
+  min-height: 0;
+  padding: 10px 16px 0;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .analysis-empty {
@@ -940,19 +1250,19 @@ const canSubmitVerdict = computed(
 .ai-card-body {
   display: flex;
   align-items: stretch;
-  padding: 10px 4px 12px;
+  min-height: 0;
+  padding: 8px 4px 10px;
 }
 
 .ai-item {
   flex: 1;
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   grid-auto-rows: min-content;
   align-content: center;
   align-items: center;
-  column-gap: 9px;
-  row-gap: 2px;
-  padding: 4px 12px;
+  row-gap: 4px;
+  padding: 2px 12px;
   text-align: left;
   min-width: 0;
 }
@@ -965,71 +1275,44 @@ const canSubmitVerdict = computed(
   margin: 6px 0;
 }
 
-/* 아이콘 원형 배경 */
-.ai-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  grid-column: 1;
-  grid-row: 1 / span 4;
-}
-
-.ai-icon-wrap--priority {
-  background: rgba(211, 47, 47, 0.1);
-  color: var(--roady-status-danger);
-}
-
-.ai-icon-wrap--type {
-  background: rgba(47, 107, 154, 0.12);
-  color: var(--roady-brand-secondary);
-}
-
-.ai-icon-wrap--score {
-  background: rgba(185, 130, 0, 0.12);
-  color: var(--roady-brand-accent-dark);
-}
-
 .ai-label {
-  grid-column: 2;
-  font-size: 10px;
+  grid-column: 1;
+  font-size: var(--krds-pc-font-size-label-small);
   color: var(--roady-text-tertiary);
   font-weight: var(--krds-font-weight-bold);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1;
+  letter-spacing: 0;
+  line-height: 1.4;
 }
 
 .ai-value {
-  grid-column: 2;
-  font-size: 15px;
+  grid-column: 1;
+  font-size: var(--krds-pc-font-size-body-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
-  line-height: 1.2;
+  line-height: 1.5;
 }
 
-/* 우선순위 강조 배지 */
-.ai-value--urgent {
-  display: inline-flex;
+.ai-result-badge {
+  grid-column: 1;
+  justify-self: start;
+}
+
+/* 파손율 진행 막대 */
+.score-value-row {
+  grid-column: 1;
+  display: flex;
   align-items: center;
-  padding: 2px 9px;
-  background: var(--roady-status-danger);
-  color: #fff;
-  border-radius: 999px;
-  font-size: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
-.ai-value--high {
-  color: var(--roady-status-warning);
+.score-value-row .ai-value {
+  flex-shrink: 0;
 }
 
-/* 파손률 진행 막대 */
 .score-bar {
-  grid-column: 2;
-  width: 100%;
+  flex: 1;
+  min-width: 40px;
   height: 4px;
   background: var(--roady-surface-subtle);
   border-radius: 2px;
@@ -1044,24 +1327,34 @@ const canSubmitVerdict = computed(
   transition: width 0.4s ease;
 }
 
-.score-desc {
-  grid-column: 2;
-  font-size: 9px;
-  color: var(--roady-text-tertiary);
-  line-height: 1.3;
-  text-align: left;
-  word-break: keep-all;
-}
-
 /* ── 고정 하단 판정 버튼 ── */
 .detail-actions {
   flex-shrink: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 16px 24px;
+  gap: 8px 12px;
+  min-height: 104px;
+  padding: 12px 24px 16px;
   border-top: 1px solid var(--roady-border-default);
   background: var(--roady-surface-default);
+}
+
+.action-guidance {
+  grid-column: 1 / -1;
+  min-height: 18px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--roady-text-tertiary);
+  text-align: center;
+}
+
+.detail-actions[data-action-mode='waiting'] .action-guidance {
+  color: var(--roady-status-warning);
+}
+
+.detail-actions[data-action-mode='completed'] .action-guidance {
+  color: var(--roady-text-secondary);
 }
 
 .verdict-btn {
@@ -1081,8 +1374,64 @@ const canSubmitVerdict = computed(
 }
 
 .verdict-btn:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.6;
+}
+
+.review-completed-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 52px;
+  border: 1px solid var(--roady-status-success);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--roady-status-success) 8%, #fff);
+  color: var(--roady-status-success);
+  font-size: 16px;
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.review-completed-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pending-request-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+
+.request-create-btn {
+  grid-column: 1 / -1;
+  height: 44px;
+  border: 1px dashed var(--roady-border-default);
+  border-radius: 10px;
+  background: var(--roady-surface-background);
+  color: var(--roady-text-tertiary);
+  font-size: 14px;
+  font-weight: var(--krds-font-weight-bold);
+  cursor: not-allowed;
+}
+
+.verdict-reset-btn {
+  height: 52px;
+  border: 1.5px solid var(--roady-border-default);
+  border-radius: 10px;
+  background: var(--roady-surface-default);
+  color: var(--roady-text-secondary);
+  font-size: 15px;
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
+}
+
+.verdict-reset-btn:hover {
+  border-color: var(--roady-brand-secondary);
+  color: var(--roady-brand-secondary);
 }
 
 .verdict-btn--secondary {
@@ -1118,8 +1467,8 @@ const canSubmitVerdict = computed(
     padding: 0 20px;
   }
 
-  .image-grid {
-    grid-template-columns: 1fr;
+  .image-frame {
+    min-height: 160px;
   }
 
   .ai-card-body {
@@ -1142,10 +1491,6 @@ const canSubmitVerdict = computed(
     row-gap: 2px;
   }
 
-  .ai-item .ai-icon-wrap {
-    flex-shrink: 0;
-  }
-
   .ai-item .score-bar {
     width: 96px;
   }
@@ -1161,9 +1506,154 @@ const canSubmitVerdict = computed(
   }
 }
 
+/* 패널 자체 너비를 줄였을 때 AI 판독 항목을 행 형태로 전환한다. */
+@container (max-width: 430px) {
+  .ai-card-body {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 12px 8px;
+  }
+
+  .ai-item {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 0;
+    padding: 10px 4px;
+  }
+
+  .ai-label {
+    grid-column: 1;
+    align-self: center;
+  }
+
+  .ai-result-badge,
+  .score-value-row {
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .ai-divider {
+    width: 100%;
+    height: 1px;
+    margin: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .score-bar-fill {
     transition: none;
   }
+}
+
+/* ── 관리자 판정 모달 ── */
+.review-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 48%);
+}
+
+.review-modal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--roady-surface-default);
+  box-shadow: 0 20px 50px rgb(15 23 42 / 24%);
+}
+
+.review-modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.review-modal-eyebrow {
+  margin: 0 0 4px;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.review-modal-head h2 {
+  margin: 0;
+  color: var(--roady-text-primary);
+  font-size: var(--krds-pc-font-size-heading-xsmall);
+}
+
+.review-modal-close {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--roady-text-tertiary);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.review-modal-description {
+  margin: 12px 0 20px;
+  color: var(--roady-text-secondary);
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+.review-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--roady-text-primary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.review-field strong {
+  color: var(--roady-status-danger);
+}
+
+.review-field small {
+  color: var(--roady-text-tertiary);
+  font-weight: var(--krds-font-weight-regular);
+}
+
+.review-field select {
+  height: 48px;
+}
+
+.review-note-input {
+  min-height: 112px;
+  padding: 12px;
+  resize: vertical;
+}
+
+.review-note-count {
+  align-self: flex-end;
+  color: var(--roady-text-tertiary);
+  font-size: var(--krds-pc-font-size-label-xsmall);
+  font-weight: var(--krds-font-weight-regular);
+}
+
+.review-form-error {
+  margin: 12px 0 0;
+  color: var(--roady-status-danger);
+  font-size: var(--krds-pc-font-size-label-small);
+}
+
+.review-modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 24px;
 }
 </style>

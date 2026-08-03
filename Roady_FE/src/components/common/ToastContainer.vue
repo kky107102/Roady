@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { Teleport, TransitionGroup } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
 import type { Toast, ToastType } from '@/stores/notification'
 
 const store = useNotificationStore()
+const router = useRouter()
+
+async function runAction(toast: Toast) {
+  if (!toast.action) return
+  store.removeToast(toast.id)
+  await router.push(toast.action.to)
+}
 
 const icons: Record<ToastType, string> = {
   success:
@@ -40,7 +47,17 @@ const icons: Record<ToastType, string> = {
           >
             <path :d="icons[toast.type]" />
           </svg>
-          <span class="toast-message">{{ toast.message }}</span>
+          <div class="toast-content">
+            <span class="toast-message">{{ toast.message }}</span>
+            <button
+              v-if="toast.action"
+              type="button"
+              class="toast-action"
+              @click="runAction(toast)"
+            >
+              {{ toast.action.label }}
+            </button>
+          </div>
           <button
             type="button"
             class="toast-close"
@@ -139,11 +156,28 @@ const icons: Record<ToastType, string> = {
 }
 
 .toast-message {
-  flex: 1;
+  display: block;
   color: var(--roady-text-primary);
   font-size: var(--krds-pc-font-size-body-small);
   line-height: 1.6;
   word-break: keep-all;
+}
+
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-action {
+  margin-top: 0.6rem;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
 }
 
 .toast-close {

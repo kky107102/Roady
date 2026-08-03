@@ -17,9 +17,9 @@ export const navGroups: NavGroup[] = [
     label: '주요 메뉴',
     items: [
       { key: 'dashboard', label: '대시보드', routeName: 'dashboard' },
-      { key: 'damages', label: '탐지·사건 관리', routeName: 'damages' },
+      { key: 'damages', label: '탐지 검토', routeName: 'damages' },
+      { key: 'repairs', label: '보수 관리', routeName: 'repairs' },
       { key: 'robots', label: '로디 운행', routeName: 'robots' },
-      { key: 'repairs', label: '보수 요청 이력', routeName: 'repairs' },
     ],
   },
   {

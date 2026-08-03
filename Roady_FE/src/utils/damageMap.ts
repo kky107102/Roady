@@ -74,3 +74,8 @@ export function toDamageMapMarkers(items: DamageListItem[]): MapMarkerItem[] {
     }]
   })
 }
+
+export function toDamageMapCenter(item: DamageListItem | null): [number, number] | null {
+  if (!item || !isValidCoordinate(item.latitude, item.longitude)) return null
+  return [item.latitude as number, item.longitude as number]
+}

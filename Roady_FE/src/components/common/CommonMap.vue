@@ -16,6 +16,9 @@ interface Props {
   markers?: MapMarkerItem[]
   center?: [number, number]
   zoom?: number
+  focusedCenter?: [number, number] | null
+  focusZoom?: number
+  rightInset?: number
   emptyMessage?: string
   mapLabel?: string
 }
@@ -24,6 +27,8 @@ const props = withDefaults(defineProps<Props>(), {
   markers: () => [],
   center: () => [37.5665, 126.978],
   zoom: 12,
+  focusZoom: 16,
+  rightInset: 0,
   emptyMessage: '표시할 위치 정보가 없습니다.',
   mapLabel: '지도',
 })
@@ -35,6 +40,7 @@ const mapElement = ref<HTMLElement | null>(null)
 let mapInstance: Map | null = null
 let markerInstances: Marker[] = []
 let resizeObserver: ResizeObserver | null = null
+let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
 
 function markerIcon(tone: MapMarkerItem['tone']) {
   const normalizedTone = tone ?? 'primary'
@@ -86,6 +92,26 @@ function clearMarkers() {
   markerInstances = []
 }
 
+function insetAdjustedCenter(center: [number, number]): [number, number] {
+  if (!mapInstance || props.rightInset <= 0) return center
+
+  const mapWidth = mapInstance.getSize().x
+  const safeInset = Math.min(props.rightInset, Math.max(0, mapWidth - 80))
+  const point = mapInstance.project(center, props.focusZoom).add([safeInset / 2, 0])
+  const adjusted = mapInstance.unproject(point, props.focusZoom)
+  return [adjusted.lat, adjusted.lng]
+}
+
+function focusSelectedLocation(animate: boolean) {
+  if (!mapInstance || !props.focusedCenter) return
+  const center = insetAdjustedCenter(props.focusedCenter)
+  if (animate) {
+    mapInstance.flyTo(center, props.focusZoom, { duration: 0.4 })
+  } else {
+    mapInstance.setView(center, props.focusZoom, { animate: false })
+  }
+}
+
 function renderMarkers() {
   if (!mapInstance) return
   clearMarkers()
@@ -104,7 +130,9 @@ function renderMarkers() {
     return marker
   })
 
-  if (props.markers.length === 1) {
+  if (props.focusedCenter) {
+    focusSelectedLocation(false)
+  } else if (props.markers.length === 1) {
     const marker = props.markers[0]
     if (marker) mapInstance.setView([marker.latitude, marker.longitude], 15)
   } else if (props.markers.length > 1) {
@@ -145,7 +173,30 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => [
+    props.focusedCenter?.[0] ?? null,
+    props.focusedCenter?.[1] ?? null,
+    props.focusZoom,
+    props.rightInset,
+  ] as const,
+  ([latitude, longitude], previous) => {
+    if (latitude == null || longitude == null) return
+
+    const locationChanged = !previous || latitude !== previous[0] || longitude !== previous[1]
+    focusSelectedLocation(locationChanged)
+
+    if (focusSettleTimer) clearTimeout(focusSettleTimer)
+    focusSettleTimer = setTimeout(() => {
+      focusSelectedLocation(false)
+      focusSettleTimer = null
+    }, 300)
+  },
+  { flush: 'post' },
+)
+
 onBeforeUnmount(() => {
+  if (focusSettleTimer) clearTimeout(focusSettleTimer)
   resizeObserver?.disconnect()
   clearMarkers()
   mapInstance?.remove()
