@@ -25,6 +25,16 @@ class LowerLimbDetector:
         image_size: int = 640,
         device: str = "0",
     ) -> None:
+        path = Path(model_path).expanduser().resolve()
+        if path.suffix == ".engine":
+            from perception.algorithms.tensorrt_lower_limb_detector import (
+                TensorRTLowerLimbDetector,
+            )
+
+            self._backend = TensorRTLowerLimbDetector(path, confidence=confidence)
+            self._model = None
+            return
+
         try:
             from ultralytics import YOLO
         except ImportError as exc:
@@ -32,17 +42,19 @@ class LowerLimbDetector:
                 "ultralytics is required: pip install -r ROADY_AI/requirements.txt"
             ) from exc
 
-        path = Path(model_path).expanduser().resolve()
         if not path.is_file():
             raise FileNotFoundError(path)
         self._model = YOLO(str(path), task="detect")
         self._confidence = confidence
         self._image_size = image_size
         self._device = device
+        self._backend = None
 
     def detect(self, image: np.ndarray) -> tuple[list[LowerLimbDetection], Any]:
         if image is None or image.size == 0:
             raise ValueError("image is empty")
+        if self._backend is not None:
+            return self._backend.detect(image)
 
         result = self._model.predict(
             source=image,
