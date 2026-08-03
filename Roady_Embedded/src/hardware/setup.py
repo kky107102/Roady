@@ -16,11 +16,11 @@ setup(
     maintainer_email="todo@example.com",
     description="Hardware device interfaces and ROS2 nodes for Roady.",
     license="TODO",
-    tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "obstacle_camera_node = hardware.nodes.obstacle_camera_node:main",
             "wide_camera_node = hardware.nodes.camera_node:main",
+            "wide_camera_capture_viewer = hardware.nodes.wide_camera_capture_viewer:main",
             "dot_matrix_node = hardware.nodes.dot_matrix_node:main",
             "push_lock_node = hardware.nodes.push_lock_node:main",
             "battery_led_node = hardware.nodes.battery_led_node:main",
