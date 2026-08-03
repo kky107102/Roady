@@ -73,14 +73,12 @@ function formatPriorityLabel(priority: string | null): string {
 
 const confirmedStatus = computed<{ label: string; type: BadgeType }>(() => {
   const status = props.item.currentStatus
-  if (status === 'REQUESTED' || status === 'REPAIR_SCHEDULED') {
+  if (status === 'REQUESTED') {
     return { label: '요청 전', type: 'warning' }
   }
   if (status === 'REPAIR_COMPLETED') return { label: '보수 완료', type: 'success' }
   if (
-    status === 'REPAIR_IN_PROGRESS' ||
-    status === 'RECEIVED' ||
-    status === 'REPAIRING'
+    status === 'REPAIR_IN_PROGRESS'
   ) {
     return { label: '요청 완료', type: 'info' }
   }

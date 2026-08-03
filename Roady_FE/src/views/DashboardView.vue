@@ -76,7 +76,7 @@ onUnmounted(() => {
           </template>
         </StatCard>
 
-        <StatCard label="검토 대기" :count="store.reviewRequiredCount" :to="{ name: 'damages', query: { status: 'REVIEW_REQUIRED' } }">
+        <StatCard label="검토 대기" :count="store.reviewRequiredCount" :to="{ name: 'damages', query: { status: 'AI_ANALYZED' } }">
           <template #icon>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>

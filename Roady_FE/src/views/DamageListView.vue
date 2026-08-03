@@ -143,13 +143,11 @@ const confirmedFilterTags = computed(() => {
 })
 
 function confirmedStatusCategory(item: DamageListItem): ConfirmedStatusFilter | null {
-  if (item.currentStatus === 'REQUESTED' || item.currentStatus === 'REPAIR_SCHEDULED') {
+  if (item.currentStatus === 'REQUESTED') {
     return 'requested'
   }
   if (
-    item.currentStatus === 'REPAIR_IN_PROGRESS' ||
-    item.currentStatus === 'RECEIVED' ||
-    item.currentStatus === 'REPAIRING'
+    item.currentStatus === 'REPAIR_IN_PROGRESS'
   ) {
     return 'in_progress'
   }

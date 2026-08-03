@@ -5,15 +5,18 @@ import {
   latLngBounds,
   map as createMap,
   marker as createMarker,
+  polyline as createPolyline,
   tileLayer,
   type Map,
   type Marker,
+  type Polyline,
 } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapMarkerItem } from '@/types/map'
+import type { MapMarkerItem, MapPathItem } from '@/types/map'
 
 interface Props {
   markers?: MapMarkerItem[]
+  paths?: MapPathItem[]
   center?: [number, number]
   zoom?: number
   focusedCenter?: [number, number] | null
@@ -25,6 +28,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   markers: () => [],
+  paths: () => [],
   center: () => [37.5665, 126.978],
   zoom: 12,
   focusZoom: 16,
@@ -39,6 +43,7 @@ const emit = defineEmits<{
 const mapElement = ref<HTMLElement | null>(null)
 let mapInstance: Map | null = null
 let markerInstances: Marker[] = []
+let pathInstances: Polyline[] = []
 let resizeObserver: ResizeObserver | null = null
 let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -112,9 +117,42 @@ function focusSelectedLocation(animate: boolean) {
   }
 }
 
+function clearPaths() {
+  pathInstances.forEach((path) => path.remove())
+  pathInstances = []
+}
+
+function pathColor(tone: MapPathItem['tone']): string {
+  const tokenMap = {
+    primary: '--roady-brand-secondary',
+    success: '--roady-status-success',
+    warning: '--roady-status-warning',
+    danger: '--roady-status-danger',
+    neutral: '--roady-text-tertiary',
+  }
+  const token = tokenMap[tone ?? 'primary']
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || 'currentColor'
+}
+
 function renderMarkers() {
   if (!mapInstance) return
   clearMarkers()
+  clearPaths()
+
+  pathInstances = props.paths
+    .filter((path) => path.points.length >= 2)
+    .map((path) =>
+      createPolyline(
+        path.points.map((point) => [point.latitude, point.longitude]),
+        {
+          color: pathColor(path.tone),
+          weight: 5,
+          opacity: 0.8,
+          lineCap: 'round',
+          lineJoin: 'round',
+        },
+      ).addTo(mapInstance as Map),
+    )
 
   markerInstances = props.markers.map((item) => {
     const marker = createMarker([item.latitude, item.longitude], {
@@ -132,16 +170,23 @@ function renderMarkers() {
 
   if (props.focusedCenter) {
     focusSelectedLocation(false)
-  } else if (props.markers.length === 1) {
-    const marker = props.markers[0]
-    if (marker) mapInstance.setView([marker.latitude, marker.longitude], 15)
-  } else if (props.markers.length > 1) {
-    const bounds = latLngBounds(
-      props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
-    )
-    mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
   } else {
-    mapInstance.setView(props.center, props.zoom)
+    const allCoordinates = [
+      ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
+      ...props.paths.flatMap((path) =>
+        path.points.map((point) => [point.latitude, point.longitude] as [number, number]),
+      ),
+    ]
+
+    if (allCoordinates.length === 1) {
+      const coordinate = allCoordinates[0]
+      if (coordinate) mapInstance.setView(coordinate, 15)
+    } else if (allCoordinates.length > 1) {
+      const bounds = latLngBounds(allCoordinates)
+      mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+    } else {
+      mapInstance.setView(props.center, props.zoom)
+    }
   }
 }
 
@@ -168,7 +213,7 @@ onMounted(() => {
 })
 
 watch(
-  () => props.markers,
+  () => [props.markers, props.paths],
   () => renderMarkers(),
   { deep: true },
 )
@@ -199,6 +244,7 @@ onBeforeUnmount(() => {
   if (focusSettleTimer) clearTimeout(focusSettleTimer)
   resizeObserver?.disconnect()
   clearMarkers()
+  clearPaths()
   mapInstance?.remove()
   mapInstance = null
 })
@@ -216,6 +262,11 @@ onBeforeUnmount(() => {
         <span v-for="detail in marker.details" :key="detail.label">
           {{ detail.label }} {{ detail.value }}
         </span>
+      </li>
+    </ul>
+    <ul v-if="paths.length" class="common-map__summary">
+      <li v-for="path in paths" :key="path.id">
+        {{ path.label || '이동 경로' }} {{ path.points.length }}개 위치
       </li>
     </ul>
   </div>

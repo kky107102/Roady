@@ -7,7 +7,6 @@ public enum DamageStatus {
     AI_ANALYZING,
     AI_ANALYZED,
     REQUESTED,
-    REPAIR_SCHEDULED,
     REPAIR_IN_PROGRESS,
     REPAIR_COMPLETED,
     CANCELED;

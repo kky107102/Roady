@@ -282,8 +282,7 @@ erDiagram
 | `COLLECTED` | 수집 완료 |
 | `AI_ANALYZING` | AI 분석중 |
 | `AI_ANALYZED` | AI 분석완료 |
-| `REQUESTED` | 요청 완료 |
-| `REPAIR_SCHEDULED` | 보수 예정 |
+| `REQUESTED` | 검토 완료(요청 전) |
 | `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
 | `CANCELED` | 취소 |

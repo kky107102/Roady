@@ -3,7 +3,7 @@ import type { DamageListItem } from '@/types/damage'
 export type ReviewTab = 'pending' | 'confirmed'
 export type DamageSort = 'latest' | 'oldest' | 'priority'
 
-const REVIEW_READY_STATUSES = new Set(['AI_ANALYZED', 'REVIEW_REQUIRED'])
+const REVIEW_READY_STATUSES = new Set(['AI_ANALYZED'])
 
 const PRIORITY_ORDER: Record<string, number> = {
   URGENT: 0,

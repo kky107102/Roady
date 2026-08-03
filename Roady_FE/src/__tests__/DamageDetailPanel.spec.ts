@@ -44,7 +44,7 @@ const baseDetail: DamageDetail = {
   latitude: 37.5665,
   longitude: 126.978,
   capturedAt: '2026-07-01T10:00:00',
-  currentStatus: 'REVIEW_REQUIRED',
+  currentStatus: 'AI_ANALYZED',
   imageCount: 0,
   images: [],
   createdAt: '2026-07-01T09:00:00',
@@ -761,7 +761,7 @@ describe('DamageDetailPanel', () => {
   })
 
   it('레거시 보수 예정 상태에서도 판정 되돌리기를 표시한다', async () => {
-    mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REPAIR_SCHEDULED' })
+    mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REQUESTED' })
     mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
 
     const wrapper = mountPanel(42)

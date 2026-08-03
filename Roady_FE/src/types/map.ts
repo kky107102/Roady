@@ -11,3 +11,15 @@ export interface MapMarkerItem {
   details?: MapMarkerDetail[]
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral'
 }
+
+export interface MapCoordinate {
+  latitude: number
+  longitude: number
+}
+
+export interface MapPathItem {
+  id: string | number
+  points: MapCoordinate[]
+  tone?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral'
+  label?: string
+}

@@ -39,7 +39,6 @@ class DamageDashboardControllerTest {
         statusCounts.put("AI_ANALYZING", 12L);
         statusCounts.put("AI_ANALYZED", 23L);
         statusCounts.put("REQUESTED", 18L);
-        statusCounts.put("REPAIR_SCHEDULED", 10L);
         statusCounts.put("REPAIR_IN_PROGRESS", 8L);
         statusCounts.put("REPAIR_COMPLETED", 27L);
         statusCounts.put("CANCELED", 5L);

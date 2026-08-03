@@ -267,14 +267,9 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   AI_ANALYZING: 'AI 분석중',
   AI_ANALYZED: 'AI 분석완료',
   REQUESTED: '요청 전',
-  REPAIR_IN_PROGRESS: '요청 완료',
+  REPAIR_IN_PROGRESS: '보수 중',
   CANCELED: '취소',
-  REVIEW_REQUIRED: '검토 필요',
-  RECEIVED: '접수됨',
-  REPAIR_SCHEDULED: '보수 예정',
-  REPAIRING: '보수 중',
   REPAIR_COMPLETED: '보수 완료',
-  REPAIR_NOT_REQUIRED: '보수 불필요',
 }
 
 function formatCaseId(id: number, createdAt: string): string {
@@ -338,7 +333,7 @@ const robotDisplayName = computed(() => {
 
 const detailConfirmed = computed(() => {
   const status = detail.value?.currentStatus
-  return status != null && !['AI_ANALYZED', 'REVIEW_REQUIRED'].includes(status)
+  return status != null && status !== 'AI_ANALYZED'
 })
 
 const displayedPriority = computed(() =>
@@ -385,19 +380,14 @@ const analysisDamageTypeType = computed<BadgeType>(() => 'neutral')
 
 const canSubmitVerdict = computed(
   () =>
-    detail.value?.currentStatus === 'AI_ANALYZED' ||
-    detail.value?.currentStatus === 'REVIEW_REQUIRED',
+    detail.value?.currentStatus === 'AI_ANALYZED',
 )
 
 const canResetVerdict = computed(() =>
-  ['REQUESTED', 'CANCELED', 'REPAIR_NOT_REQUIRED', 'REPAIR_SCHEDULED'].includes(
-    detail.value?.currentStatus ?? '',
-  ),
+  ['REQUESTED', 'CANCELED'].includes(detail.value?.currentStatus ?? ''),
 )
 
-const canManagePendingRequest = computed(() =>
-  ['REQUESTED', 'REPAIR_SCHEDULED'].includes(detail.value?.currentStatus ?? ''),
-)
+const canManagePendingRequest = computed(() => detail.value?.currentStatus === 'REQUESTED')
 
 const hasManagerReview = computed(
   () =>
@@ -456,7 +446,7 @@ function confirmResetVerdict() {
 
 const reviewActionMode = computed<'ready' | 'waiting' | 'completed'>(() => {
   const status = detail.value?.currentStatus
-  if (status === 'AI_ANALYZED' || status === 'REVIEW_REQUIRED') return 'ready'
+  if (status === 'AI_ANALYZED') return 'ready'
   if (status === 'COLLECTED' || status === 'AI_ANALYZING') return 'waiting'
   return 'completed'
 })

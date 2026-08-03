@@ -8,12 +8,15 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
+import { useRobotLocationStream } from '@/composables/useRobotLocationStream'
 import type {
   Robot,
   RobotCommand,
   RobotCommandType,
+  RobotLocationMessage,
   RobotOperationStatus,
 } from '@/types/robot'
+import type { MapPathItem } from '@/types/map'
 import {
   connectionBadge,
   formatBattery,
@@ -32,10 +35,34 @@ const commandLoading = ref(false)
 const commandError = ref('')
 const currentCommand = ref<RobotCommand | null>(null)
 const optimisticOperationStatus = ref<RobotOperationStatus | null>(null)
+const {
+  status: locationStreamStatus,
+  latestLocation,
+  pathPoints,
+  start: startLocationStream,
+  stop: stopLocationStream,
+} = useRobotLocationStream()
 let commandPollTimer: ReturnType<typeof setInterval> | null = null
 const robotId = computed(() => Number(route.params.id))
+const displayedStatus = computed(() => {
+  const currentRobot = robot.value
+  const live = latestLocation.value
+  if (!currentRobot || !live) return currentRobot?.latestStatus ?? null
+
+  return {
+    id: currentRobot.latestStatus?.id ?? -1,
+    latitude: live.latitude,
+    longitude: live.longitude,
+    batteryLevel: live.batteryLevel,
+    operationStatus: live.operationStatus,
+    connectionStatus: live.connectionStatus,
+    errorCode: live.errorCode,
+    errorMessage: live.errorMessage,
+    recordedAt: live.recordedAt ?? live.receivedAt,
+  }
+})
 const currentOperationStatus = computed(
-  () => optimisticOperationStatus.value ?? robot.value?.latestStatus?.operationStatus ?? null,
+  () => optimisticOperationStatus.value ?? displayedStatus.value?.operationStatus ?? null,
 )
 const isInspecting = computed(() => currentOperationStatus.value === 'INSPECTING')
 const isOperating = computed(() => currentOperationStatus.value === 'MOVING')
@@ -58,7 +85,30 @@ const canResumeAfterEmergency = computed(
     currentCommand.value?.commandType === 'EMERGENCY_STOP' &&
     currentCommand.value.commandStatus === 'SUCCEEDED',
 )
-const robotMarkers = computed(() => robot.value ? toRobotMapMarkers([robot.value]) : [])
+const robotMarkers = computed(() => {
+  if (!robot.value) return []
+  return toRobotMapMarkers([{ ...robot.value, latestStatus: displayedStatus.value }])
+})
+const movementPaths = computed<MapPathItem[]>(() =>
+  pathPoints.value.length >= 2
+    ? [{
+        id: `robot-${robotId.value}-live-path`,
+        points: [...pathPoints.value],
+        tone: 'primary',
+        label: '실시간 이동 경로',
+      }]
+    : [],
+)
+const locationStreamLabel = computed(() => {
+  const labels = {
+    idle: '연결 대기',
+    connecting: '실시간 연결 중',
+    connected: '실시간 연결됨',
+    reconnecting: '재연결 중',
+    error: '실시간 연결 실패',
+  }
+  return labels[locationStreamStatus.value]
+})
 const commandFeedbackLines = computed(() => {
   const command = currentCommand.value
   if (!command) return []
@@ -98,6 +148,7 @@ async function fetchRobot() {
   commandError.value = ''
   currentCommand.value = null
   stopCommandPolling()
+  stopLocationStream()
 
   if (!Number.isInteger(robotId.value) || robotId.value <= 0) {
     notFound.value = true
@@ -107,6 +158,23 @@ async function fetchRobot() {
 
   try {
     robot.value = await robotsApi.get(robotId.value)
+    const latest = robot.value.latestStatus
+    const fallbackLocation: RobotLocationMessage | null = latest?.latitude != null && latest.longitude != null
+      ? {
+          robotId: robot.value.id,
+          latitude: latest.latitude,
+          longitude: latest.longitude,
+          batteryLevel: latest.batteryLevel,
+          operationStatus: latest.operationStatus,
+          connectionStatus: latest.connectionStatus,
+          errorCode: latest.errorCode,
+          errorMessage: latest.errorMessage,
+          recordedAt: latest.recordedAt,
+          receivedAt: null,
+        }
+      : null
+    const initialLocation = await robotsApi.latestLocation(robot.value.id).catch(() => fallbackLocation)
+    startLocationStream(robot.value.id, initialLocation)
   } catch (requestError) {
     if (axios.isAxiosError(requestError) && requestError.response?.status === 404) {
       notFound.value = true
@@ -183,7 +251,10 @@ async function sendCommand(commandType: RobotCommandType) {
 }
 
 onMounted(fetchRobot)
-onUnmounted(stopCommandPolling)
+onUnmounted(() => {
+  stopCommandPolling()
+  stopLocationStream()
+})
 watch(robotId, fetchRobot)
 </script>
 
@@ -267,14 +338,26 @@ watch(robotId, fetchRobot)
         <section class="detail-card map-card" aria-labelledby="robot-map-title">
           <div class="section-header">
             <div>
-              <h2 id="robot-map-title">로봇 위치</h2>
-              <p>현재 수집된 로봇 위치를 지도에서 확인합니다.</p>
+              <h2 id="robot-map-title">실시간 위치 및 이동 경로</h2>
+              <p>현재 위치와 이 화면에 접속한 이후 수신된 이동 경로를 표시합니다.</p>
+            </div>
+            <div class="location-stream-info" role="status" aria-live="polite">
+              <span
+                class="location-stream-status"
+                :class="`is-${locationStreamStatus}`"
+              >
+                {{ locationStreamLabel }}
+              </span>
+              <span v-if="pathPoints.length >= 2" class="path-point-count">
+                {{ pathPoints.length }}개 위치
+              </span>
             </div>
           </div>
           <CommonMap
             class="robot-detail-map"
             :markers="robotMarkers"
-            :map-label="`${robot.name} 최신 위치 지도`"
+            :paths="movementPaths"
+            :map-label="`${robot.name} 실시간 위치 및 이동 경로 지도`"
             empty-message="수집된 로봇 위치 정보가 없습니다."
           />
         </section>
@@ -296,14 +379,14 @@ watch(robotId, fetchRobot)
         <div class="section-header">
           <div>
             <h2 id="latest-status-title">최신 상태</h2>
-            <p v-if="robot.latestStatus">
-              {{ formatDateTime(robot.latestStatus.recordedAt) }} 기준
+            <p v-if="displayedStatus">
+              {{ formatDateTime(displayedStatus.recordedAt) }} 기준
             </p>
           </div>
         </div>
 
         <EmptyState
-          v-if="!robot.latestStatus"
+          v-if="!displayedStatus"
           title="수집된 최신 상태가 없습니다."
           description="로봇에서 상태 정보가 수집되면 이곳에 표시됩니다."
         />
@@ -312,8 +395,8 @@ watch(robotId, fetchRobot)
             <dt>운행 상태</dt>
             <dd>
               <StatusBadge
-                :type="operationBadge(robot.latestStatus.operationStatus).type"
-                :label="operationBadge(robot.latestStatus.operationStatus).label"
+                :type="operationBadge(displayedStatus.operationStatus).type"
+                :label="operationBadge(displayedStatus.operationStatus).label"
               />
             </dd>
           </div>
@@ -321,28 +404,28 @@ watch(robotId, fetchRobot)
             <dt>연결 상태</dt>
             <dd>
               <StatusBadge
-                :type="connectionBadge(robot.latestStatus.connectionStatus).type"
-                :label="connectionBadge(robot.latestStatus.connectionStatus).label"
+                :type="connectionBadge(displayedStatus.connectionStatus).type"
+                :label="connectionBadge(displayedStatus.connectionStatus).label"
               />
             </dd>
           </div>
           <div>
             <dt>배터리</dt>
-            <dd :class="{ 'low-battery': robot.latestStatus.batteryLevel != null && robot.latestStatus.batteryLevel <= 10 }">
-              {{ formatBattery(robot.latestStatus.batteryLevel) }}
+            <dd :class="{ 'low-battery': displayedStatus.batteryLevel != null && displayedStatus.batteryLevel <= 10 }">
+              {{ formatBattery(displayedStatus.batteryLevel) }}
             </dd>
           </div>
           <div>
             <dt>마지막 갱신</dt>
-            <dd>{{ formatDateTime(robot.latestStatus.recordedAt) }}</dd>
+            <dd>{{ formatDateTime(displayedStatus.recordedAt) }}</dd>
           </div>
           <div>
             <dt>마지막 위치 위도</dt>
-            <dd>{{ formatCoordinate(robot.latestStatus.latitude) }}</dd>
+            <dd>{{ formatCoordinate(displayedStatus.latitude) }}</dd>
           </div>
           <div>
             <dt>마지막 위치 경도</dt>
-            <dd>{{ formatCoordinate(robot.latestStatus.longitude) }}</dd>
+            <dd>{{ formatCoordinate(displayedStatus.longitude) }}</dd>
           </div>
         </dl>
       </section>
@@ -494,6 +577,51 @@ watch(robotId, fetchRobot)
   gap: 1.6rem;
 }
 
+.location-stream-info {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.location-stream-status,
+.path-point-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.8rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.location-stream-status {
+  color: var(--roady-text-secondary);
+  background: var(--roady-surface-subtle);
+}
+
+.location-stream-status.is-connected {
+  color: var(--roady-status-success);
+  background: color-mix(in srgb, var(--roady-status-success) 10%, transparent);
+}
+
+.location-stream-status.is-reconnecting,
+.location-stream-status.is-connecting {
+  color: var(--roady-status-warning-text);
+  background: color-mix(in srgb, var(--roady-status-warning) 12%, transparent);
+}
+
+.location-stream-status.is-error {
+  color: var(--roady-status-danger);
+  background: color-mix(in srgb, var(--roady-status-danger) 10%, transparent);
+}
+
+.path-point-count {
+  color: var(--roady-brand-secondary);
+  background: var(--roady-brand-primary-subtle);
+}
+
 .robot-detail-map {
   flex: 1;
   min-height: 26rem;
@@ -565,6 +693,14 @@ dd {
 
   .page-header {
     flex-direction: column;
+  }
+
+  .map-card .section-header {
+    flex-direction: column;
+  }
+
+  .location-stream-info {
+    justify-content: flex-start;
   }
 
   .remote-control {
