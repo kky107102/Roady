@@ -847,7 +847,6 @@ curl -X POST "http://localhost:8080/api/damages" \
     "AI_ANALYZING": 12,
     "AI_ANALYZED": 23,
     "REQUESTED": 18,
-    "REPAIR_SCHEDULED": 10,
     "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
     "CANCELED": 5
@@ -1483,7 +1482,6 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
     "AI_ANALYZING": 12,
     "AI_ANALYZED": 23,
     "REQUESTED": 18,
-    "REPAIR_SCHEDULED": 10,
     "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
     "CANCELED": 5
@@ -1574,8 +1572,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `COLLECTED` | 수집 완료 |
 | `AI_ANALYZING` | AI 분석중 |
 | `AI_ANALYZED` | AI 분석완료 |
-| `REQUESTED` | 요청 완료 |
-| `REPAIR_SCHEDULED` | 보수 예정 |
+| `REQUESTED` | 검토 완료(요청 전) |
 | `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
 | `CANCELED` | 취소 |
@@ -1583,12 +1580,11 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 권장 상태 전이는 다음과 같다.
 
 ```text
-COLLECTED -> AI_ANALYZING -> AI_ANALYZED -> REQUESTED -> REPAIR_SCHEDULED -> REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
+COLLECTED -> AI_ANALYZING -> AI_ANALYZED -> REQUESTED -> REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
 COLLECTED -> CANCELED
 AI_ANALYZING -> CANCELED
 AI_ANALYZED -> CANCELED
 REQUESTED -> CANCELED
-REPAIR_SCHEDULED -> CANCELED
 ```
 
 | 기능 | Method | URL | 권한 | 설명 |
@@ -1610,7 +1606,7 @@ REPAIR_SCHEDULED -> CANCELED
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_SCHEDULED`로 변경하며 보수 요청 이력을 저장한다. |
+| 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_IN_PROGRESS`로 변경하며 보수 요청 이력을 저장한다. |
 | 보수 배정 목록 조회 | `GET` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 담당자, 기간, 상태 기준으로 배정 목록을 조회한다. |
 | 보수 배정 상세 조회 | `GET` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 배정 상세 정보를 조회한다. |
 | 보수 배정 수정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR` | 담당자, 예정일, 메모를 수정한다. |
@@ -1641,7 +1637,7 @@ REPAIR_SCHEDULED -> CANCELED
 처리 규칙은 다음과 같다.
 
 ```text
-damages.current_status: REQUESTED -> REPAIR_SCHEDULED
+damages.current_status: REQUESTED -> REPAIR_IN_PROGRESS
 damages.assigned_to: repairerId로 갱신
 repair_assignments: 보수 배정 정보 저장
 repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, note 저장
@@ -1657,7 +1653,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
   "assignedBy": 2,
   "scheduledDate": "2026-07-30",
   "note": "보행량이 적은 오전 시간대 작업 권장",
-  "damageStatus": "REPAIR_SCHEDULED",
+  "damageStatus": "REPAIR_IN_PROGRESS",
   "createdAt": "2026-07-29T10:00:00",
   "updatedAt": "2026-07-29T10:00:00"
 }
@@ -1674,7 +1670,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
     "requestedBy": 2,
     "repairerId": 5,
     "beforeStatus": "REQUESTED",
-    "afterStatus": "REPAIR_SCHEDULED",
+    "afterStatus": "REPAIR_IN_PROGRESS",
     "note": "보행량이 적은 오전 시간대 작업 권장",
     "requestedAt": "2026-07-29T10:00:00"
   }
@@ -1705,7 +1701,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
 }
 ```
 
-취소는 `REQUESTED` 또는 `REPAIR_SCHEDULED` 상태에서 허용한다. 성공 시 `damages.current_status`를 `CANCELED`로 변경하고, `repair_request_histories.note`에 취소 사유를 저장한다.
+취소는 `REQUESTED` 또는 `REPAIR_IN_PROGRESS` 상태에서 허용한다. 성공 시 `damages.current_status`를 `CANCELED`로 변경하고, `repair_request_histories.note`에 취소 사유를 저장한다.
 
 ### 11.3 보수 결과 후속 확장
 
@@ -1792,7 +1788,6 @@ GET /api/statistics/damages/by-status?from=2026-07-01T00:00:00&to=2026-08-01T00:
     "AI_ANALYZING": 4,
     "AI_ANALYZED": 4,
     "REQUESTED": 4,
-    "REPAIR_SCHEDULED": 3,
     "REPAIR_IN_PROGRESS": 2,
     "REPAIR_COMPLETED": 12,
     "CANCELED": 4

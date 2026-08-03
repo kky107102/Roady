@@ -33,8 +33,8 @@ const STATUS_OPTIONS = [
   { value: 'COLLECTED', label: '수집완료' },
   { value: 'AI_ANALYZING', label: 'AI 분석중' },
   { value: 'AI_ANALYZED', label: 'AI 분석완료' },
-  { value: 'REQUESTED', label: '요청 전' },
-  { value: 'REPAIR_IN_PROGRESS', label: '요청 완료' },
+  { value: 'REQUESTED', label: '검토 완료' },
+  { value: 'REPAIR_IN_PROGRESS', label: '보수 중' },
   { value: 'REPAIR_COMPLETED', label: '보수 완료' },
   { value: 'CANCELED', label: '취소' },
 ]
@@ -100,7 +100,7 @@ const listError = ref<string | null>(null)
 const hasMore = computed(() => currentPage.value + 1 < totalPages.value)
 
 function isConfirmed(item: DamageListItem): boolean {
-  return !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED', 'REVIEW_REQUIRED'].includes(
+  return !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED'].includes(
     item.currentStatus,
   )
 }
@@ -215,7 +215,7 @@ async function submitVerdict(
     )
     notification.success(
       isRepairRequired
-        ? '보수 필요로 판정했습니다. 요청 전 목록에서 확인할 수 있습니다.'
+        ? '보수 필요로 판정했습니다. 검토 완료 목록에서 확인할 수 있습니다.'
         : '보수 불필요로 판정했습니다.',
     )
     await loadPage(0, false)

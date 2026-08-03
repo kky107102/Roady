@@ -41,13 +41,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const reviewRequiredCount = computed(() =>
     useMock.value
       ? MOCK_STAT_COUNTS.reviewRequired
-      : damages.value.filter((d) => d.currentStatus === 'REVIEW_REQUIRED').length,
+      : damages.value.filter((d) => d.currentStatus === 'AI_ANALYZED').length,
   )
 
   const repairingCount = computed(() =>
     useMock.value
       ? MOCK_STAT_COUNTS.repairing
-      : damages.value.filter((d) => d.currentStatus === 'REPAIRING').length,
+      : damages.value.filter((d) => d.currentStatus === 'REPAIR_IN_PROGRESS').length,
   )
 
   // severity 필드는 현재 API 응답에 포함되지 않으므로 항상 mock 값 사용

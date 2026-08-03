@@ -43,7 +43,7 @@ const baseDetail: DamageDetail = {
   latitude: 37.5665,
   longitude: 126.978,
   capturedAt: '2026-07-01T10:00:00',
-  currentStatus: 'REVIEW_REQUIRED',
+  currentStatus: 'AI_ANALYZED',
   imageCount: 0,
   images: [],
   createdAt: '2026-07-01T09:00:00',
