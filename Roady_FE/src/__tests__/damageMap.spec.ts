@@ -11,7 +11,7 @@ function damage(overrides: Partial<DamageListItem> = {}): DamageListItem {
     latitude: 37.5665,
     longitude: 126.978,
     capturedAt: '2026-07-30T10:00:00',
-    currentStatus: 'REVIEW_REQUIRED',
+    currentStatus: 'AI_ANALYZED',
     imageCount: 1,
     damageScore: 0.9,
     repairRequired: true,

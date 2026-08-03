@@ -59,7 +59,7 @@ function formatLocation(item: DamageListItem): string {
 
 const confirmed = computed(
   () =>
-    !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED', 'REVIEW_REQUIRED'].includes(
+    !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED'].includes(
       props.item.currentStatus,
     ),
 )

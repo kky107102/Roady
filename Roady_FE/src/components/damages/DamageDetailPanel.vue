@@ -202,15 +202,10 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   COLLECTED: '수집완료',
   AI_ANALYZING: 'AI 분석중',
   AI_ANALYZED: 'AI 분석완료',
-  REQUESTED: '요청 전',
-  REPAIR_IN_PROGRESS: '요청 완료',
+  REQUESTED: '검토 완료',
+  REPAIR_IN_PROGRESS: '보수 중',
   CANCELED: '취소',
-  REVIEW_REQUIRED: '검토 필요',
-  RECEIVED: '접수됨',
-  REPAIR_SCHEDULED: '보수 예정',
-  REPAIRING: '보수 중',
   REPAIR_COMPLETED: '보수 완료',
-  REPAIR_NOT_REQUIRED: '보수 불필요',
 }
 
 const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
@@ -220,12 +215,7 @@ const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
   REQUESTED: 'info',
   REPAIR_IN_PROGRESS: 'warning',
   CANCELED: 'neutral',
-  REVIEW_REQUIRED: 'warning',
-  RECEIVED: 'info',
-  REPAIR_SCHEDULED: 'info',
-  REPAIRING: 'warning',
   REPAIR_COMPLETED: 'success',
-  REPAIR_NOT_REQUIRED: 'neutral',
 }
 
 function formatCaseId(id: number, createdAt: string): string {
@@ -293,8 +283,7 @@ const displayedPriority = computed(
 
 const canSubmitVerdict = computed(
   () =>
-    detail.value?.currentStatus === 'AI_ANALYZED' ||
-    detail.value?.currentStatus === 'REVIEW_REQUIRED',
+    detail.value?.currentStatus === 'AI_ANALYZED',
 )
 </script>
 

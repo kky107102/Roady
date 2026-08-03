@@ -58,7 +58,7 @@ class StatisticsServiceTest {
                 .containsEntry("COLLECTED", 3L)
                 .containsEntry("REPAIR_COMPLETED", 2L)
                 .containsEntry("REPAIR_IN_PROGRESS", 0L)
-                .hasSize(8);
+                .hasSize(7);
     }
 
     @Test

@@ -443,7 +443,7 @@ class DamageServiceTest {
                 .containsEntry("COLLECTED", 3L)
                 .containsEntry("AI_ANALYZED", 2L)
                 .containsEntry("REPAIR_COMPLETED", 0L)
-                .hasSize(8);
+                .hasSize(7);
     }
 
     @Test
@@ -457,7 +457,7 @@ class DamageServiceTest {
         assertThat(result.total()).isZero();
         assertThat(result.unassigned()).isZero();
         assertThat(result.statusCounts())
-                .hasSize(8)
+                .hasSize(7)
                 .allSatisfy((status, count) -> assertThat(count).isZero());
     }
 

@@ -13,7 +13,7 @@ const baseItem: DamageListItem = {
   latitude: 37.5665,
   longitude: 126.978,
   capturedAt: '2026-07-31T13:08:00',
-  currentStatus: 'REVIEW_REQUIRED',
+  currentStatus: 'AI_ANALYZED',
   imageCount: 2,
   damageScore: 38,
   repairRequired: true,
@@ -51,7 +51,7 @@ describe('DamageCard', () => {
   it('관리자 확인 사건은 카드 우하단에 확인 완료를 표시한다', () => {
     const wrapper = mountCard({
       ...baseItem,
-      currentStatus: 'REPAIR_NOT_REQUIRED',
+      currentStatus: 'REQUESTED',
       repairPriority: 'NORMAL',
     })
 

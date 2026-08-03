@@ -4,14 +4,8 @@ export type DamageStatus =
   | 'AI_ANALYZED'
   | 'REQUESTED'
   | 'REPAIR_IN_PROGRESS'
-  | 'CANCELED'
-  // 이전 API 응답과 목 데이터 호환을 위한 레거시 상태
-  | 'REVIEW_REQUIRED'
-  | 'RECEIVED'
-  | 'REPAIR_SCHEDULED'
-  | 'REPAIRING'
   | 'REPAIR_COMPLETED'
-  | 'REPAIR_NOT_REQUIRED'
+  | 'CANCELED'
 
 export interface DamageListItem {
   id: number

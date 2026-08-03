@@ -176,7 +176,7 @@ public class SampleDataInitializer implements ApplicationRunner {
                 new BigDecimal("37.5228900"),
                 new BigDecimal("127.0370100"),
                 LocalDateTime.of(2026, 8, 3, 11, 0),
-                "REPAIR_SCHEDULED",
+                "REQUESTED",
                 "NORMAL",
                 56,
                 "WEAR",
