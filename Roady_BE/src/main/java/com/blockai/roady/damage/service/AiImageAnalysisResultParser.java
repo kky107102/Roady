@@ -1,5 +1,6 @@
 package com.blockai.roady.damage.service;
 
+import com.blockai.roady.damage.domain.DamageTypeNormalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -80,16 +81,7 @@ public class AiImageAnalysisResultParser {
     }
 
     private String normalizeDamageType(String damageType) {
-        if (!StringUtils.hasText(damageType)) {
-            return null;
-        }
-        return switch (damageType.trim().toUpperCase()) {
-            case "MISSING", "결손" -> "MISSING";
-            case "WEAR", "마모" -> "WEAR";
-            case "BREAKAGE", "BROKEN", "깨짐" -> "BREAKAGE";
-            case "CRACK", "균열" -> "CRACK";
-            default -> damageType.trim();
-        };
+        return DamageTypeNormalizer.normalizeAiDamageType(damageType);
     }
 
     private BigDecimal decimalValue(JsonNode root, String... fieldNames) {
