@@ -16,10 +16,24 @@ vi.mock('@/api/robots', () => ({
   robotsApi: {
     list: vi.fn(),
     get: vi.fn(),
+    latestLocation: vi.fn(),
     command: vi.fn(),
     commands: vi.fn(),
   },
 }))
+
+vi.mock('@/composables/useRobotLocationStream', async () => {
+  const { ref } = await import('vue')
+  return {
+    useRobotLocationStream: () => ({
+      status: ref('idle'),
+      latestLocation: ref(null),
+      pathPoints: ref([]),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }),
+  }
+})
 
 const robot: Robot = {
   id: 1,
@@ -150,6 +164,7 @@ describe('RobotDetailView', () => {
     vi.clearAllMocks()
     route.value = { params: { id: '1' } }
     vi.mocked(robotsApi.commands).mockResolvedValue([])
+    vi.mocked(robotsApi.latestLocation).mockRejectedValue(new Error('no live location'))
   })
 
   it('reloads detail data by the robot id and handles a missing latest status', async () => {
@@ -159,8 +174,8 @@ describe('RobotDetailView', () => {
 
     expect(robotsApi.get).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('로디 1호')
-    expect(wrapper.text()).toContain('로봇 위치')
-    expect(wrapper.text()).toContain('현재 수집된 로봇 위치를 지도에서 확인합니다.')
+    expect(wrapper.text()).toContain('실시간 위치 및 이동 경로')
+    expect(wrapper.text()).toContain('현재 위치와 이 화면에 접속한 이후 수신된 이동 경로를 표시합니다.')
     expect(wrapper.text()).toContain('기본 정보')
     expect(wrapper.text()).toContain('수집된 최신 상태가 없습니다.')
     expect(wrapper.text()).toContain('운행 시작')
