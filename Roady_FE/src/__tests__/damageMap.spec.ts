@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DamageListItem } from '@/types/damage'
-import { toDamageMapMarkers } from '@/utils/damageMap'
+import { toDamageMapCenter, toDamageMapMarkers } from '@/utils/damageMap'
 
 function damage(overrides: Partial<DamageListItem> = {}): DamageListItem {
   return {
@@ -40,5 +40,17 @@ describe('toDamageMapMarkers', () => {
       damage({ id: 1, latitude: null }),
       damage({ id: 2, longitude: 181 }),
     ])).toEqual([])
+  })
+})
+
+describe('toDamageMapCenter', () => {
+  it('선택 사건의 유효한 좌표를 지도 중심 좌표로 반환한다', () => {
+    expect(toDamageMapCenter(damage())).toEqual([37.5665, 126.978])
+  })
+
+  it('선택 사건이 없거나 좌표가 유효하지 않으면 지도 중심을 변경하지 않는다', () => {
+    expect(toDamageMapCenter(null)).toBeNull()
+    expect(toDamageMapCenter(damage({ latitude: null }))).toBeNull()
+    expect(toDamageMapCenter(damage({ longitude: 181 }))).toBeNull()
   })
 })

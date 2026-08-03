@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import type { DamageListItem } from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import DamageThumbnail from './DamageThumbnail.vue'
+import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import { isReviewConfirmed } from '@/utils/damageReview'
 
 const props = defineProps<{
   item: DamageListItem
@@ -14,7 +16,7 @@ const emit = defineEmits<{ select: [id: number] }>()
 
 const PRIORITY_LABELS: Record<string, string> = {
   URGENT: '긴급',
-  HIGH: '주의',
+  HIGH: '높음',
   NORMAL: '보통',
   MEDIUM: '보통',
   LOW: '낮음',
@@ -23,6 +25,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
   URGENT: 'danger',
   HIGH: 'warning',
+  NORMAL: 'info',
   MEDIUM: 'info',
   LOW: 'neutral',
 }
@@ -57,24 +60,30 @@ function formatLocation(item: DamageListItem): string {
   return formatCoords(item.latitude, item.longitude)
 }
 
-const confirmed = computed(
-  () =>
-    !['COLLECTED', 'AI_ANALYZING', 'AI_ANALYZED'].includes(
-      props.item.currentStatus,
-    ),
-)
+const confirmed = computed(() => isReviewConfirmed(props.item))
 
 const displayedPriority = computed(() =>
-  confirmed.value
-    ? props.item.processingPriority || props.item.repairPriority
-    : props.item.repairPriority,
+  confirmed.value ? (props.item.processingPriority ?? null) : (props.item.repairPriority ?? null),
 )
 
 function formatPriorityLabel(priority: string | null): string {
-  if (!priority) return '보류'
-  const label = PRIORITY_LABELS[priority] ?? priority
-  return confirmed.value ? label : `AI 제안 · ${label}`
+  if (!priority) return confirmed.value ? '미지정' : '보류'
+  return PRIORITY_LABELS[priority] ?? priority
 }
+
+const confirmedStatus = computed<{ label: string; type: BadgeType }>(() => {
+  const status = props.item.currentStatus
+  if (status === 'REQUESTED') {
+    return { label: '요청 전', type: 'warning' }
+  }
+  if (status === 'REPAIR_COMPLETED') return { label: '보수 완료', type: 'success' }
+  if (
+    status === 'REPAIR_IN_PROGRESS'
+  ) {
+    return { label: '요청 완료', type: 'info' }
+  }
+  return { label: '보수 불필요', type: 'neutral' }
+})
 </script>
 
 <template>
@@ -90,8 +99,18 @@ function formatPriorityLabel(priority: string | null): string {
     <div class="card-body">
       <div class="card-header">
         <span class="card-id">{{ formatCaseId(item.id, item.createdAt) }}</span>
+        <AiResultBadge
+          v-if="!confirmed"
+          :type="
+            displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'
+          "
+          :label="formatPriorityLabel(displayedPriority)"
+        />
         <StatusBadge
-          :type="displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'"
+          v-else
+          :type="
+            displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'
+          "
           :label="formatPriorityLabel(displayedPriority)"
         />
       </div>
@@ -104,7 +123,12 @@ function formatPriorityLabel(priority: string | null): string {
         <time class="card-time" :datetime="(item.capturedAt ?? item.createdAt) || undefined">
           {{ formatDate(item.capturedAt ?? item.createdAt) }} 탐지
         </time>
-        <span v-if="confirmed" class="confirmed-label">확인 완료</span>
+        <StatusBadge
+          v-if="confirmed"
+          class="confirmed-status"
+          :type="confirmedStatus.type"
+          :label="confirmedStatus.label"
+        />
       </div>
     </div>
   </button>
@@ -126,8 +150,7 @@ function formatPriorityLabel(priority: string | null): string {
   box-shadow: 0 2px 5px rgb(15 23 42 / 6%);
   transition:
     border-color 0.12s,
-    box-shadow 0.12s,
-    transform 0.12s;
+    box-shadow 0.12s;
 }
 
 .damage-card:first-of-type {
@@ -137,7 +160,6 @@ function formatPriorityLabel(priority: string | null): string {
 .damage-card:hover {
   border-color: color-mix(in srgb, var(--roady-brand-primary) 45%, var(--roady-border-default));
   box-shadow: 0 5px 12px rgb(15 23 42 / 10%);
-  transform: translateY(-1px);
 }
 
 .damage-card.is-selected {
@@ -202,11 +224,8 @@ function formatPriorityLabel(priority: string | null): string {
   font-weight: var(--krds-font-weight-bold);
 }
 
-.confirmed-label {
+.confirmed-status {
   flex-shrink: 0;
-  font-size: 12px;
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-brand-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

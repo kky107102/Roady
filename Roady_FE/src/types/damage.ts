@@ -24,8 +24,11 @@ export interface DamageListItem {
   capturedAt: string | null
   currentStatus: DamageStatus
   processingPriority?: string | null
+  reviewDamageType?: string | null
+  reviewNote?: string | null
   imageCount: number
   damageScore: number | null
+  damageType?: string | null
   repairRequired: boolean | null
   repairPriority: string | null
   confidenceScore: number | null
@@ -68,6 +71,8 @@ export interface DamageDetail {
   capturedAt: string | null
   currentStatus: DamageStatus
   processingPriority?: string | null
+  reviewDamageType?: string | null
+  reviewNote?: string | null
   imageCount: number
   images: DamageImage[]
   createdAt: string

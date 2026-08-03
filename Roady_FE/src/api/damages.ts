@@ -41,12 +41,16 @@ export const damagesApi = {
 
   async updateReview(
     damageId: number,
-    status: 'REQUESTED' | 'CANCELED',
+    status: 'AI_ANALYZED' | 'REQUESTED' | 'CANCELED',
     processingPriority?: string | null,
+    reviewDamageType?: string | null,
+    reviewNote?: string | null,
   ): Promise<void> {
     await http.patch(`/damages/${damageId}/review`, {
       status,
       processingPriority: processingPriority || null,
+      reviewDamageType: reviewDamageType || null,
+      reviewNote: reviewNote?.trim() || null,
     })
     detailCache.delete(damageId)
   },

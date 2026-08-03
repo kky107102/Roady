@@ -78,7 +78,7 @@ async function handleLogout() {
                   <rect x="3" y="14" width="7" height="7" rx="1" />
                   <rect x="14" y="14" width="7" height="7" rx="1" />
                 </svg>
-                <!-- 탐지·사건 관리: alert triangle -->
+                <!-- 탐지 검토: alert triangle -->
                 <svg
                   v-else-if="item.key === 'damages'"
                   viewBox="0 0 24 24"
@@ -107,7 +107,7 @@ async function handleLogout() {
                   <circle cx="5.5" cy="18.5" r="2.5" />
                   <circle cx="18.5" cy="18.5" r="2.5" />
                 </svg>
-                <!-- 보수 요청 이력: clipboard list -->
+                <!-- 보수 관리: clipboard list -->
                 <svg
                   v-else-if="item.key === 'repairs'"
                   viewBox="0 0 24 24"

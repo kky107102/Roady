@@ -19,6 +19,9 @@ interface Props {
   paths?: MapPathItem[]
   center?: [number, number]
   zoom?: number
+  focusedCenter?: [number, number] | null
+  focusZoom?: number
+  rightInset?: number
   emptyMessage?: string
   mapLabel?: string
 }
@@ -28,6 +31,8 @@ const props = withDefaults(defineProps<Props>(), {
   paths: () => [],
   center: () => [37.5665, 126.978],
   zoom: 12,
+  focusZoom: 16,
+  rightInset: 0,
   emptyMessage: '표시할 위치 정보가 없습니다.',
   mapLabel: '지도',
 })
@@ -40,6 +45,7 @@ let mapInstance: Map | null = null
 let markerInstances: Marker[] = []
 let pathInstances: Polyline[] = []
 let resizeObserver: ResizeObserver | null = null
+let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
 
 function markerIcon(tone: MapMarkerItem['tone']) {
   const normalizedTone = tone ?? 'primary'
@@ -89,6 +95,26 @@ function popupContent(item: MapMarkerItem): HTMLElement {
 function clearMarkers() {
   markerInstances.forEach((marker) => marker.remove())
   markerInstances = []
+}
+
+function insetAdjustedCenter(center: [number, number]): [number, number] {
+  if (!mapInstance || props.rightInset <= 0) return center
+
+  const mapWidth = mapInstance.getSize().x
+  const safeInset = Math.min(props.rightInset, Math.max(0, mapWidth - 80))
+  const point = mapInstance.project(center, props.focusZoom).add([safeInset / 2, 0])
+  const adjusted = mapInstance.unproject(point, props.focusZoom)
+  return [adjusted.lat, adjusted.lng]
+}
+
+function focusSelectedLocation(animate: boolean) {
+  if (!mapInstance || !props.focusedCenter) return
+  const center = insetAdjustedCenter(props.focusedCenter)
+  if (animate) {
+    mapInstance.flyTo(center, props.focusZoom, { duration: 0.4 })
+  } else {
+    mapInstance.setView(center, props.focusZoom, { animate: false })
+  }
 }
 
 function clearPaths() {
@@ -142,21 +168,25 @@ function renderMarkers() {
     return marker
   })
 
-  const allCoordinates = [
-    ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
-    ...props.paths.flatMap((path) =>
-      path.points.map((point) => [point.latitude, point.longitude] as [number, number]),
-    ),
-  ]
-
-  if (allCoordinates.length === 1) {
-    const coordinate = allCoordinates[0]
-    if (coordinate) mapInstance.setView(coordinate, 15)
-  } else if (allCoordinates.length > 1) {
-    const bounds = latLngBounds(allCoordinates)
-    mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+  if (props.focusedCenter) {
+    focusSelectedLocation(false)
   } else {
-    mapInstance.setView(props.center, props.zoom)
+    const allCoordinates = [
+      ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
+      ...props.paths.flatMap((path) =>
+        path.points.map((point) => [point.latitude, point.longitude] as [number, number]),
+      ),
+    ]
+
+    if (allCoordinates.length === 1) {
+      const coordinate = allCoordinates[0]
+      if (coordinate) mapInstance.setView(coordinate, 15)
+    } else if (allCoordinates.length > 1) {
+      const bounds = latLngBounds(allCoordinates)
+      mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+    } else {
+      mapInstance.setView(props.center, props.zoom)
+    }
   }
 }
 
@@ -188,7 +218,30 @@ watch(
   { deep: true },
 )
 
+watch(
+  () => [
+    props.focusedCenter?.[0] ?? null,
+    props.focusedCenter?.[1] ?? null,
+    props.focusZoom,
+    props.rightInset,
+  ] as const,
+  ([latitude, longitude], previous) => {
+    if (latitude == null || longitude == null) return
+
+    const locationChanged = !previous || latitude !== previous[0] || longitude !== previous[1]
+    focusSelectedLocation(locationChanged)
+
+    if (focusSettleTimer) clearTimeout(focusSettleTimer)
+    focusSettleTimer = setTimeout(() => {
+      focusSelectedLocation(false)
+      focusSettleTimer = null
+    }, 300)
+  },
+  { flush: 'post' },
+)
+
 onBeforeUnmount(() => {
+  if (focusSettleTimer) clearTimeout(focusSettleTimer)
   resizeObserver?.disconnect()
   clearMarkers()
   clearPaths()
