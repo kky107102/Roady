@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { DamageDetail, DamageImage } from '@/types/damage'
+import type { UserSummary } from '@/types/auth'
+import type { RepairRequestPayload } from '@/types/repair'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -18,26 +20,50 @@ const props = withDefaults(
     imagesLoading?: boolean
     readonly?: boolean
     submitting?: boolean
+    editing?: boolean
+    officialName?: string | null
+    repairers?: UserSummary[]
   }>(),
   {
     imagesLoading: false,
     readonly: false,
     submitting: false,
+    editing: false,
+    officialName: null,
+    repairers: () => [],
   },
 )
 
 const emit = defineEmits<{
   close: []
-  confirm: [note: string | null]
+  confirm: [payload: RepairRequestPayload]
 }>()
 
-// ── 비고 입력 ─────────────────────────────────────────────────
-const note = ref<string>(props.detail.reviewNote ?? '')
+const note = ref<string>(props.detail.repairRequestNote ?? '')
+const priority = ref(props.detail.processingPriority ?? '')
+const damageType = ref(props.detail.reviewDamageType ?? '')
+const repairerId = ref<number | null>(props.detail.repairerId ?? null)
+const formError = ref('')
+
+const PRIORITY_OPTIONS = [
+  { value: 'URGENT', label: '긴급' },
+  { value: 'HIGH', label: '높음' },
+  { value: 'NORMAL', label: '보통' },
+  { value: 'LOW', label: '낮음' },
+]
+
+const DAMAGE_TYPE_OPTIONS = [
+  { value: 'LARGE_MISSING', label: '큰 결손' },
+  { value: 'SMALL_MISSING', label: '작은 결손' },
+  { value: 'WEAR', label: '마모' },
+  { value: 'CRACK', label: '균열' },
+  { value: 'OTHER', label: '기타' },
+]
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────────
 const caseId = computed(() => formatCaseId(props.detail.id, props.detail.createdAt))
 const location = computed(() => formatRepairLocation(props.detail))
-const priorityLabel = computed(() => formatPriorityLabel(props.detail.processingPriority))
+const priorityLabel = computed(() => formatPriorityLabel(priority.value))
 const priorityType = computed<BadgeType>(() => {
   const map: Record<string, BadgeType> = {
     URGENT: 'danger',
@@ -46,11 +72,13 @@ const priorityType = computed<BadgeType>(() => {
     MEDIUM: 'info',
     LOW: 'neutral',
   }
-  return props.detail.processingPriority
-    ? (map[props.detail.processingPriority] ?? 'neutral')
-    : 'neutral'
+  return priority.value ? (map[priority.value] ?? 'neutral') : 'neutral'
 })
-const damageTypeLabel = computed(() => formatDamageTypeLabel(props.detail.reviewDamageType))
+const damageTypeLabel = computed(() => formatDamageTypeLabel(damageType.value))
+const repairerName = computed(() => {
+  if (props.detail.repairerName) return props.detail.repairerName
+  return props.repairers.find((user) => user.id === repairerId.value)?.name ?? '-'
+})
 
 const loadedImages = computed(() =>
   (props.detail.images ?? []).filter((img) => props.imageBlobUrls.has(img.id)),
@@ -91,7 +119,16 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 // ── 제출 ──────────────────────────────────────────────────────
 function handleConfirm() {
-  emit('confirm', note.value.trim() || null)
+  if (!priority.value || !damageType.value) {
+    formError.value = '우선순위와 파손 유형을 모두 선택해 주세요.'
+    return
+  }
+  emit('confirm', {
+    note: note.value.trim() || null,
+    processingPriority: priority.value,
+    reviewDamageType: damageType.value,
+    repairerId: repairerId.value,
+  })
 }
 </script>
 
@@ -101,13 +138,15 @@ function handleConfirm() {
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
-      :aria-label="readonly ? '요청서 확인' : '보수 요청서'"
+      :aria-label="readonly ? '요청서 확인' : editing ? '보수 요청서 수정' : '보수 요청서 작성'"
       @click.self="emit('close')"
     >
       <div class="modal-panel">
         <!-- 헤더 -->
         <div class="modal-header">
-          <h2 class="modal-title">{{ readonly ? '요청서 확인' : '보수 요청서' }}</h2>
+          <h2 class="modal-title">
+            {{ readonly ? '요청서 확인' : editing ? '보수 요청서 수정' : '보수 요청서 작성' }}
+          </h2>
           <button
             type="button"
             class="modal-close-btn"
@@ -149,7 +188,19 @@ function handleConfirm() {
               </div>
               <div class="info-row">
                 <dt class="info-label">담당 주무관</dt>
-                <dd class="info-value">{{ detail.assignedTo != null ? `사용자 #${detail.assignedTo}` : '-' }}</dd>
+                <dd class="info-value">{{ officialName || detail.assignedToName || '-' }}</dd>
+              </div>
+              <div class="info-row">
+                <dt class="info-label">보수 담당자</dt>
+                <dd v-if="readonly" class="info-value">{{ repairerName }}</dd>
+                <dd v-else class="info-value info-value--field">
+                  <select v-model="repairerId" class="krds-input request-select">
+                    <option :value="null">미지정</option>
+                    <option v-for="repairer in repairers" :key="repairer.id" :value="repairer.id">
+                      {{ repairer.name }}
+                    </option>
+                  </select>
+                </dd>
               </div>
               <div class="info-row">
                 <dt class="info-label">탐지 일시</dt>
@@ -174,14 +225,38 @@ function handleConfirm() {
             <dl class="info-grid">
               <div class="info-row">
                 <dt class="info-label">우선순위</dt>
-                <dd class="info-value">
+                <dd v-if="readonly" class="info-value">
                   <StatusBadge :type="priorityType" :label="priorityLabel" />
+                </dd>
+                <dd v-else class="info-value info-value--field">
+                  <select v-model="priority" class="krds-input request-select" required>
+                    <option value="" disabled>우선순위 선택</option>
+                    <option
+                      v-for="option in PRIORITY_OPTIONS"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
                 </dd>
               </div>
               <div class="info-row">
                 <dt class="info-label">파손 유형</dt>
-                <dd class="info-value">
+                <dd v-if="readonly" class="info-value">
                   <StatusBadge type="neutral" :label="damageTypeLabel" />
+                </dd>
+                <dd v-else class="info-value info-value--field">
+                  <select v-model="damageType" class="krds-input request-select" required>
+                    <option value="" disabled>파손 유형 선택</option>
+                    <option
+                      v-for="option in DAMAGE_TYPE_OPTIONS"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
                 </dd>
               </div>
             </dl>
@@ -249,11 +324,10 @@ function handleConfirm() {
                 placeholder="외부 보수 담당자에게 전달할 내용을 입력하세요 (선택)"
                 aria-describedby="repair-note-hint"
               />
-              <p id="repair-note-hint" class="note-hint">
-                {{ note.length }}/1000자
-              </p>
+              <p id="repair-note-hint" class="note-hint">{{ note.length }}/1000자</p>
             </div>
           </section>
+          <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         </div>
 
         <!-- 푸터 -->
@@ -404,6 +478,15 @@ function handleConfirm() {
   word-break: break-word;
 }
 
+.info-value--field {
+  flex: 1;
+}
+
+.request-select {
+  width: 100%;
+  min-width: 18rem;
+}
+
 .case-id-badge {
   display: inline-flex;
   align-items: center;
@@ -496,6 +579,12 @@ function handleConfirm() {
   font-size: 1.2rem;
   color: var(--roady-text-tertiary);
   text-align: right;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--roady-status-danger, #e74c3c);
+  font-size: 1.3rem;
 }
 
 /* ── 푸터 ── */

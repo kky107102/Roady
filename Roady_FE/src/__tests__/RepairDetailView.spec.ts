@@ -3,27 +3,40 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createPinia } from 'pinia'
 import type { DamageDetail } from '@/types/damage'
+import type { UserSummary } from '@/types/auth'
+import type {
+  RepairCompletePayload,
+  RepairRequestPayload,
+  RepairTransitionResult,
+} from '@/types/repair'
 
 // ── API mock ─────────────────────────────────────────────────
 
 const mockDamagesApi = vi.hoisted(() => ({
   getDetail: vi.fn<(id: number) => Promise<DamageDetail>>(),
   getImageContent: vi.fn<(damageId: number, imageId: number) => Promise<Blob>>(),
-  clearDetailCache: vi.fn(),
+  clearDetailCache: vi.fn<(id?: number) => void>(),
+  updateReview: vi.fn<() => Promise<void>>(),
 }))
 
 const mockRepairsApi = vi.hoisted(() => ({
-  submitRequest: vi.fn(),
-  cancelRequest: vi.fn(),
-  completeRepair: vi.fn(),
+  submitRequest:
+    vi.fn<(id: number, payload?: RepairRequestPayload) => Promise<RepairTransitionResult>>(),
+  cancelRequest:
+    vi.fn<(id: number, payload?: RepairRequestPayload) => Promise<RepairTransitionResult>>(),
+  completeRepair:
+    vi.fn<(id: number, payload?: RepairCompletePayload) => Promise<RepairTransitionResult>>(),
 }))
+
+const mockUsersApi = vi.hoisted(() => ({ list: vi.fn<() => Promise<UserSummary[]>>() }))
 
 vi.mock('@/api/damages', () => ({ damagesApi: mockDamagesApi }))
 vi.mock('@/api/repairs', () => ({ repairsApi: mockRepairsApi }))
+vi.mock('@/api/users', () => ({ usersApi: mockUsersApi }))
 
 // ── navigator.clipboard mock ──────────────────────────────────
 
-const mockClipboard = { writeText: vi.fn() }
+const mockClipboard = { writeText: vi.fn<(text: string) => Promise<void>>() }
 
 beforeAll(() => {
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock')
@@ -68,6 +81,7 @@ const baseDetail: DamageDetail = {
 
 const detailInProgress: DamageDetail = { ...baseDetail, currentStatus: 'REPAIR_IN_PROGRESS' }
 const detailCompleted: DamageDetail = { ...baseDetail, currentStatus: 'REPAIR_COMPLETED' }
+const detailCanceled: DamageDetail = { ...baseDetail, currentStatus: 'CANCELED' }
 
 // ── 마운트 헬퍼 ──────────────────────────────────────────────
 
@@ -104,18 +118,27 @@ async function mountView(damageId = 6) {
           template:
             '<div data-testid="request-modal">' +
             '<button data-testid="modal-close" @click="$emit(\'close\')">닫기</button>' +
-            '<button data-testid="modal-confirm" @click="$emit(\'confirm\', null)">확인</button>' +
+            "<button data-testid=\"modal-confirm\" @click=\"$emit('confirm', { note: null, processingPriority: 'URGENT', reviewDamageType: 'CRACK', repairerId: null })\">확인</button>" +
             '</div>',
-          props: ['detail', 'imageBlobUrls', 'imagesLoading', 'readonly', 'submitting'],
+          props: [
+            'detail',
+            'imageBlobUrls',
+            'imagesLoading',
+            'readonly',
+            'editing',
+            'submitting',
+            'officialName',
+            'repairers',
+          ],
           emits: ['close', 'confirm'],
         },
         RepairCompletionModal: {
           template:
             '<div data-testid="completion-modal">' +
             '<button data-testid="completion-close" @click="$emit(\'close\')">닫기</button>' +
-            '<button data-testid="completion-confirm" @click="$emit(\'confirm\', \'2026-08-01\')">확인</button>' +
+            "<button data-testid=\"completion-confirm\" @click=\"$emit('confirm', { completedAt: '2026-08-01', note: '완료 처리' })\">확인</button>" +
             '</div>',
-          props: ['submitting'],
+          props: ['submitting', 'readonly', 'completedAt', 'note', 'officialName', 'repairerName'],
           emits: ['close', 'confirm'],
         },
       },
@@ -128,6 +151,8 @@ async function mountView(damageId = 6) {
 describe('RepairDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockUsersApi.list.mockResolvedValue([])
+    mockDamagesApi.updateReview.mockResolvedValue(undefined)
     mockClipboard.writeText.mockResolvedValue(undefined)
   })
 
@@ -167,6 +192,21 @@ describe('RepairDetailView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('요청 정보 복사')
+  })
+
+  it('REQUESTED 상태에서 보수 불필요 처리 버튼을 표시하고 판정 API를 호출한다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    const noRepairBtn = wrapper.findAll('button').find((b) => b.text() === '보수 불필요 처리')
+    await noRepairBtn!.trigger('click')
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    await confirmBtn!.trigger('click')
+    await flushPromises()
+
+    expect(mockDamagesApi.updateReview).toHaveBeenCalledWith(6, 'CANCELED')
   })
 
   it('REQUESTED 상태에서 보수 완료 버튼을 표시하지 않는다', async () => {
@@ -252,7 +292,12 @@ describe('RepairDetailView', () => {
     await confirmBtn!.trigger('click')
     await flushPromises()
 
-    expect(mockRepairsApi.submitRequest).toHaveBeenCalledWith(6, { note: null })
+    expect(mockRepairsApi.submitRequest).toHaveBeenCalledWith(6, {
+      note: null,
+      processingPriority: 'URGENT',
+      reviewDamageType: 'CRACK',
+      repairerId: null,
+    })
   })
 
   it('요청 성공 시 상태가 REPAIR_IN_PROGRESS로 갱신된다', async () => {
@@ -366,6 +411,32 @@ describe('RepairDetailView', () => {
     expect(text).toContain('보수 완료')
   })
 
+  it('요청서 수정 확인 시 취소 후 판정 갱신과 재요청을 수행한다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
+    mockRepairsApi.cancelRequest.mockResolvedValue(detailCanceled)
+    mockRepairsApi.submitRequest.mockResolvedValue(detailInProgress)
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    const editBtn = wrapper.findAll('button').find((b) => b.text() === '요청서 내용 수정')
+    await editBtn!.trigger('click')
+    await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    await confirmBtn!.trigger('click')
+    await flushPromises()
+
+    expect(mockRepairsApi.cancelRequest).toHaveBeenCalledWith(6, { note: '요청서 수정' })
+    expect(mockDamagesApi.updateReview).toHaveBeenCalledWith(
+      6,
+      'REQUESTED',
+      'URGENT',
+      'CRACK',
+      '현장 확인 필요',
+    )
+    expect(mockRepairsApi.submitRequest).toHaveBeenCalledOnce()
+  })
+
   it('보수 완료 버튼 클릭 시 완료 모달을 연다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
 
@@ -390,7 +461,10 @@ describe('RepairDetailView', () => {
     await wrapper.find('[data-testid="completion-confirm"]').trigger('click')
     await flushPromises()
 
-    expect(mockRepairsApi.completeRepair).toHaveBeenCalledWith(6, { completedAt: '2026-08-01' })
+    expect(mockRepairsApi.completeRepair).toHaveBeenCalledWith(6, {
+      completedAt: '2026-08-01',
+      note: '완료 처리',
+    })
   })
 
   it('보수 완료 성공 시 상태가 REPAIR_COMPLETED로 갱신된다', async () => {
@@ -441,7 +515,7 @@ describe('RepairDetailView', () => {
 
   it('취소 확인 시 repairsApi.cancelRequest를 호출한다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
-    mockRepairsApi.cancelRequest.mockResolvedValue(baseDetail)
+    mockRepairsApi.cancelRequest.mockResolvedValue(detailCanceled)
 
     const wrapper = await mountView()
     await flushPromises()
@@ -453,12 +527,21 @@ describe('RepairDetailView', () => {
     await confirmBtn!.trigger('click')
     await flushPromises()
 
-    expect(mockRepairsApi.cancelRequest).toHaveBeenCalledWith(6)
+    expect(mockRepairsApi.cancelRequest).toHaveBeenCalledWith(6, { note: null })
+    expect(mockDamagesApi.updateReview).toHaveBeenCalledWith(
+      6,
+      'REQUESTED',
+      'URGENT',
+      'CRACK',
+      '현장 확인 필요',
+    )
   })
 
-  it('취소 성공 시 REQUESTED 상태로 되돌아가 보수 요청 버튼이 표시된다', async () => {
-    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
-    mockRepairsApi.cancelRequest.mockResolvedValue(baseDetail)
+  it('취소 성공 시 REQUESTED 상태로 복귀하고 보수 요청 버튼을 표시한다', async () => {
+    mockDamagesApi.getDetail
+      .mockResolvedValueOnce(detailInProgress)
+      .mockResolvedValueOnce(baseDetail)
+    mockRepairsApi.cancelRequest.mockResolvedValue(detailCanceled)
 
     const wrapper = await mountView()
     await flushPromises()
@@ -470,7 +553,9 @@ describe('RepairDetailView', () => {
     await confirmBtn!.trigger('click')
     await flushPromises()
 
-    expect(wrapper.findAll('button').find((b) => b.text().includes('보수 요청'))).toBeDefined()
+    const badges = wrapper.findAll('[data-testid="status-badge"]')
+    expect(badges.some((b) => b.text() === '요청 전')).toBe(true)
+    expect(wrapper.findAll('button').find((b) => b.text() === '보수 요청')).toBeDefined()
   })
 
   // ── REPAIR_COMPLETED 상태 ─────────────────────────────────

@@ -1,54 +1,67 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { RepairCompletePayload } from '@/types/repair'
 
 const props = withDefaults(
   defineProps<{
     submitting?: boolean
+    readonly?: boolean
+    completedAt?: string | null
+    note?: string | null
+    officialName?: string | null
+    repairerName?: string | null
   }>(),
-  { submitting: false },
+  {
+    submitting: false,
+    readonly: false,
+    completedAt: null,
+    note: null,
+    officialName: null,
+    repairerName: null,
+  },
 )
 
 const emit = defineEmits<{
   close: []
-  confirm: [completedAt: string]
+  confirm: [payload: RepairCompletePayload]
 }>()
 
 // ── 상태 ──────────────────────────────────────────────────────
 type Step = 'input' | 'confirm'
 const step = ref<Step>('input')
 
-const completedAt = ref('')
-const dateError = ref('')
-
-// 오늘 날짜(로컬 타임존) — 미래 날짜 차단 기준
-const todayStr = computed(() => {
+function localToday(): string {
   const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
-})
-
-// ── 유효성 검사 ────────────────────────────────────────────────
-function validate(): boolean {
-  if (!completedAt.value) {
-    dateError.value = '보수 완료 일자를 입력해주세요.'
-    return false
-  }
-  if (completedAt.value > todayStr.value) {
-    dateError.value = '미래 날짜는 선택할 수 없습니다.'
-    return false
-  }
-  dateError.value = ''
-  return true
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
+const completionDate = ref(props.completedAt?.slice(0, 10) ?? localToday())
+const completionNote = ref(props.note ?? '')
+const dateError = ref('')
+
+const todayStr = computed(localToday)
+
 function handleNext() {
-  if (validate()) step.value = 'confirm'
+  if (!completionDate.value) {
+    dateError.value = '보수 완료 일자를 입력해 주세요.'
+    return
+  }
+  if (completionDate.value > todayStr.value) {
+    dateError.value = '미래 날짜는 선택할 수 없습니다.'
+    return
+  }
+  dateError.value = ''
+  step.value = 'confirm'
 }
 
 function handleConfirm() {
-  emit('confirm', completedAt.value)
+  emit('confirm', {
+    completedAt: completionDate.value,
+    note: completionNote.value.trim() || null,
+  })
 }
 
 function handleBack() {
@@ -69,13 +82,13 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="보수 완료 처리"
+      :aria-label="readonly ? '완료 보고서 확인' : '보수 완료 처리'"
       @click.self="!submitting && emit('close')"
     >
       <div class="modal-panel">
         <!-- 헤더 -->
         <div class="modal-header">
-          <h2 class="modal-title">보수 완료 처리</h2>
+          <h2 class="modal-title">{{ readonly ? '완료 보고서 확인' : '보수 완료 처리' }}</h2>
           <button
             type="button"
             class="modal-close-btn"
@@ -100,31 +113,62 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         </div>
 
         <!-- 입력 단계 -->
-        <div v-if="step === 'input'" class="modal-body">
+        <div v-if="readonly" class="modal-body">
+          <div class="assignment-grid">
+            <div>
+              <span class="field-label">담당 주무관</span>
+              <p class="readonly-value">{{ officialName || '-' }}</p>
+            </div>
+            <div>
+              <span class="field-label">보수 담당자</span>
+              <p class="readonly-value">{{ repairerName || '-' }}</p>
+            </div>
+          </div>
+          <div class="field-group">
+            <span class="field-label">보수 완료 일자</span>
+            <p class="readonly-value">{{ completionDate || '-' }}</p>
+          </div>
+          <div class="field-group">
+            <span class="field-label">완료 메모</span>
+            <p class="readonly-value readonly-value--note">{{ completionNote || '-' }}</p>
+          </div>
+        </div>
+
+        <div v-else-if="step === 'input'" class="modal-body">
+          <div class="assignment-grid">
+            <div>
+              <span class="field-label">담당 주무관</span>
+              <p class="readonly-value">{{ officialName || '-' }}</p>
+            </div>
+            <div>
+              <span class="field-label">보수 담당자</span>
+              <p class="readonly-value">{{ repairerName || '-' }}</p>
+            </div>
+          </div>
           <div class="field-group">
             <label for="completion-date" class="field-label">
-              보수 완료 일자 <span class="required" aria-hidden="true">*</span>
+              보수 완료 일자 <span class="required">*</span>
             </label>
             <input
               id="completion-date"
-              v-model="completedAt"
+              v-model="completionDate"
               type="date"
               class="krds-input date-input"
               :max="todayStr"
-              :aria-describedby="dateError ? 'completion-date-error' : undefined"
               :aria-invalid="!!dateError"
               @input="dateError = ''"
             />
-            <p
-              v-if="dateError"
-              id="completion-date-error"
-              class="field-error"
-              role="alert"
-              aria-live="polite"
-            >
-              {{ dateError }}
-            </p>
-            <p class="field-hint">오늘 이전 날짜만 선택할 수 있습니다.</p>
+            <p v-if="dateError" class="field-error" role="alert">{{ dateError }}</p>
+            <label for="completion-note" class="field-label">완료 메모</label>
+            <textarea
+              id="completion-note"
+              v-model="completionNote"
+              class="krds-input note-input"
+              maxlength="1000"
+              rows="5"
+              placeholder="보수 완료 내용을 입력해주세요. (선택)"
+            />
+            <p class="field-hint">선택 입력 · 최대 1,000자</p>
           </div>
         </div>
 
@@ -145,12 +189,20 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             <polyline points="22 4 12 14.01 9 11.01" />
           </svg>
           <p class="confirm-text">보수 완료로 처리하시겠습니까?</p>
-          <p class="confirm-date">완료 일자: <strong>{{ completedAt }}</strong></p>
+          <p class="confirm-date">
+            완료 일자: <strong>{{ completionDate }}</strong>
+          </p>
+          <p v-if="completionNote.trim()" class="confirm-note">{{ completionNote.trim() }}</p>
         </div>
 
         <!-- 푸터 -->
         <div class="modal-footer">
-          <template v-if="step === 'input'">
+          <template v-if="readonly">
+            <button type="button" class="krds-btn medium filled primary" @click="emit('close')">
+              확인
+            </button>
+          </template>
+          <template v-else-if="step === 'input'">
             <button
               type="button"
               class="krds-btn medium outline"
@@ -209,7 +261,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 44rem;
+  max-width: 64rem;
+  max-height: 90dvh;
   background: var(--roady-surface-default);
   border-radius: 1.2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
@@ -260,6 +313,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 }
 
 .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
   padding: 2.4rem;
 }
 
@@ -283,10 +341,35 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   color: var(--roady-text-primary);
 }
 
-.confirm-date {
+.confirm-note {
   margin: 0;
   font-size: 1.4rem;
   color: var(--roady-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.confirm-date,
+.readonly-value {
+  margin: 0;
+  font-size: 1.4rem;
+  color: var(--roady-text-secondary);
+}
+
+.readonly-value--note {
+  white-space: pre-wrap;
+}
+
+.assignment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.6rem;
+}
+
+.assignment-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 /* ── 입력 필드 ── */
@@ -302,19 +385,23 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   color: var(--roady-text-primary);
 }
 
-.required {
-  color: var(--roady-status-danger, #e74c3c);
-  margin-left: 0.2rem;
+.note-input {
+  width: 100%;
+  resize: vertical;
 }
 
 .date-input {
   width: 100%;
 }
 
+.required,
+.field-error {
+  color: var(--roady-status-danger, #e74c3c);
+}
+
 .field-error {
   margin: 0;
   font-size: 1.3rem;
-  color: var(--roady-status-danger, #e74c3c);
 }
 
 .field-hint {

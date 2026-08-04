@@ -1,13 +1,14 @@
-// NOTE: Backend state transition APIs are not yet implemented (2026-08-04).
-// Required endpoints:
-//   POST /api/damages/{id}/repair-request    (REQUESTED → REPAIR_IN_PROGRESS)
-//   DELETE /api/damages/{id}/repair-request  (REPAIR_IN_PROGRESS → REQUESTED)
-//   POST /api/damages/{id}/repair-completion (REPAIR_IN_PROGRESS → REPAIR_COMPLETED)
+import type { DamageDetail } from '@/types/damage'
 
 export interface RepairRequestPayload {
   note?: string | null
+  processingPriority?: string | null
+  reviewDamageType?: string | null
+  repairerId?: number | null
 }
 
 export interface RepairCompletePayload {
-  completedAt: string // YYYY-MM-DD
+  completedAt: string
+  note?: string | null
 }
+export type RepairTransitionResult = Omit<DamageDetail, 'images'>

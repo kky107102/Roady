@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, watch, computed, onUnmounted } from 'vue'
+import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import { repairsApi } from '@/api/repairs'
+import { usersApi } from '@/api/users'
 import { useNotificationStore } from '@/stores/notification'
 import type { DamageDetail, DamageImage } from '@/types/damage'
+import type { UserSummary } from '@/types/auth'
+import type { RepairCompletePayload, RepairRequestPayload } from '@/types/repair'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -42,7 +45,16 @@ const imageBlobUrls = ref<Map<number, string>>(new Map())
 const imagesLoading = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const users = ref<UserSummary[]>([])
 let fetchSeq = 0
+
+onMounted(async () => {
+  try {
+    users.value = await usersApi.list()
+  } catch {
+    users.value = []
+  }
+})
 
 async function loadImages(d: DamageDetail, seq: number) {
   imagesLoading.value = true
@@ -88,7 +100,9 @@ async function fetchDetail(id: number) {
 
 watch(
   damageId,
-  (id) => { if (id != null) fetchDetail(id) },
+  (id) => {
+    if (id != null) fetchDetail(id)
+  },
   { immediate: true },
 )
 
@@ -110,6 +124,7 @@ const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
   REQUESTED: { label: '요청 전', type: 'warning' },
   REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
   REPAIR_COMPLETED: { label: '보수 완료', type: 'success' },
+  CANCELED: { label: '취소', type: 'neutral' },
 }
 
 function formatDateTime(str: string | null | undefined): string {
@@ -165,15 +180,23 @@ const caseIdText = computed(() => {
   return formatCaseId(detail.value.id, detail.value.createdAt)
 })
 
+const repairers = computed(() =>
+  users.value.filter((user) => user.active && user.role === 'REPAIRER'),
+)
+const officialName = computed(() => {
+  if (detail.value?.assignedToName) return detail.value.assignedToName
+  return users.value.find((user) => user.id === detail.value?.assignedTo)?.name ?? null
+})
+
 // ── 보수 요청 모달 상태 ────────────────────────────────────
 const requestModalOpen = ref(false)
-const requestModalReadonly = ref(false)
+const requestModalMode = ref<'create' | 'view' | 'edit'>('create')
 const requestConfirmOpen = ref(false)
-const pendingNote = ref<string | null>(null)
+const pendingRequest = ref<RepairRequestPayload | null>(null)
 const requestSubmitting = ref(false)
 
-function openRequestModal(readonly = false) {
-  requestModalReadonly.value = readonly
+function openRequestModal(mode: 'create' | 'view' | 'edit') {
+  requestModalMode.value = mode
   requestModalOpen.value = true
 }
 
@@ -182,9 +205,9 @@ function closeRequestModal() {
   requestModalOpen.value = false
 }
 
-function onRequestModalConfirm(note: string | null) {
+function onRequestModalConfirm(payload: RepairRequestPayload) {
   requestModalOpen.value = false
-  pendingNote.value = note
+  pendingRequest.value = payload
   requestConfirmOpen.value = true
 }
 
@@ -192,10 +215,40 @@ async function confirmRepairRequest() {
   if (!detail.value || requestSubmitting.value) return
   requestSubmitting.value = true
   try {
-    const updated = await repairsApi.submitRequest(detail.value.id, {
-      note: pendingNote.value,
-    })
-    detail.value = updated
+    const payload = pendingRequest.value
+    if (!payload?.processingPriority || !payload.reviewDamageType) return
+    let updated
+    if (requestModalMode.value === 'edit') {
+      await repairsApi.cancelRequest(detail.value.id, { note: '요청서 수정' })
+      await damagesApi.updateReview(
+        detail.value.id,
+        'REQUESTED',
+        payload.processingPriority,
+        payload.reviewDamageType,
+        detail.value.reviewNote,
+      )
+      updated = await repairsApi.submitRequest(detail.value.id, payload)
+    } else {
+      await damagesApi.updateReview(
+        detail.value.id,
+        'REQUESTED',
+        payload.processingPriority,
+        payload.reviewDamageType,
+        detail.value.reviewNote,
+      )
+      updated = await repairsApi.submitRequest(detail.value.id, payload)
+    }
+    const repairerName =
+      repairers.value.find((user) => user.id === payload.repairerId)?.name ?? null
+    detail.value = {
+      ...detail.value,
+      ...updated,
+      processingPriority: payload.processingPriority,
+      reviewDamageType: payload.reviewDamageType,
+      repairerId: payload.repairerId,
+      repairerName,
+      repairRequestNote: payload.note,
+    }
     requestConfirmOpen.value = false
     notification.success('보수 요청 처리되었습니다.')
   } catch {
@@ -213,8 +266,16 @@ async function confirmCancelRequest() {
   if (!detail.value || cancelSubmitting.value) return
   cancelSubmitting.value = true
   try {
-    const updated = await repairsApi.cancelRequest(detail.value.id)
-    detail.value = updated
+    await repairsApi.cancelRequest(detail.value.id, { note: null })
+    await damagesApi.updateReview(
+      detail.value.id,
+      'REQUESTED',
+      detail.value.processingPriority,
+      detail.value.reviewDamageType,
+      detail.value.reviewNote,
+    )
+    const refreshed = await damagesApi.getDetail(detail.value.id)
+    detail.value = refreshed
     cancelConfirmOpen.value = false
     notification.success('보수 요청이 취소되었습니다.')
   } catch {
@@ -226,20 +287,49 @@ async function confirmCancelRequest() {
 
 // ── 보수 완료 모달 ─────────────────────────────────────────
 const completionModalOpen = ref(false)
+const completionModalReadonly = ref(false)
 const completionSubmitting = ref(false)
 
-async function onCompletionConfirm(completedAt: string) {
+function openCompletionModal(readonly = false) {
+  completionModalReadonly.value = readonly
+  completionModalOpen.value = true
+}
+
+async function onCompletionConfirm(payload: RepairCompletePayload) {
   if (!detail.value || completionSubmitting.value) return
   completionSubmitting.value = true
   try {
-    const updated = await repairsApi.completeRepair(detail.value.id, { completedAt })
-    detail.value = updated
+    const updated = await repairsApi.completeRepair(detail.value.id, payload)
+    detail.value = {
+      ...detail.value,
+      ...updated,
+      repairCompletedAt: payload.completedAt,
+      repairCompletionNote: payload.note,
+    }
     completionModalOpen.value = false
     notification.success('보수 완료 처리되었습니다.')
   } catch {
     notification.error('보수 완료 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
   } finally {
     completionSubmitting.value = false
+  }
+}
+
+const noRepairConfirmOpen = ref(false)
+const noRepairSubmitting = ref(false)
+
+async function confirmNoRepair() {
+  if (!detail.value || noRepairSubmitting.value) return
+  noRepairSubmitting.value = true
+  try {
+    await damagesApi.updateReview(detail.value.id, 'CANCELED')
+    detail.value = { ...detail.value, currentStatus: 'CANCELED' }
+    noRepairConfirmOpen.value = false
+    notification.success('보수 불필요로 처리되었습니다.')
+  } catch {
+    notification.error('보수 불필요 처리 중 오류가 발생했습니다.')
+  } finally {
+    noRepairSubmitting.value = false
   }
 }
 
@@ -260,18 +350,15 @@ async function copyRequestInfo() {
     notification.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.')
   } finally {
     if (copyStateTimer) clearTimeout(copyStateTimer)
-    copyStateTimer = setTimeout(() => { copyState.value = 'idle' }, 3000)
+    copyStateTimer = setTimeout(() => {
+      copyState.value = 'idle'
+    }, 3000)
   }
 }
 
 onUnmounted(() => {
   if (copyStateTimer) clearTimeout(copyStateTimer)
 })
-
-// ── 보수 담당자 지정 여부 ──────────────────────────────────
-// NOTE: 현재 API에 보수 담당자 전용 필드가 없으므로 항상 수정/취소 가능으로 처리.
-// 백엔드에서 repair person 필드를 추가하면 이 computed를 업데이트해야 함.
-const canModifyRequest = computed(() => true)
 </script>
 
 <template>
@@ -446,14 +533,12 @@ const canModifyRequest = computed(() => true)
             <!-- ── REQUESTED: 요청 전 ── -->
             <template v-if="detail.currentStatus === 'REQUESTED'">
               <div class="action-section" aria-label="보수 요청 액션">
-                <p class="action-description">
-                  외부 보수 담당자에게 보수 요청을 전송하세요.
-                </p>
+                <p class="action-description">외부 보수 담당자에게 보수 요청을 전송하세요.</p>
                 <div class="action-btn-group">
                   <button
                     type="button"
                     class="krds-btn medium filled primary action-btn"
-                    @click="openRequestModal(false)"
+                    @click="openRequestModal('create')"
                   >
                     <svg
                       width="16"
@@ -472,8 +557,17 @@ const canModifyRequest = computed(() => true)
                   </button>
                   <button
                     type="button"
+                    class="krds-btn medium outline action-btn cancel-btn"
+                    @click="noRepairConfirmOpen = true"
+                  >
+                    보수 불필요 처리
+                  </button>
+                  <button
+                    type="button"
                     class="krds-btn medium outline action-btn"
-                    :aria-label="copyState === 'success' ? '복사 완료' : '요청 정보 클립보드에 복사'"
+                    :aria-label="
+                      copyState === 'success' ? '복사 완료' : '요청 정보 클립보드에 복사'
+                    "
                     @click="copyRequestInfo"
                   >
                     <svg
@@ -518,7 +612,7 @@ const canModifyRequest = computed(() => true)
                 </div>
                 <div class="repair-info-row">
                   <dt class="repair-info-label">보수 담당자</dt>
-                  <dd class="repair-info-value text-tertiary">-</dd>
+                  <dd class="repair-info-value">{{ detail.repairerName || '-' }}</dd>
                 </div>
               </dl>
               <div class="action-section" aria-label="요청 완료 상태 액션">
@@ -526,7 +620,7 @@ const canModifyRequest = computed(() => true)
                   <button
                     type="button"
                     class="krds-btn medium outline action-btn"
-                    @click="openRequestModal(true)"
+                    @click="openRequestModal('view')"
                   >
                     요청서 확인
                   </button>
@@ -535,19 +629,13 @@ const canModifyRequest = computed(() => true)
                   <button
                     type="button"
                     class="krds-btn small outline action-btn"
-                    :disabled="!canModifyRequest"
-                    :aria-disabled="!canModifyRequest"
-                    :title="!canModifyRequest ? '보수 담당자가 지정된 후에는 수정할 수 없습니다.' : undefined"
-                    @click="openRequestModal(false)"
+                    @click="openRequestModal('edit')"
                   >
                     요청서 내용 수정
                   </button>
                   <button
                     type="button"
                     class="krds-btn small outline action-btn cancel-btn"
-                    :disabled="!canModifyRequest"
-                    :aria-disabled="!canModifyRequest"
-                    :title="!canModifyRequest ? '보수 담당자가 지정된 후에는 취소할 수 없습니다.' : undefined"
                     @click="cancelConfirmOpen = true"
                   >
                     요청 취소
@@ -557,7 +645,7 @@ const canModifyRequest = computed(() => true)
                   <button
                     type="button"
                     class="krds-btn medium filled primary action-btn"
-                    @click="completionModalOpen = true"
+                    @click="openCompletionModal(false)"
                   >
                     <svg
                       width="16"
@@ -583,11 +671,13 @@ const canModifyRequest = computed(() => true)
               <dl class="repair-info-list">
                 <div class="repair-info-row">
                   <dt class="repair-info-label">완료 일자</dt>
-                  <dd class="repair-info-value">{{ formatDate(detail.updatedAt) }}</dd>
+                  <dd class="repair-info-value">
+                    {{ formatDate(detail.repairCompletedAt || detail.updatedAt) }}
+                  </dd>
                 </div>
                 <div class="repair-info-row">
                   <dt class="repair-info-label">보수 담당자</dt>
-                  <dd class="repair-info-value text-tertiary">-</dd>
+                  <dd class="repair-info-value">{{ detail.repairerName || '-' }}</dd>
                 </div>
               </dl>
               <div class="action-section" aria-label="보수 완료 상태 액션">
@@ -595,9 +685,16 @@ const canModifyRequest = computed(() => true)
                   <button
                     type="button"
                     class="krds-btn medium outline action-btn"
-                    @click="openRequestModal(true)"
+                    @click="openRequestModal('view')"
                   >
                     요청서 확인
+                  </button>
+                  <button
+                    type="button"
+                    class="krds-btn medium outline action-btn"
+                    @click="openCompletionModal(true)"
+                  >
+                    완료 보고서 확인
                   </button>
                 </div>
               </div>
@@ -622,8 +719,11 @@ const canModifyRequest = computed(() => true)
       :detail="detail"
       :image-blob-urls="imageBlobUrls"
       :images-loading="imagesLoading"
-      :readonly="requestModalReadonly"
+      :readonly="requestModalMode === 'view'"
+      :editing="requestModalMode === 'edit'"
       :submitting="requestSubmitting"
+      :official-name="officialName"
+      :repairers="repairers"
       @close="closeRequestModal"
       @confirm="onRequestModalConfirm"
     />
@@ -639,7 +739,13 @@ const canModifyRequest = computed(() => true)
         @click.self="!requestSubmitting && (requestConfirmOpen = false)"
       >
         <div class="confirm-panel">
-          <p class="confirm-message">해당 사건을 보수 요청 처리하시겠습니까?</p>
+          <p class="confirm-message">
+            {{
+              requestModalMode === 'edit'
+                ? '보수 요청서를 수정하시겠습니까?'
+                : '해당 사건을 보수 요청 처리하시겠습니까?'
+            }}
+          </p>
           <div class="confirm-actions">
             <button
               type="button"
@@ -657,6 +763,41 @@ const canModifyRequest = computed(() => true)
               @click="confirmRepairRequest"
             >
               {{ requestSubmitting ? '처리 중...' : '확인' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 보수 불필요 확인 다이얼로그 -->
+    <Teleport to="body">
+      <div
+        v-if="noRepairConfirmOpen"
+        class="confirm-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label="보수 불필요 처리 확인"
+        @click.self="!noRepairSubmitting && (noRepairConfirmOpen = false)"
+      >
+        <div class="confirm-panel">
+          <p class="confirm-message">해당 사건을 보수 불필요로 처리하시겠습니까?</p>
+          <div class="confirm-actions">
+            <button
+              type="button"
+              class="krds-btn medium outline"
+              :disabled="noRepairSubmitting"
+              @click="noRepairConfirmOpen = false"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              class="krds-btn medium filled primary cancel-confirm-btn"
+              :disabled="noRepairSubmitting"
+              :aria-busy="noRepairSubmitting"
+              @click="confirmNoRepair"
+            >
+              {{ noRepairSubmitting ? '처리 중...' : '확인' }}
             </button>
           </div>
         </div>
@@ -702,6 +843,11 @@ const canModifyRequest = computed(() => true)
     <RepairCompletionModal
       v-if="completionModalOpen"
       :submitting="completionSubmitting"
+      :readonly="completionModalReadonly"
+      :completed-at="detail?.repairCompletedAt || null"
+      :note="detail?.repairCompletionNote || null"
+      :official-name="officialName"
+      :repairer-name="detail?.repairerName || null"
       @close="completionModalOpen = false"
       @confirm="onCompletionConfirm"
     />
