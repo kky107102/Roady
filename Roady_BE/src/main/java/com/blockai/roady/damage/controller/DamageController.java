@@ -191,6 +191,34 @@ public class DamageController {
         ));
     }
 
+    @PatchMapping("/{damageId}/repair-complete")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public DamageSummaryResponse completeDamageRepair(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long damageId,
+            @Valid @RequestBody CreateDamageRepairRequest request
+    ) {
+        return DamageSummaryResponse.from(damageService.completeRepair(
+                damageId,
+                user.id(),
+                request.note()
+        ));
+    }
+
+    @PatchMapping("/{damageId}/repair-cancel")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public DamageSummaryResponse cancelDamageRepair(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long damageId,
+            @Valid @RequestBody CreateDamageRepairRequest request
+    ) {
+        return DamageSummaryResponse.from(damageService.cancelRepair(
+                damageId,
+                user.id(),
+                request.note()
+        ));
+    }
+
     @PostMapping("/{damageId}/analysis-jobs")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public CreateDamageAiAnalysisResponse createDamageAnalysisJob(@PathVariable Long damageId) {

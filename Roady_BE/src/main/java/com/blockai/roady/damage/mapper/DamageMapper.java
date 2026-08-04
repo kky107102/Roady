@@ -307,6 +307,17 @@ public interface DamageMapper {
             """)
     int transitionToRepairInProgress(@Param("damageId") Long damageId);
 
+    @Update("""
+            UPDATE damages
+            SET current_status = #{status}
+            WHERE id = #{damageId}
+              AND current_status = 'REPAIR_IN_PROGRESS'
+            """)
+    int transitionRepairInProgressToStatus(
+            @Param("damageId") Long damageId,
+            @Param("status") String status
+    );
+
     @Insert("""
             INSERT INTO repair_request_histories (
                 damage_id,

@@ -404,4 +404,110 @@ class DamageControllerTest {
 
         verify(damageService).requestRepair(3L, 2L, "hello");
     }
+
+    @Test
+    void completeDamageRepairPassesNoteAndReturnsUpdatedStatus() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 8, 4, 16, 0);
+        AuthenticatedUser principal = new AuthenticatedUser(2L, "inspector", UserRole.INSPECTOR);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
+        ));
+        when(damageService.completeRepair(3L, 2L, "done"))
+                .thenReturn(new DamageSummary(
+                        3L,
+                        10L,
+                        2L,
+                        null,
+                        "tactile block crack",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 8, 4, 14, 0),
+                        "REPAIR_COMPLETED",
+                        "HIGH",
+                        "CRACK",
+                        "reviewed",
+                        1L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        try {
+            mockMvc.perform(patch("/api/damages/{damageId}/repair-complete", 3L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "note": "done"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(3))
+                    .andExpect(jsonPath("$.currentStatus").value("REPAIR_COMPLETED"));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        verify(damageService).completeRepair(3L, 2L, "done");
+    }
+
+    @Test
+    void cancelDamageRepairPassesNoteAndReturnsUpdatedStatus() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 8, 4, 16, 0);
+        AuthenticatedUser principal = new AuthenticatedUser(2L, "inspector", UserRole.INSPECTOR);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
+        ));
+        when(damageService.cancelRepair(3L, 2L, "cancel"))
+                .thenReturn(new DamageSummary(
+                        3L,
+                        10L,
+                        2L,
+                        null,
+                        "tactile block crack",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 8, 4, 14, 0),
+                        "CANCELED",
+                        "HIGH",
+                        "CRACK",
+                        "reviewed",
+                        1L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        try {
+            mockMvc.perform(patch("/api/damages/{damageId}/repair-cancel", 3L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "note": "cancel"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(3))
+                    .andExpect(jsonPath("$.currentStatus").value("CANCELED"));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        verify(damageService).cancelRepair(3L, 2L, "cancel");
+    }
 }
