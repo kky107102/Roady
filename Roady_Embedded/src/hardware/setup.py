@@ -31,6 +31,7 @@ setup(
             "test_dot_matrix = hardware.tools.test_dot_matrix:main",
             "test_gps = hardware.tools.test_gps:main",
             "test_hall_sensor = hardware.tools.test_hall_sensor:main",
+            "measure_hall_pulses = hardware.tools.measure_hall_pulses:main",
             "test_leds = hardware.tools.test_leds:main",
         ],
     },

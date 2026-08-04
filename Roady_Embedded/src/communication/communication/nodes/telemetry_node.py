@@ -13,15 +13,15 @@ class TelemetryNode(Node):
     def __init__(self) -> None:
         super().__init__("telemetry_node")
 
-        self.declare_parameter("robot_id", 365)
-        self.declare_parameter("broker_host", "localhost")
+        self.declare_parameter("robot_id", 2)
+        self.declare_parameter("broker_host", "i15a404.p.ssafy.io")
         self.declare_parameter("broker_port", 1883)
         self.declare_parameter("mqtt_username", "")
         self.declare_parameter("mqtt_password", "")
         self.declare_parameter("publish_interval_sec", 5.0)
+        self.declare_parameter("battery_level", 80)
         self.declare_parameter("mock_latitude", 37.5012748)
         self.declare_parameter("mock_longitude", 127.039625)
-        self.declare_parameter("mock_longitude_step", 0.0001)
 
         robot_id = int(self.get_parameter("robot_id").value)
         if robot_id <= 0:
@@ -38,7 +38,10 @@ class TelemetryNode(Node):
         self._mock = MockTelemetry(
             latitude=latitude,
             longitude=longitude,
-            longitude_step=float(self.get_parameter("mock_longitude_step").value),
+            # Location changes must come from /location/fix, whose wheel-based
+            # offset is updated only by Hall-sensor pulses.
+            longitude_step=0.0,
+            battery_level=int(self.get_parameter("battery_level").value),
         )
         username = str(self.get_parameter("mqtt_username").value)
         password = str(self.get_parameter("mqtt_password").value)
@@ -59,7 +62,10 @@ class TelemetryNode(Node):
         interval = max(float(self.get_parameter("publish_interval_sec").value), 1.0)
         self._timer = self.create_timer(interval, self._publish_telemetry)
         self.get_logger().info(
-            f"Telemetry ready: topic={self._topic}, interval={interval:.1f}s"
+            "Telemetry ready: "
+            f"broker={self.get_parameter('broker_host').value}:"
+            f"{self.get_parameter('broker_port').value}, topic={self._topic}; "
+            f"interval={interval:.1f}s, location=/location/fix"
         )
 
     def _on_location(self, message: NavSatFix) -> None:

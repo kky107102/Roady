@@ -42,8 +42,8 @@ def test_longitude_increases_and_latitude_stays_fixed():
     assert first["latitude"] == second["latitude"] == 37.5012748
     assert first["longitude"] == 127.039625
     assert second["longitude"] == 127.039725
-    assert 20 <= first["batteryLevel"] <= 100
-    assert 20 <= second["batteryLevel"] <= 100
+    assert first["batteryLevel"] == 80
+    assert second["batteryLevel"] == 80
 
 
 def test_live_location_replaces_mock_movement():

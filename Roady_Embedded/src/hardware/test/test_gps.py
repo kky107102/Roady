@@ -1,5 +1,8 @@
+import pytest
+
 from hardware.devices.gps import parse_nmea
-from hardware.devices.location_estimator import LocationEstimator
+from hardware.devices.location_estimator import LocationEstimator, offset_longitude
+from hardware.devices.wheel_odometry import WheelOdometry
 
 
 def with_checksum(payload):
@@ -30,6 +33,49 @@ def test_reject_bad_checksum():
     assert parse_nmea("$GNGGA,,,,,,0,00,25.5,,,,,,*00") is None
 
 
+def test_location_uses_hall_distance_from_virtual_origin():
+    estimator = LocationEstimator(37.5, 127.0)
+    estimator.update_distance(100.0)
+
+    location = estimator.location()
+
+    assert location.source == "wheel"
+    assert location.latitude == 37.5
+    assert location.longitude > 127.0
+
+
+def test_indoor_virtual_map_scales_physical_wheel_distance_only_for_display():
+    estimator = LocationEstimator(
+        37.5012748,
+        127.039625,
+        wheel_distance_scale=24.0368829327,
+    )
+    estimator.update_distance(0.367)
+
+    location = estimator.location()
+    expected = offset_longitude(37.5012748, 127.039625, 8.821536036299)
+
+    assert location.latitude == expected[0]
+    assert location.longitude == pytest.approx(expected[1])
+
+
+def test_one_hall_pulse_becomes_one_demo_longitude_step():
+    odometry = WheelOdometry(distance_per_pulse_m=0.367)
+    estimator = LocationEstimator(
+        37.5012748,
+        127.039625,
+        wheel_distance_scale=24.0368829327,
+    )
+
+    wheel = odometry.record_pulse()
+    estimator.update_distance(wheel.distance_m)
+    location = estimator.location()
+
+    assert wheel.distance_m == pytest.approx(0.367)
+    assert location.latitude == pytest.approx(37.5012748)
+    assert location.longitude == pytest.approx(127.039725, abs=1e-10)
+
+
 class FakeClock:
     def __init__(self):
         self.now = 0.0
@@ -38,10 +84,19 @@ class FakeClock:
         return self.now
 
 
-def test_location_uses_gps_until_it_becomes_stale():
+def test_indoor_mode_ignores_gps_updates():
+    estimator = LocationEstimator(37.5, 127.0, use_gps=False)
+    estimator.update_gps(37.6, 127.1)
+
+    assert estimator.location().source == "wheel"
+    assert estimator.location().latitude == 37.5
+    assert estimator.location().longitude == 127.0
+
+
+def test_outdoor_mode_uses_recent_gps_then_wheel_distance():
     clock = FakeClock()
     estimator = LocationEstimator(
-        37.5, 127.0, gps_timeout_sec=3.0, clock=clock
+        37.5, 127.0, use_gps=True, gps_timeout_sec=3.0, clock=clock
     )
     estimator.update_distance(10.0)
     estimator.update_gps(37.6, 127.1)
@@ -54,14 +109,3 @@ def test_location_uses_gps_until_it_becomes_stale():
     assert fallback.source == "wheel"
     assert abs(fallback.latitude - 37.6) < 1e-6
     assert fallback.longitude > 127.1
-
-
-def test_location_uses_virtual_origin_before_first_gps_fix():
-    estimator = LocationEstimator(37.5, 127.0, heading_deg=0.0)
-    estimator.update_distance(100.0)
-
-    location = estimator.location()
-
-    assert location.source == "wheel"
-    assert location.latitude > 37.5
-    assert abs(location.longitude - 127.0) < 1e-9
