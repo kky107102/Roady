@@ -394,6 +394,90 @@ class DamageServiceTest {
     }
 
     @Test
+    void requestRepairTransitionsStatusAndStoresNormalizedNote() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(1);
+        when(damageMapper.insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("hello"),
+                any(LocalDateTime.class)
+        )).thenReturn(1);
+
+        DamageSummary result = damageService.requestRepair(3L, 2L, "  hello  ");
+
+        verify(damageMapper).transitionToRepairInProgress(3L);
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("hello"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_IN_PROGRESS");
+    }
+
+    @Test
+    void requestRepairStoresBlankNoteAsNull() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
+        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(1);
+
+        damageService.requestRepair(3L, 2L, "   ");
+
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq(null),
+                any(LocalDateTime.class)
+        );
+    }
+
+    @Test
+    void requestRepairRejectsDamageOutsideRequestedStatus() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "AI_ANALYZED", "HIGH", "CRACK", null));
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only REQUESTED damage can move to repair in progress.");
+
+        verify(damageMapper, never()).transitionToRepairInProgress(any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsConcurrentStatusChange() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
+        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(0);
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Damage is no longer in REQUESTED status.");
+
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsTooLongNote() {
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "a".repeat(1001)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("note must be 1000 characters or less.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+        verify(damageMapper, never()).transitionToRepairInProgress(any());
+    }
+
+    @Test
     void searchReturnsZeroTotalPagesForEmptyResult() {
         DamageSearchCriteria criteria = new DamageSearchCriteria(
                 null,
