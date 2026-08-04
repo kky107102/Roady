@@ -17,6 +17,8 @@ import com.blockai.roady.damage.domain.ReviewDamageType;
 import com.blockai.roady.damage.geocoding.GeocodedAddress;
 import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
+import com.blockai.roady.user.domain.UserRole;
+import com.blockai.roady.user.service.UserAccountService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,10 +49,16 @@ public class DamageService {
 
     private final DamageMapper damageMapper;
     private final KakaoReverseGeocodingClient geocodingClient;
+    private final UserAccountService userAccountService;
 
-    public DamageService(DamageMapper damageMapper, KakaoReverseGeocodingClient geocodingClient) {
+    public DamageService(
+            DamageMapper damageMapper,
+            KakaoReverseGeocodingClient geocodingClient,
+            UserAccountService userAccountService
+    ) {
         this.damageMapper = damageMapper;
         this.geocodingClient = geocodingClient;
+        this.userAccountService = userAccountService;
     }
 
     @Transactional
@@ -190,18 +199,33 @@ public class DamageService {
     }
 
     @Transactional
-    public DamageSummary requestRepair(Long damageId, Long requestedBy, String note) {
+    public DamageSummary requestRepair(
+            Long damageId,
+            Long requestedBy,
+            String processingPriority,
+            String reviewDamageType,
+            Long repairerId,
+            String note
+    ) {
         if (requestedBy == null) {
             throw new IllegalArgumentException("Authenticated user is required.");
         }
 
         String normalizedNote = normalizeRepairRequestNote(note);
+        Long normalizedRepairerId = normalizeRepairerId(repairerId);
         DamageSummary damage = getSummary(damageId);
         if (!"REQUESTED".equals(damage.currentStatus())) {
             throw new IllegalArgumentException("Only REQUESTED damage can move to repair in progress.");
         }
 
-        int updatedRows = damageMapper.transitionToRepairInProgress(damageId);
+        String normalizedPriority = normalizeRepairProcessingPriority(processingPriority, damage.processingPriority());
+        String normalizedReviewDamageType = normalizeRepairReviewDamageType(reviewDamageType, damage.reviewDamageType());
+        int updatedRows = damageMapper.transitionToRepairInProgress(
+                damageId,
+                normalizedPriority,
+                normalizedReviewDamageType,
+                normalizedRepairerId
+        );
         if (updatedRows != 1) {
             throw new IllegalArgumentException("Damage is no longer in REQUESTED status.");
         }
@@ -209,6 +233,7 @@ public class DamageService {
         damageMapper.insertRepairRequestHistory(
                 damageId,
                 requestedBy,
+                normalizedRepairerId,
                 "REQUESTED",
                 "REPAIR_IN_PROGRESS",
                 normalizedNote,
@@ -218,23 +243,106 @@ public class DamageService {
     }
 
     @Transactional
-    public DamageSummary completeRepair(Long damageId, Long requestedBy, String note) {
-        return transitionRepairInProgress(
+    public DamageSummary updateRepairRequest(
+            Long damageId,
+            Long requestedBy,
+            String processingPriority,
+            String reviewDamageType,
+            Long repairerId,
+            String note
+    ) {
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        String normalizedNote = normalizeRepairRequestNote(note);
+        String normalizedPriority = normalizeProcessingPriority(processingPriority);
+        String normalizedReviewDamageType = normalizeReviewDamageType(reviewDamageType);
+        Long normalizedRepairerId = normalizeRepairerId(repairerId);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can update repair request.");
+        }
+
+        int updatedRows = damageMapper.updateRepairRequest(
+                damageId,
+                normalizedPriority,
+                normalizedReviewDamageType,
+                normalizedRepairerId
+        );
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
                 damageId,
                 requestedBy,
-                note,
-                "REPAIR_COMPLETED"
+                normalizedRepairerId,
+                "REPAIR_IN_PROGRESS",
+                "REPAIR_IN_PROGRESS",
+                normalizedNote,
+                LocalDateTime.now()
         );
+        return getSummary(damageId);
+    }
+
+    @Transactional
+    public DamageSummary completeRepair(Long damageId, Long requestedBy, LocalDate completedAt, String note) {
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        LocalDate normalizedCompletedAt = normalizeRepairCompletedAt(completedAt);
+        String normalizedNote = normalizeRepairRequestNote(note);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can move to REPAIR_COMPLETED.");
+        }
+
+        int updatedRows = damageMapper.completeRepair(damageId, normalizedCompletedAt, normalizedNote);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
+                damageId,
+                requestedBy,
+                damage.repairerId(),
+                "REPAIR_IN_PROGRESS",
+                "REPAIR_COMPLETED",
+                normalizedNote,
+                LocalDateTime.now()
+        );
+        return getSummary(damageId);
     }
 
     @Transactional
     public DamageSummary cancelRepair(Long damageId, Long requestedBy, String note) {
-        return transitionRepairInProgress(
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        String normalizedNote = normalizeRepairRequestNote(note);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can move to REQUESTED.");
+        }
+
+        int updatedRows = damageMapper.cancelRepairRequest(damageId);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
                 damageId,
                 requestedBy,
-                note,
-                "CANCELED"
+                damage.repairerId(),
+                "REPAIR_IN_PROGRESS",
+                "REQUESTED",
+                normalizedNote,
+                LocalDateTime.now()
         );
+        return getSummary(damageId);
     }
 
     @Transactional(readOnly = true)
@@ -337,38 +445,6 @@ public class DamageService {
         return normalized;
     }
 
-    private DamageSummary transitionRepairInProgress(
-            Long damageId,
-            Long requestedBy,
-            String note,
-            String nextStatus
-    ) {
-        if (requestedBy == null) {
-            throw new IllegalArgumentException("Authenticated user is required.");
-        }
-
-        String normalizedNote = normalizeRepairRequestNote(note);
-        DamageSummary damage = getSummary(damageId);
-        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
-            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can move to " + nextStatus + ".");
-        }
-
-        int updatedRows = damageMapper.transitionRepairInProgressToStatus(damageId, nextStatus);
-        if (updatedRows != 1) {
-            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
-        }
-
-        damageMapper.insertRepairRequestHistory(
-                damageId,
-                requestedBy,
-                "REPAIR_IN_PROGRESS",
-                nextStatus,
-                normalizedNote,
-                LocalDateTime.now()
-        );
-        return getSummary(damageId);
-    }
-
     private String normalizeRepairRequestNote(String note) {
         if (!StringUtils.hasText(note)) {
             return null;
@@ -378,6 +454,49 @@ public class DamageService {
             throw new IllegalArgumentException("note must be 1000 characters or less.");
         }
         return normalized;
+    }
+
+    private LocalDate normalizeRepairCompletedAt(LocalDate completedAt) {
+        if (completedAt == null) {
+            throw new IllegalArgumentException("completedAt is required.");
+        }
+        if (completedAt.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("completedAt cannot be a future date.");
+        }
+        return completedAt;
+    }
+
+    private String normalizeRepairProcessingPriority(String processingPriority, String fallback) {
+        String normalized = normalizeProcessingPriority(processingPriority);
+        return normalized == null ? fallback : normalized;
+    }
+
+    private String normalizeRepairReviewDamageType(String reviewDamageType, String fallback) {
+        String normalized = normalizeReviewDamageType(reviewDamageType);
+        return normalized == null ? fallback : normalized;
+    }
+
+    private String normalizeReviewDamageType(String reviewDamageType) {
+        if (!StringUtils.hasText(reviewDamageType)) {
+            return null;
+        }
+        String normalized = reviewDamageType.trim().toUpperCase(Locale.ROOT);
+        if (!ReviewDamageType.contains(normalized)) {
+            throw new IllegalArgumentException("Invalid review damage type.");
+        }
+        return normalized;
+    }
+
+    private Long normalizeRepairerId(Long repairerId) {
+        if (repairerId == null) {
+            return null;
+        }
+        var repairer = userAccountService.findById(repairerId)
+                .orElseThrow(() -> new IllegalArgumentException("Repairer not found."));
+        if (repairer.role() != UserRole.REPAIRER) {
+            throw new IllegalArgumentException("repairerId must reference a REPAIRER user.");
+        }
+        return repairer.id();
     }
 
     private String normalizeProcessingPriority(String processingPriority) {

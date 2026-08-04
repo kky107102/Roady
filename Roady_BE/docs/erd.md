@@ -1,6 +1,6 @@
 # Roady 백엔드 ERD
 
-이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장하고, 별도 관리자 검토 이력은 저장하지 않는다. 보수 요청 시에는 담당자 배정 없이 상태를 전환한 요청/완료/취소 이력과 보수 담당자 배정/취소 이력을 별도 테이블에 저장한다.
+이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정/완료까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장한다. 현재 보수 담당자와 완료 보고 정보는 `damages`에 저장하고, 보수 요청·수정·완료·취소 이력은 `repair_request_histories`에 누적한다.
 
 ## 1. 테이블 목록
 
@@ -25,6 +25,7 @@ users 1:N robots (responsible)
 users 1:N robot_commands (requests)
 users 1:N damages (reports)
 users 1:N damages (assigned)
+users 1:N damages (repairs)
 users 1:N repair_assignments (assigns)
 users 1:N repair_assignments (repairs)
 users 1:N repair_request_histories (requests)
@@ -135,6 +136,9 @@ erDiagram
         varchar processing_priority "NULL"
         varchar review_damage_type "NULL"
         varchar review_note "NULL"
+        bigint repairer_id FK "NULL"
+        date repair_completed_at "NULL"
+        varchar repair_completion_note "NULL, max 1000"
         datetime created_at
         datetime updated_at
     }
@@ -193,6 +197,7 @@ erDiagram
     users ||--o{ robot_commands : requests
     users ||--o{ damages : reports
     users ||--o{ damages : assigned_to
+    users ||--o{ damages : repairs
     users ||--o{ repair_assignments : assigns
     users ||--o{ repair_assignments : repairs
     users ||--o{ repair_request_histories : requests
@@ -356,6 +361,9 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 | `damages.processing_priority` | 관리자가 보수 필요로 판정한 경우의 처리 우선순위. 판정 되돌리기 또는 취소 시 `NULL` |
 | `damages.review_damage_type` | 관리자가 판정한 파손 유형. 기존 데이터는 보정하지 않고 `NULL` 유지 |
 | `damages.review_note` | 관리자 판정 비고. 공백은 `NULL`, 최대 1,000자 |
+| `damages.repairer_id` | 현재 보수 요청을 배정받은 `REPAIRER` 역할 사용자 ID. 미지정 또는 요청 취소 후에는 `NULL` |
+| `damages.repair_completed_at` | 실제 보수 완료 일자. 서버 처리 시각인 `updated_at`과 별도로 저장하며 완료 전에는 `NULL` |
+| `damages.repair_completion_note` | 보수 완료 보고 메모. 공백은 `NULL`, 최대 1,000자 |
 | `repair_assignments.repairer_id` | 보수 요청을 배정받은 보수 담당자 ID |
 | `repair_assignments.assigned_by` | 보수 요청을 생성하거나 배정한 관리자/점검 담당자 ID |
 | `repair_request_histories.repair_assignment_id` | 보수 배정과 연결된 이력인 경우 배정 ID를 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청은 `NULL` |
@@ -371,6 +379,7 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 | `idx_damages_status_created_at_id` | `current_status, created_at DESC, id DESC` | 처리 상태별 기간 검색 및 최신순 페이지 조회 |
 | `idx_damages_robot_created_at` | `robot_id, created_at` | 로봇별 파손 검색 |
 | `idx_damages_assigned_to_created_at` | `assigned_to, created_at` | 담당자별 파손 검색 |
+| `idx_damages_repairer_created_at` | `repairer_id, created_at` | 현재 보수 담당자별 파손 검색 |
 | `idx_users_assigned_region_code` | `assigned_region_code` | 담당 시군구 코드별 사용자 조회 |
 | `idx_damages_address_name` | `address_name` | 지번 주소 키워드 검색 |
 | `idx_damages_road_address_name` | `road_address_name` | 도로명 주소 키워드 검색 |
@@ -390,6 +399,7 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 - 파손 유형 컬럼이 없는 구버전 `damage_ai_analysis_results` 테이블: `docs/sql/add-damage-ai-analysis-damage-type.sql`을 한 번 실행한다.
 - 관리자 처리 우선순위 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-processing-priority.sql`을 한 번 실행한다.
 - 관리자 판정 파손 유형/비고 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-review-fields.sql`을 한 번 실행한다. 기존 데이터의 판정값은 보정하지 않고 `NULL`로 유지한다.
+- 보수 담당자/완료 보고 컬럼이 없는 구버전 `damages` 테이블: `docs/sql/add-damage-repair-management-fields.sql`을 한 번 실행한다. 기존 데이터는 세 컬럼 모두 `NULL`로 유지한다.
 
 대표 조회 쿼리는 다음 실행계획을 확인한다.
 
