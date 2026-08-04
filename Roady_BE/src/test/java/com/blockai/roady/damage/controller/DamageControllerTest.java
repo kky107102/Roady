@@ -26,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -361,7 +362,7 @@ class DamageControllerTest {
                 null,
                 List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
         ));
-        when(damageService.requestRepair(3L, 2L, "hello"))
+        when(damageService.requestRepair(3L, 2L, "HIGH", "CRACK", 9L, "hello"))
                 .thenReturn(new DamageSummary(
                         3L,
                         10L,
@@ -392,6 +393,9 @@ class DamageControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
+                                      "processingPriority": "HIGH",
+                                      "reviewDamageType": "CRACK",
+                                      "repairerId": 9,
                                       "note": "hello"
                                     }
                                     """))
@@ -402,7 +406,63 @@ class DamageControllerTest {
             SecurityContextHolder.clearContext();
         }
 
-        verify(damageService).requestRepair(3L, 2L, "hello");
+        verify(damageService).requestRepair(3L, 2L, "HIGH", "CRACK", 9L, "hello");
+    }
+
+    @Test
+    void updateDamageRepairRequestPassesEditableFieldsAndKeepsStatus() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 8, 4, 15, 30);
+        AuthenticatedUser principal = new AuthenticatedUser(2L, "inspector", UserRole.INSPECTOR);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
+        ));
+        when(damageService.updateRepairRequest(3L, 2L, "URGENT", "LARGE_MISSING", 9L, "changed"))
+                .thenReturn(new DamageSummary(
+                        3L,
+                        10L,
+                        2L,
+                        null,
+                        "tactile block crack",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 8, 4, 14, 0),
+                        "REPAIR_IN_PROGRESS",
+                        "URGENT",
+                        "LARGE_MISSING",
+                        "reviewed",
+                        1L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        try {
+            mockMvc.perform(patch("/api/damages/{damageId}/repair-request", 3L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "processingPriority": "URGENT",
+                                      "reviewDamageType": "LARGE_MISSING",
+                                      "repairerId": 9,
+                                      "note": "changed"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(3))
+                    .andExpect(jsonPath("$.currentStatus").value("REPAIR_IN_PROGRESS"));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        verify(damageService).updateRepairRequest(3L, 2L, "URGENT", "LARGE_MISSING", 9L, "changed");
     }
 
     @Test
@@ -414,7 +474,7 @@ class DamageControllerTest {
                 null,
                 List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
         ));
-        when(damageService.completeRepair(3L, 2L, "done"))
+        when(damageService.completeRepair(3L, 2L, LocalDate.of(2026, 8, 4), "done"))
                 .thenReturn(new DamageSummary(
                         3L,
                         10L,
@@ -445,6 +505,7 @@ class DamageControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
+                                      "completedAt": "2026-08-04",
                                       "note": "done"
                                     }
                                     """))
@@ -455,7 +516,7 @@ class DamageControllerTest {
             SecurityContextHolder.clearContext();
         }
 
-        verify(damageService).completeRepair(3L, 2L, "done");
+        verify(damageService).completeRepair(3L, 2L, LocalDate.of(2026, 8, 4), "done");
     }
 
     @Test
@@ -484,7 +545,7 @@ class DamageControllerTest {
                         BigDecimal.valueOf(37.5665),
                         BigDecimal.valueOf(126.978),
                         LocalDateTime.of(2026, 8, 4, 14, 0),
-                        "CANCELED",
+                        "REQUESTED",
                         "HIGH",
                         "CRACK",
                         "reviewed",
@@ -503,7 +564,7 @@ class DamageControllerTest {
                                     """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.id").value(3))
-                    .andExpect(jsonPath("$.currentStatus").value("CANCELED"));
+                    .andExpect(jsonPath("$.currentStatus").value("REQUESTED"));
         } finally {
             SecurityContextHolder.clearContext();
         }

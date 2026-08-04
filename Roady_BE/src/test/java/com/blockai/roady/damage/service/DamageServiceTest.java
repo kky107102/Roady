@@ -14,6 +14,9 @@ import com.blockai.roady.damage.domain.DamageSummary;
 import com.blockai.roady.damage.geocoding.GeocodedAddress;
 import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
+import com.blockai.roady.user.domain.UserAccount;
+import com.blockai.roady.user.domain.UserRole;
+import com.blockai.roady.user.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -47,6 +51,9 @@ class DamageServiceTest {
 
     @Mock
     private KakaoReverseGeocodingClient geocodingClient;
+
+    @Mock
+    private UserAccountService userAccountService;
 
     @InjectMocks
     private DamageService damageService;
@@ -398,22 +405,24 @@ class DamageServiceTest {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", "reviewed"))
                 .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"));
-        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(1);
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(1);
         when(damageMapper.insertRepairRequestHistory(
                 eq(3L),
                 eq(2L),
+                eq((Long) null),
                 eq("REQUESTED"),
                 eq("REPAIR_IN_PROGRESS"),
                 eq("hello"),
                 any(LocalDateTime.class)
         )).thenReturn(1);
 
-        DamageSummary result = damageService.requestRepair(3L, 2L, "  hello  ");
+        DamageSummary result = damageService.requestRepair(3L, 2L, null, null, null, "  hello  ");
 
-        verify(damageMapper).transitionToRepairInProgress(3L);
+        verify(damageMapper).transitionToRepairInProgress(3L, "HIGH", "CRACK", null);
         verify(damageMapper).insertRepairRequestHistory(
                 eq(3L),
                 eq(2L),
+                eq((Long) null),
                 eq("REQUESTED"),
                 eq("REPAIR_IN_PROGRESS"),
                 eq("hello"),
@@ -427,13 +436,14 @@ class DamageServiceTest {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null))
                 .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
-        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(1);
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(1);
 
-        damageService.requestRepair(3L, 2L, "   ");
+        damageService.requestRepair(3L, 2L, null, null, null, "   ");
 
         verify(damageMapper).insertRepairRequestHistory(
                 eq(3L),
                 eq(2L),
+                eq((Long) null),
                 eq("REQUESTED"),
                 eq("REPAIR_IN_PROGRESS"),
                 eq(null),
@@ -446,35 +456,97 @@ class DamageServiceTest {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "AI_ANALYZED", "HIGH", "CRACK", null));
 
-        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "hello"))
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "hello"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Only REQUESTED damage can move to repair in progress.");
 
-        verify(damageMapper, never()).transitionToRepairInProgress(any());
-        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+        verify(damageMapper, never()).transitionToRepairInProgress(any(), any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void requestRepairRejectsConcurrentStatusChange() {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
-        when(damageMapper.transitionToRepairInProgress(3L)).thenReturn(0);
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(0);
 
-        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "hello"))
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "hello"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Damage is no longer in REQUESTED status.");
 
-        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
     void requestRepairRejectsTooLongNote() {
-        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "a".repeat(1001)))
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "a".repeat(1001)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("note must be 1000 characters or less.");
 
         verify(damageMapper, never()).findSummaryById(any());
-        verify(damageMapper, never()).transitionToRepairInProgress(any());
+        verify(damageMapper, never()).transitionToRepairInProgress(any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsUserWithoutRepairerRole() {
+        when(userAccountService.findById(9L)).thenReturn(Optional.of(new UserAccount(
+                9L,
+                "inspector",
+                "hash",
+                "inspector@roady.local",
+                "Inspector",
+                null,
+                UserRole.INSPECTOR,
+                true,
+                LocalDateTime.of(2026, 8, 4, 10, 0)
+        )));
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "HIGH", "CRACK", 9L, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("repairerId must reference a REPAIRER user.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+    }
+
+    @Test
+    void updateRepairRequestKeepsStatusAndStoresEditHistory() {
+        when(userAccountService.findById(9L)).thenReturn(Optional.of(new UserAccount(
+                9L,
+                "repairer",
+                "hash",
+                "repairer@roady.local",
+                "Repairer",
+                null,
+                UserRole.REPAIRER,
+                true,
+                LocalDateTime.of(2026, 8, 4, 10, 0)
+        )));
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "NORMAL", "POTHOLE", null))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null, 9L));
+        when(damageMapper.updateRepairRequest(3L, "HIGH", "CRACK", 9L)).thenReturn(1);
+
+        DamageSummary result = damageService.updateRepairRequest(
+                3L,
+                2L,
+                " high ",
+                " crack ",
+                9L,
+                "  assignment changed  "
+        );
+
+        verify(damageMapper).updateRepairRequest(3L, "HIGH", "CRACK", 9L);
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq(9L),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("assignment changed"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_IN_PROGRESS");
+        assertThat(result.repairerId()).isEqualTo(9L);
     }
 
     @Test
@@ -482,14 +554,16 @@ class DamageServiceTest {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
                 .thenReturn(summary(3L, "REPAIR_COMPLETED", "HIGH", "CRACK", "reviewed"));
-        when(damageMapper.transitionRepairInProgressToStatus(3L, "REPAIR_COMPLETED")).thenReturn(1);
+        LocalDate completedAt = LocalDate.of(2026, 8, 4);
+        when(damageMapper.completeRepair(3L, completedAt, "done")).thenReturn(1);
 
-        DamageSummary result = damageService.completeRepair(3L, 2L, "  done  ");
+        DamageSummary result = damageService.completeRepair(3L, 2L, completedAt, "  done  ");
 
-        verify(damageMapper).transitionRepairInProgressToStatus(3L, "REPAIR_COMPLETED");
+        verify(damageMapper).completeRepair(3L, completedAt, "done");
         verify(damageMapper).insertRepairRequestHistory(
                 eq(3L),
                 eq(2L),
+                eq((Long) null),
                 eq("REPAIR_IN_PROGRESS"),
                 eq("REPAIR_COMPLETED"),
                 eq("done"),
@@ -502,21 +576,22 @@ class DamageServiceTest {
     void cancelRepairTransitionsStatusAndStoresHistory() {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
-                .thenReturn(summary(3L, "CANCELED", "HIGH", "CRACK", "reviewed"));
-        when(damageMapper.transitionRepairInProgressToStatus(3L, "CANCELED")).thenReturn(1);
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.cancelRepairRequest(3L)).thenReturn(1);
 
         DamageSummary result = damageService.cancelRepair(3L, 2L, "  cancel  ");
 
-        verify(damageMapper).transitionRepairInProgressToStatus(3L, "CANCELED");
+        verify(damageMapper).cancelRepairRequest(3L);
         verify(damageMapper).insertRepairRequestHistory(
                 eq(3L),
                 eq(2L),
+                eq((Long) null),
                 eq("REPAIR_IN_PROGRESS"),
-                eq("CANCELED"),
+                eq("REQUESTED"),
                 eq("cancel"),
                 any(LocalDateTime.class)
         );
-        assertThat(result.currentStatus()).isEqualTo("CANCELED");
+        assertThat(result.currentStatus()).isEqualTo("REQUESTED");
     }
 
     @Test
@@ -524,25 +599,39 @@ class DamageServiceTest {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
 
-        assertThatThrownBy(() -> damageService.completeRepair(3L, 2L, "done"))
+        assertThatThrownBy(() -> damageService.completeRepair(3L, 2L, LocalDate.of(2026, 8, 4), "done"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Only REPAIR_IN_PROGRESS damage can move to REPAIR_COMPLETED.");
 
-        verify(damageMapper, never()).transitionRepairInProgressToStatus(any(), any());
-        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+        verify(damageMapper, never()).completeRepair(any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void completeRepairRejectsFutureCompletionDate() {
+        assertThatThrownBy(() -> damageService.completeRepair(
+                3L,
+                2L,
+                LocalDate.now().plusDays(1),
+                "done"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("completedAt cannot be a future date.");
+
+        verify(damageMapper, never()).findSummaryById(any());
     }
 
     @Test
     void cancelRepairRejectsConcurrentStatusChange() {
         when(damageMapper.findSummaryById(3L))
                 .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
-        when(damageMapper.transitionRepairInProgressToStatus(3L, "CANCELED")).thenReturn(0);
+        when(damageMapper.cancelRepairRequest(3L)).thenReturn(0);
 
         assertThatThrownBy(() -> damageService.cancelRepair(3L, 2L, "cancel"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Damage is no longer in REPAIR_IN_PROGRESS status.");
 
-        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -727,6 +816,17 @@ class DamageServiceTest {
             String reviewDamageType,
             String reviewNote
     ) {
+        return summary(id, status, processingPriority, reviewDamageType, reviewNote, null);
+    }
+
+    private DamageSummary summary(
+            Long id,
+            String status,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote,
+            Long repairerId
+    ) {
         LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
         return new DamageSummary(
                 id,
@@ -748,6 +848,13 @@ class DamageServiceTest {
                 processingPriority,
                 reviewDamageType,
                 reviewNote,
+                "Inspector",
+                repairerId,
+                repairerId == null ? null : "Repairer",
+                null,
+                null,
+                null,
+                null,
                 2L,
                 updatedAt,
                 updatedAt
