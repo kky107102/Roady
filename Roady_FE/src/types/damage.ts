@@ -59,6 +59,13 @@ export interface DamageDetail {
   robotId: number | null
   reportedBy: number | null
   assignedTo: number | null
+  assignedToName?: string | null
+  repairerId?: number | null
+  repairerName?: string | null
+  repairRequestedAt?: string | null
+  repairRequestNote?: string | null
+  repairCompletedAt?: string | null
+  repairCompletionNote?: string | null
   description: string | null
   addressName?: string | null
   roadAddressName?: string | null

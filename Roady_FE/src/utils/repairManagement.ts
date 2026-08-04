@@ -73,8 +73,9 @@ const FILTER_TO_STATUS: Record<RepairStatusFilter, string> = {
 export function parseStatusesParam(
   param: string | string[] | null | undefined,
 ): RepairStatusFilter[] {
-  if (!param) return [...REPAIR_STATUS_FILTERS]
+  if (param == null) return [...REPAIR_STATUS_FILTERS]
   const raw = Array.isArray(param) ? param.join(',') : param
+  if (raw.trim() === '') return []
   const parsed = raw
     .split(',')
     .map((s) => STATUS_TO_FILTER[s.trim()])
