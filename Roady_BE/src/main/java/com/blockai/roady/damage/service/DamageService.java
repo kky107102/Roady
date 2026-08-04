@@ -36,6 +36,7 @@ public class DamageService {
 
     private static final int MAX_IMAGE_COUNT = 50;
     private static final int MAX_REVIEW_NOTE_LENGTH = 1000;
+    private static final int MAX_REPAIR_REQUEST_NOTE_LENGTH = 1000;
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
     private static final Set<String> REVIEW_STATUSES = Set.of(
             "AI_ANALYZED",
@@ -188,6 +189,54 @@ public class DamageService {
         return getSummary(damageId);
     }
 
+    @Transactional
+    public DamageSummary requestRepair(Long damageId, Long requestedBy, String note) {
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        String normalizedNote = normalizeRepairRequestNote(note);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REQUESTED".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REQUESTED damage can move to repair in progress.");
+        }
+
+        int updatedRows = damageMapper.transitionToRepairInProgress(damageId);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REQUESTED status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
+                damageId,
+                requestedBy,
+                "REQUESTED",
+                "REPAIR_IN_PROGRESS",
+                normalizedNote,
+                LocalDateTime.now()
+        );
+        return getSummary(damageId);
+    }
+
+    @Transactional
+    public DamageSummary completeRepair(Long damageId, Long requestedBy, String note) {
+        return transitionRepairInProgress(
+                damageId,
+                requestedBy,
+                note,
+                "REPAIR_COMPLETED"
+        );
+    }
+
+    @Transactional
+    public DamageSummary cancelRepair(Long damageId, Long requestedBy, String note) {
+        return transitionRepairInProgress(
+                damageId,
+                requestedBy,
+                note,
+                "CANCELED"
+        );
+    }
+
     @Transactional(readOnly = true)
     public List<DamageImageMetadata> getImageMetadata(Long damageId) {
         getSummary(damageId);
@@ -284,6 +333,49 @@ public class DamageService {
         String normalized = reviewNote.trim();
         if (normalized.length() > MAX_REVIEW_NOTE_LENGTH) {
             throw new IllegalArgumentException("reviewNote must be 1000 characters or less.");
+        }
+        return normalized;
+    }
+
+    private DamageSummary transitionRepairInProgress(
+            Long damageId,
+            Long requestedBy,
+            String note,
+            String nextStatus
+    ) {
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        String normalizedNote = normalizeRepairRequestNote(note);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can move to " + nextStatus + ".");
+        }
+
+        int updatedRows = damageMapper.transitionRepairInProgressToStatus(damageId, nextStatus);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
+                damageId,
+                requestedBy,
+                "REPAIR_IN_PROGRESS",
+                nextStatus,
+                normalizedNote,
+                LocalDateTime.now()
+        );
+        return getSummary(damageId);
+    }
+
+    private String normalizeRepairRequestNote(String note) {
+        if (!StringUtils.hasText(note)) {
+            return null;
+        }
+        String normalized = note.trim();
+        if (normalized.length() > MAX_REPAIR_REQUEST_NOTE_LENGTH) {
+            throw new IllegalArgumentException("note must be 1000 characters or less.");
         }
         return normalized;
     }

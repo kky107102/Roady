@@ -20,6 +20,8 @@ setup(
     entry_points={
         "console_scripts": [
             "mock_damage_detection_node = perception.nodes.mock_damage_detection_node:main",
+            "obstacle_detection_node = perception.nodes.obstacle_detection_node:main",
+            "safety_fusion_node = perception.nodes.safety_fusion_node:main",
         ],
     },
 )

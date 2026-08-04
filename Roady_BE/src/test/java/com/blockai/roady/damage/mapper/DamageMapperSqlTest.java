@@ -111,6 +111,51 @@ class DamageMapperSqlTest {
                 .doesNotContain("LIMIT");
     }
 
+    @Test
+    void transitionToRepairInProgressRequiresRequestedStatus() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".transitionToRepairInProgress")
+                .getBoundSql(Map.of("damageId", 3L));
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("SET current_status = 'REPAIR_IN_PROGRESS'")
+                .contains("WHERE id = ? AND current_status = 'REQUESTED'");
+    }
+
+    @Test
+    void transitionRepairInProgressToStatusRequiresRepairInProgressStatus() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("status", "REPAIR_COMPLETED");
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".transitionRepairInProgressToStatus")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("SET current_status = ?")
+                .contains("WHERE id = ? AND current_status = 'REPAIR_IN_PROGRESS'");
+    }
+
+    @Test
+    void insertRepairRequestHistoryStoresStateTransitionAndNote() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("requestedBy", 2L);
+        parameters.put("beforeStatus", "REQUESTED");
+        parameters.put("afterStatus", "REPAIR_IN_PROGRESS");
+        parameters.put("note", "hello");
+        parameters.put("requestedAt", LocalDateTime.of(2026, 8, 4, 15, 0));
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".insertRepairRequestHistory")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("INSERT INTO repair_request_histories")
+                .contains("damage_id, requested_by, before_status, after_status, note, requested_at");
+    }
+
     private Configuration configuration() {
         Configuration mybatisConfiguration = new Configuration();
         mybatisConfiguration.addMapper(DamageMapper.class);

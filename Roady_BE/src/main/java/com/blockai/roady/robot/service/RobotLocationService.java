@@ -22,17 +22,20 @@ public class RobotLocationService {
     private final Validator validator;
     private final RobotLocationCache robotLocationCache;
     private final RobotLocationPublisher robotLocationPublisher;
+    private final RobotTelemetryPersistenceService robotTelemetryPersistenceService;
 
     public RobotLocationService(
             ObjectMapper objectMapper,
             Validator validator,
             RobotLocationCache robotLocationCache,
-            RobotLocationPublisher robotLocationPublisher
+            RobotLocationPublisher robotLocationPublisher,
+            RobotTelemetryPersistenceService robotTelemetryPersistenceService
     ) {
         this.objectMapper = objectMapper;
         this.validator = validator;
         this.robotLocationCache = robotLocationCache;
         this.robotLocationPublisher = robotLocationPublisher;
+        this.robotTelemetryPersistenceService = robotTelemetryPersistenceService;
     }
 
     public RobotLocationState saveLatest(Long robotId, String payload) {
@@ -54,6 +57,7 @@ public class RobotLocationService {
         RobotLocationState state = RobotLocationState.from(robotId, request, LocalDateTime.now());
         robotLocationCache.saveLatest(state);
         robotLocationPublisher.publish(state);
+        robotTelemetryPersistenceService.persistIfRequired(state);
         return state;
     }
 
