@@ -478,6 +478,74 @@ class DamageServiceTest {
     }
 
     @Test
+    void completeRepairTransitionsStatusAndStoresHistory() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "REPAIR_COMPLETED", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.transitionRepairInProgressToStatus(3L, "REPAIR_COMPLETED")).thenReturn(1);
+
+        DamageSummary result = damageService.completeRepair(3L, 2L, "  done  ");
+
+        verify(damageMapper).transitionRepairInProgressToStatus(3L, "REPAIR_COMPLETED");
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("REPAIR_COMPLETED"),
+                eq("done"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_COMPLETED");
+    }
+
+    @Test
+    void cancelRepairTransitionsStatusAndStoresHistory() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "CANCELED", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.transitionRepairInProgressToStatus(3L, "CANCELED")).thenReturn(1);
+
+        DamageSummary result = damageService.cancelRepair(3L, 2L, "  cancel  ");
+
+        verify(damageMapper).transitionRepairInProgressToStatus(3L, "CANCELED");
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("CANCELED"),
+                eq("cancel"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("CANCELED");
+    }
+
+    @Test
+    void completeRepairRejectsDamageOutsideRepairInProgressStatus() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
+
+        assertThatThrownBy(() -> damageService.completeRepair(3L, 2L, "done"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only REPAIR_IN_PROGRESS damage can move to REPAIR_COMPLETED.");
+
+        verify(damageMapper, never()).transitionRepairInProgressToStatus(any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void cancelRepairRejectsConcurrentStatusChange() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
+        when(damageMapper.transitionRepairInProgressToStatus(3L, "CANCELED")).thenReturn(0);
+
+        assertThatThrownBy(() -> damageService.cancelRepair(3L, 2L, "cancel"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Damage is no longer in REPAIR_IN_PROGRESS status.");
+
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void searchReturnsZeroTotalPagesForEmptyResult() {
         DamageSearchCriteria criteria = new DamageSearchCriteria(
                 null,

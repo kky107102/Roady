@@ -123,6 +123,21 @@ class DamageMapperSqlTest {
     }
 
     @Test
+    void transitionRepairInProgressToStatusRequiresRepairInProgressStatus() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("status", "REPAIR_COMPLETED");
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".transitionRepairInProgressToStatus")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("SET current_status = ?")
+                .contains("WHERE id = ? AND current_status = 'REPAIR_IN_PROGRESS'");
+    }
+
+    @Test
     void insertRepairRequestHistoryStoresStateTransitionAndNote() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("damageId", 3L);

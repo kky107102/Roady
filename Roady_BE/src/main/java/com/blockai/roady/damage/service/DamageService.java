@@ -217,6 +217,26 @@ public class DamageService {
         return getSummary(damageId);
     }
 
+    @Transactional
+    public DamageSummary completeRepair(Long damageId, Long requestedBy, String note) {
+        return transitionRepairInProgress(
+                damageId,
+                requestedBy,
+                note,
+                "REPAIR_COMPLETED"
+        );
+    }
+
+    @Transactional
+    public DamageSummary cancelRepair(Long damageId, Long requestedBy, String note) {
+        return transitionRepairInProgress(
+                damageId,
+                requestedBy,
+                note,
+                "CANCELED"
+        );
+    }
+
     @Transactional(readOnly = true)
     public List<DamageImageMetadata> getImageMetadata(Long damageId) {
         getSummary(damageId);
@@ -315,6 +335,38 @@ public class DamageService {
             throw new IllegalArgumentException("reviewNote must be 1000 characters or less.");
         }
         return normalized;
+    }
+
+    private DamageSummary transitionRepairInProgress(
+            Long damageId,
+            Long requestedBy,
+            String note,
+            String nextStatus
+    ) {
+        if (requestedBy == null) {
+            throw new IllegalArgumentException("Authenticated user is required.");
+        }
+
+        String normalizedNote = normalizeRepairRequestNote(note);
+        DamageSummary damage = getSummary(damageId);
+        if (!"REPAIR_IN_PROGRESS".equals(damage.currentStatus())) {
+            throw new IllegalArgumentException("Only REPAIR_IN_PROGRESS damage can move to " + nextStatus + ".");
+        }
+
+        int updatedRows = damageMapper.transitionRepairInProgressToStatus(damageId, nextStatus);
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage is no longer in REPAIR_IN_PROGRESS status.");
+        }
+
+        damageMapper.insertRepairRequestHistory(
+                damageId,
+                requestedBy,
+                "REPAIR_IN_PROGRESS",
+                nextStatus,
+                normalizedNote,
+                LocalDateTime.now()
+        );
+        return getSummary(damageId);
     }
 
     private String normalizeRepairRequestNote(String note) {

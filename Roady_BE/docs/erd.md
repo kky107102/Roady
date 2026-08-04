@@ -1,6 +1,6 @@
 # Roady 백엔드 ERD
 
-이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장하고, 별도 관리자 검토 이력은 저장하지 않는다. 보수 요청 시에는 담당자 배정 없이 상태만 전환한 이력과 보수 담당자 배정/취소 이력을 별도 테이블에 저장한다.
+이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장하고, 별도 관리자 검토 이력은 저장하지 않는다. 보수 요청 시에는 담당자 배정 없이 상태를 전환한 요청/완료/취소 이력과 보수 담당자 배정/취소 이력을 별도 테이블에 저장한다.
 
 ## 1. 테이블 목록
 
@@ -16,7 +16,7 @@
 | `damage_images` | 파손 데이터에 연결된 이미지 파일 여러 장의 정보를 저장한다. |
 | `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 유형, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
 | `repair_assignments` | 보수 요청 시 담당자, 배정자, 예정일, 메모를 저장한다. |
-| `repair_request_histories` | 보수 요청/배정/취소 시점의 상태 변경, 요청 메모, 담당자 배정 이력을 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청도 저장한다. |
+| `repair_request_histories` | 보수 요청/완료/취소 및 배정/취소 시점의 상태 변경, 요청 메모, 담당자 배정 이력을 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청도 저장한다. |
 
 ## 2. 주요 관계
 
@@ -361,7 +361,7 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 | `repair_request_histories.repair_assignment_id` | 보수 배정과 연결된 이력인 경우 배정 ID를 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청은 `NULL` |
 | `repair_request_histories.repairer_id` | 보수 담당자가 지정된 이력인 경우 담당자 ID를 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청은 `NULL` |
 | `repair_request_histories.note` | 요청 메모. 공백은 `NULL`, 최대 1,000자 |
-| `repair_request_histories` | 보수 요청/배정/취소 시점의 상태 변경과 담당자 배정 기록을 저장한다. 관리자 검토 이력과는 분리한다. |
+| `repair_request_histories` | 보수 요청/완료/취소 및 배정/취소 시점의 상태 변경과 담당자 배정 기록을 저장한다. 관리자 검토 이력과는 분리한다. |
 
 ## 5. 주요 조회 인덱스
 

@@ -1597,6 +1597,7 @@ COLLECTED -> CANCELED
 AI_ANALYZING -> CANCELED
 AI_ANALYZED -> CANCELED
 REQUESTED -> CANCELED
+REPAIR_IN_PROGRESS -> CANCELED
 ```
 
 | 기능 | Method | URL | 권한 | 설명 |
@@ -1634,6 +1635,8 @@ REQUESTED -> CANCELED
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | 보수 진행 전환 | `POST` | `/api/damages/{damageId}/repair-request` | `ADMIN`, `INSPECTOR` | 검토 완료(`REQUESTED`) 파손을 보수 진행 중(`REPAIR_IN_PROGRESS`)으로 변경하고 요청 메모를 이력에 저장한다. |
+| 보수 완료 처리 | `PATCH` | `/api/damages/{damageId}/repair-complete` | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 보수 완료(`REPAIR_COMPLETED`)로 변경하고 메모를 이력에 저장한다. |
+| 보수 요청 취소 | `PATCH` | `/api/damages/{damageId}/repair-cancel` | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 취소(`CANCELED`)로 변경하고 취소 메모를 이력에 저장한다. |
 | 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_IN_PROGRESS`로 변경하며 보수 요청 이력을 저장한다. |
 | 보수 배정 목록 조회 | `GET` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 담당자, 기간, 상태 기준으로 배정 목록을 조회한다. |
 | 보수 배정 상세 조회 | `GET` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 배정 상세 정보를 조회한다. |
@@ -1646,7 +1649,7 @@ REQUESTED -> CANCELED
 
 #### CreateDamageRepairRequest
 
-담당자 배정 없이 현재 파손을 바로 보수 진행 상태로 전환할 때 사용한다.
+담당자 배정 없이 현재 파손을 바로 보수 진행 상태로 전환하거나, 이후 보수 완료/취소 상태로 전환할 때 사용한다.
 
 ```json
 {
@@ -1654,7 +1657,15 @@ REQUESTED -> CANCELED
 }
 ```
 
-`note`는 선택 입력이며 공백 문자열은 `null`로 저장하고 최대 1,000자까지 허용한다. 현재 상태가 `REQUESTED`일 때만 처리하며, 상태 변경과 `repair_request_histories` 이력 저장은 하나의 트랜잭션으로 실행한다. 성공 응답은 최신 `DamageSummaryResponse`이고 `currentStatus`는 `REPAIR_IN_PROGRESS`이다.
+`note`는 선택 입력이며 공백 문자열은 `null`로 저장하고 최대 1,000자까지 허용한다. 상태 변경과 `repair_request_histories` 이력 저장은 하나의 트랜잭션으로 실행한다. 성공 응답은 최신 `DamageSummaryResponse`이다.
+
+상태 전환 규칙은 다음과 같다.
+
+```text
+POST /api/damages/{damageId}/repair-request: REQUESTED -> REPAIR_IN_PROGRESS
+PATCH /api/damages/{damageId}/repair-complete: REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
+PATCH /api/damages/{damageId}/repair-cancel: REPAIR_IN_PROGRESS -> CANCELED
+```
 
 #### CreateRepairAssignmentRequest
 
