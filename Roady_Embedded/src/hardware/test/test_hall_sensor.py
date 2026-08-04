@@ -63,6 +63,13 @@ def test_multiple_magnets_reduce_distance_per_pulse():
     assert odometry.record_pulse().distance_m == pytest.approx(math.pi * 0.05)
 
 
+def test_measured_distance_can_override_wheel_geometry():
+    odometry = WheelOdometry(distance_per_pulse_m=0.367)
+
+    assert odometry.record_pulse().distance_m == pytest.approx(0.367)
+    assert odometry.record_pulse().distance_m == pytest.approx(0.734)
+
+
 @pytest.mark.parametrize("diameter", [0.0, -0.1, float("nan")])
 def test_invalid_wheel_diameter_is_rejected(diameter):
     with pytest.raises(ValueError):
