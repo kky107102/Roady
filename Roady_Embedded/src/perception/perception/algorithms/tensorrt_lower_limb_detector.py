@@ -3,6 +3,7 @@ from __future__ import annotations
 import ctypes
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 import cv2
 import numpy as np
@@ -118,6 +119,7 @@ class TensorRTLowerLimbDetector:
         engine_path: str | Path,
         confidence: float = 0.25,
         iou_threshold: float = 0.45,
+        class_names: Sequence[str] | None = None,
     ) -> None:
         path = Path(engine_path).expanduser().resolve()
         if not path.is_file():
@@ -166,6 +168,7 @@ class TensorRTLowerLimbDetector:
         self._context.set_tensor_address(self._output_name, int(self._device_output.value))
         self._confidence = confidence
         self._iou_threshold = iou_threshold
+        self._class_names = tuple(class_names or self.CLASS_NAMES)
         self._closed = False
 
     def close(self) -> None:
@@ -269,7 +272,7 @@ class TensorRTLowerLimbDetector:
             detections.append(
                 TensorRTDetection(
                     class_id=class_id,
-                    label=self.CLASS_NAMES[class_id],
+                    label=self._class_names[class_id],
                     confidence=float(confidences[index]),
                     xyxy=xyxy,
                 )
