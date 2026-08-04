@@ -122,6 +122,19 @@ class AuthFlowTest {
     }
 
     @Test
+    void inspectorCanReadActiveRepairers() throws Exception {
+        String accessToken = login("inspector", PASSWORD);
+
+        mockMvc.perform(get("/api/users")
+                        .param("role", "REPAIRER")
+                        .param("active", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(accessToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].role").value("REPAIRER"))
+                .andExpect(jsonPath("$[0].active").value(true));
+    }
+
+    @Test
     void viewerCannotReadUsers() throws Exception {
         String accessToken = login("viewer", PASSWORD);
 

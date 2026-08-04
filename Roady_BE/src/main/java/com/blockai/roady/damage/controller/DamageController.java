@@ -7,6 +7,7 @@ import com.blockai.roady.damage.domain.DamageSearchCriteria;
 import com.blockai.roady.damage.dto.CreateDamageRepairRequest;
 import com.blockai.roady.damage.dto.CreateDamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageAiAnalysisResponse;
+import com.blockai.roady.damage.dto.CompleteDamageRepairRequest;
 import com.blockai.roady.damage.dto.DamageImageResponse;
 import com.blockai.roady.damage.dto.DamageMapMarkerResponse;
 import com.blockai.roady.damage.dto.DamageResponse;
@@ -187,6 +188,26 @@ public class DamageController {
         return DamageSummaryResponse.from(damageService.requestRepair(
                 damageId,
                 user.id(),
+                request.processingPriority(),
+                request.reviewDamageType(),
+                request.repairerId(),
+                request.note()
+        ));
+    }
+
+    @PatchMapping("/{damageId}/repair-request")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public DamageSummaryResponse updateDamageRepairRequest(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long damageId,
+            @Valid @RequestBody CreateDamageRepairRequest request
+    ) {
+        return DamageSummaryResponse.from(damageService.updateRepairRequest(
+                damageId,
+                user.id(),
+                request.processingPriority(),
+                request.reviewDamageType(),
+                request.repairerId(),
                 request.note()
         ));
     }
@@ -196,11 +217,12 @@ public class DamageController {
     public DamageSummaryResponse completeDamageRepair(
             @AuthenticationPrincipal AuthenticatedUser user,
             @PathVariable Long damageId,
-            @Valid @RequestBody CreateDamageRepairRequest request
+            @Valid @RequestBody CompleteDamageRepairRequest request
     ) {
         return DamageSummaryResponse.from(damageService.completeRepair(
                 damageId,
                 user.id(),
+                request.completedAt(),
                 request.note()
         ));
     }

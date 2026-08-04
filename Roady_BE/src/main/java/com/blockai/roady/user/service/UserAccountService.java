@@ -16,6 +16,8 @@ public interface UserAccountService {
 
     List<UserAccount> findAll();
 
+    List<UserAccount> findAll(UserRole role, Boolean active);
+
     UserAccount updateRole(Long id, UserRole role);
 
     UserAccount updateActive(Long id, boolean active);
