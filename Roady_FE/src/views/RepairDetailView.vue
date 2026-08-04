@@ -50,7 +50,7 @@ let fetchSeq = 0
 
 onMounted(async () => {
   try {
-    users.value = await usersApi.list()
+    users.value = await usersApi.list({ role: 'REPAIRER', active: true })
   } catch {
     users.value = []
   }
@@ -219,15 +219,7 @@ async function confirmRepairRequest() {
     if (!payload?.processingPriority || !payload.reviewDamageType) return
     let updated
     if (requestModalMode.value === 'edit') {
-      await repairsApi.cancelRequest(detail.value.id, { note: '요청서 수정' })
-      await damagesApi.updateReview(
-        detail.value.id,
-        'REQUESTED',
-        payload.processingPriority,
-        payload.reviewDamageType,
-        detail.value.reviewNote,
-      )
-      updated = await repairsApi.submitRequest(detail.value.id, payload)
+      updated = await repairsApi.updateRequest(detail.value.id, payload)
     } else {
       await damagesApi.updateReview(
         detail.value.id,
@@ -266,16 +258,8 @@ async function confirmCancelRequest() {
   if (!detail.value || cancelSubmitting.value) return
   cancelSubmitting.value = true
   try {
-    await repairsApi.cancelRequest(detail.value.id, { note: null })
-    await damagesApi.updateReview(
-      detail.value.id,
-      'REQUESTED',
-      detail.value.processingPriority,
-      detail.value.reviewDamageType,
-      detail.value.reviewNote,
-    )
-    const refreshed = await damagesApi.getDetail(detail.value.id)
-    detail.value = refreshed
+    const updated = await repairsApi.cancelRequest(detail.value.id, { note: null })
+    detail.value = { ...detail.value, ...updated }
     cancelConfirmOpen.value = false
     notification.success('보수 요청이 취소되었습니다.')
   } catch {

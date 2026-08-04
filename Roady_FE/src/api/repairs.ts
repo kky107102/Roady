@@ -31,6 +31,18 @@ export const repairsApi = {
     return data
   },
 
+  async updateRequest(
+    damageId: number,
+    payload: RepairRequestPayload,
+  ): Promise<RepairTransitionResult> {
+    const { data } = await http.patch<RepairTransitionResult>(
+      `/damages/${damageId}/repair-request`,
+      payload,
+    )
+    damagesApi.clearDetailCache(damageId)
+    return data
+  },
+
   async completeRepair(
     damageId: number,
     payload?: RepairCompletePayload,

@@ -49,6 +49,21 @@ describe('repairsApi', () => {
     expect(mocks.clearDetailCache).toHaveBeenCalledWith(6)
   })
 
+  it('보수 요청서 수정 API를 PATCH로 호출한다', async () => {
+    mocks.patch.mockResolvedValue({ data: updatedDamage })
+    const payload = {
+      note: '수정 메모',
+      processingPriority: 'HIGH',
+      reviewDamageType: 'WEAR',
+      repairerId: 9,
+    }
+
+    await expect(repairsApi.updateRequest(6, payload)).resolves.toBe(updatedDamage)
+
+    expect(mocks.patch).toHaveBeenCalledWith('/damages/6/repair-request', payload)
+    expect(mocks.clearDetailCache).toHaveBeenCalledWith(6)
+  })
+
   it('보수 완료 API를 PATCH로 호출한다', async () => {
     mocks.patch.mockResolvedValue({ data: updatedDamage })
 

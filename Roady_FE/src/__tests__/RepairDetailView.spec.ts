@@ -24,6 +24,8 @@ const mockRepairsApi = vi.hoisted(() => ({
     vi.fn<(id: number, payload?: RepairRequestPayload) => Promise<RepairTransitionResult>>(),
   cancelRequest:
     vi.fn<(id: number, payload?: RepairRequestPayload) => Promise<RepairTransitionResult>>(),
+  updateRequest:
+    vi.fn<(id: number, payload: RepairRequestPayload) => Promise<RepairTransitionResult>>(),
   completeRepair:
     vi.fn<(id: number, payload?: RepairCompletePayload) => Promise<RepairTransitionResult>>(),
 }))
@@ -411,10 +413,9 @@ describe('RepairDetailView', () => {
     expect(text).toContain('보수 완료')
   })
 
-  it('요청서 수정 확인 시 취소 후 판정 갱신과 재요청을 수행한다', async () => {
+  it('요청서 수정 확인 시 수정 API를 호출한다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
-    mockRepairsApi.cancelRequest.mockResolvedValue(detailCanceled)
-    mockRepairsApi.submitRequest.mockResolvedValue(detailInProgress)
+    mockRepairsApi.updateRequest.mockResolvedValue(detailInProgress)
 
     const wrapper = await mountView()
     await flushPromises()
@@ -426,15 +427,12 @@ describe('RepairDetailView', () => {
     await confirmBtn!.trigger('click')
     await flushPromises()
 
-    expect(mockRepairsApi.cancelRequest).toHaveBeenCalledWith(6, { note: '요청서 수정' })
-    expect(mockDamagesApi.updateReview).toHaveBeenCalledWith(
-      6,
-      'REQUESTED',
-      'URGENT',
-      'CRACK',
-      '현장 확인 필요',
-    )
-    expect(mockRepairsApi.submitRequest).toHaveBeenCalledOnce()
+    expect(mockRepairsApi.updateRequest).toHaveBeenCalledWith(6, {
+      note: null,
+      processingPriority: 'URGENT',
+      reviewDamageType: 'CRACK',
+      repairerId: null,
+    })
   })
 
   it('보수 완료 버튼 클릭 시 완료 모달을 연다', async () => {
@@ -528,20 +526,11 @@ describe('RepairDetailView', () => {
     await flushPromises()
 
     expect(mockRepairsApi.cancelRequest).toHaveBeenCalledWith(6, { note: null })
-    expect(mockDamagesApi.updateReview).toHaveBeenCalledWith(
-      6,
-      'REQUESTED',
-      'URGENT',
-      'CRACK',
-      '현장 확인 필요',
-    )
   })
 
   it('취소 성공 시 REQUESTED 상태로 복귀하고 보수 요청 버튼을 표시한다', async () => {
-    mockDamagesApi.getDetail
-      .mockResolvedValueOnce(detailInProgress)
-      .mockResolvedValueOnce(baseDetail)
-    mockRepairsApi.cancelRequest.mockResolvedValue(detailCanceled)
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
+    mockRepairsApi.cancelRequest.mockResolvedValue(baseDetail)
 
     const wrapper = await mountView()
     await flushPromises()
