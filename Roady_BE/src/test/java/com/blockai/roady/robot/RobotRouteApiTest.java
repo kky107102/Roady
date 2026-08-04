@@ -11,6 +11,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.blockai.roady.support.DefaultUserCredentials.PASSWORD;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -30,9 +31,9 @@ class RobotRouteApiTest {
 
     @Test
     void inspectorCanCreateReadUpdateAndDeleteRobotRoute() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Route Robot");
 
@@ -101,8 +102,8 @@ class RobotRouteApiTest {
 
     @Test
     void routeRejectsInvalidPointComposition() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Invalid Route Robot");
 
@@ -135,9 +136,9 @@ class RobotRouteApiTest {
 
     @Test
     void viewerCannotCreateUpdateOrDeleteRobotRoute() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Forbidden Route Robot");
         Long routeId = createRoute(inspectorToken, robotId, "권한 테스트 경로");
