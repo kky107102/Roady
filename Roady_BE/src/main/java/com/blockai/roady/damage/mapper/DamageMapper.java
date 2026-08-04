@@ -299,6 +299,41 @@ public interface DamageMapper {
             @Param("reviewNote") String reviewNote
     );
 
+    @Update("""
+            UPDATE damages
+            SET current_status = 'REPAIR_IN_PROGRESS'
+            WHERE id = #{damageId}
+              AND current_status = 'REQUESTED'
+            """)
+    int transitionToRepairInProgress(@Param("damageId") Long damageId);
+
+    @Insert("""
+            INSERT INTO repair_request_histories (
+                damage_id,
+                requested_by,
+                before_status,
+                after_status,
+                note,
+                requested_at
+            )
+            VALUES (
+                #{damageId},
+                #{requestedBy},
+                #{beforeStatus},
+                #{afterStatus},
+                #{note},
+                #{requestedAt}
+            )
+            """)
+    int insertRepairRequestHistory(
+            @Param("damageId") Long damageId,
+            @Param("requestedBy") Long requestedBy,
+            @Param("beforeStatus") String beforeStatus,
+            @Param("afterStatus") String afterStatus,
+            @Param("note") String note,
+            @Param("requestedAt") LocalDateTime requestedAt
+    );
+
     @Select("""
             <script>
             SELECT COUNT(*)

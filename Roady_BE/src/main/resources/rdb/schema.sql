@@ -129,6 +129,24 @@ CREATE TABLE IF NOT EXISTS damages (
     CONSTRAINT fk_damages_assigned_to FOREIGN KEY (assigned_to) REFERENCES users (id)
 );
 
+CREATE TABLE IF NOT EXISTS repair_request_histories (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    damage_id BIGINT NOT NULL,
+    repair_assignment_id BIGINT NULL,
+    requested_by BIGINT NOT NULL,
+    repairer_id BIGINT NULL,
+    before_status VARCHAR(30) NOT NULL,
+    after_status VARCHAR(30) NOT NULL,
+    note VARCHAR(1000) NULL,
+    requested_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_repair_request_histories_damage_requested_at (damage_id, requested_at DESC),
+    INDEX idx_repair_request_histories_assignment_requested_at (repair_assignment_id, requested_at DESC),
+    CONSTRAINT fk_repair_request_histories_damage FOREIGN KEY (damage_id) REFERENCES damages (id) ON DELETE CASCADE,
+    CONSTRAINT fk_repair_request_histories_requested_by FOREIGN KEY (requested_by) REFERENCES users (id),
+    CONSTRAINT fk_repair_request_histories_repairer FOREIGN KEY (repairer_id) REFERENCES users (id)
+);
+
 CREATE TABLE IF NOT EXISTS damage_images (
     id BIGINT NOT NULL AUTO_INCREMENT,
     damage_id BIGINT NOT NULL,

@@ -4,6 +4,7 @@ import com.blockai.roady.damage.domain.DamageImage;
 import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageMapBounds;
 import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.dto.CreateDamageRepairRequest;
 import com.blockai.roady.damage.dto.CreateDamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageAiAnalysisResponse;
 import com.blockai.roady.damage.dto.DamageImageResponse;
@@ -16,12 +17,14 @@ import com.blockai.roady.damage.service.DamageAiAnalysisService;
 import com.blockai.roady.damage.service.DamageService;
 import com.blockai.roady.robot.service.RobotService;
 import com.blockai.roady.security.AuthenticatedUser;
+import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -171,6 +174,20 @@ public class DamageController {
                 request.processingPriority(),
                 request.reviewDamageType(),
                 request.reviewNote()
+        ));
+    }
+
+    @PostMapping("/{damageId}/repair-request")
+    @PreAuthorize("hasAnyRole('ADMIN', 'INSPECTOR')")
+    public DamageSummaryResponse createDamageRepairRequest(
+            @AuthenticationPrincipal AuthenticatedUser user,
+            @PathVariable Long damageId,
+            @Valid @RequestBody CreateDamageRepairRequest request
+    ) {
+        return DamageSummaryResponse.from(damageService.requestRepair(
+                damageId,
+                user.id(),
+                request.note()
         ));
     }
 

@@ -11,11 +11,17 @@ import com.blockai.roady.damage.service.DamageService;
 import com.blockai.roady.robot.domain.Robot;
 import com.blockai.roady.robot.domain.RobotStatus;
 import com.blockai.roady.robot.service.RobotService;
+import com.blockai.roady.security.AuthenticatedUser;
+import com.blockai.roady.user.domain.UserRole;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -32,6 +38,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,6 +55,7 @@ class DamageControllerTest {
         robotService = mock(RobotService.class);
         DamageController controller = new DamageController(damageService, aiAnalysisService, robotService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
@@ -342,5 +350,58 @@ class DamageControllerTest {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Invalid damage review status."));
+    }
+
+    @Test
+    void createDamageRepairRequestPassesNoteAndReturnsUpdatedStatus() throws Exception {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 8, 4, 15, 0);
+        AuthenticatedUser principal = new AuthenticatedUser(2L, "inspector", UserRole.INSPECTOR);
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_INSPECTOR"))
+        ));
+        when(damageService.requestRepair(3L, 2L, "hello"))
+                .thenReturn(new DamageSummary(
+                        3L,
+                        10L,
+                        2L,
+                        null,
+                        "tactile block crack",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        BigDecimal.valueOf(37.5665),
+                        BigDecimal.valueOf(126.978),
+                        LocalDateTime.of(2026, 8, 4, 14, 0),
+                        "REPAIR_IN_PROGRESS",
+                        "HIGH",
+                        "CRACK",
+                        "reviewed",
+                        1L,
+                        updatedAt,
+                        updatedAt
+                ));
+
+        try {
+            mockMvc.perform(post("/api/damages/{damageId}/repair-request", 3L)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "note": "hello"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(3))
+                    .andExpect(jsonPath("$.currentStatus").value("REPAIR_IN_PROGRESS"));
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+
+        verify(damageService).requestRepair(3L, 2L, "hello");
     }
 }
