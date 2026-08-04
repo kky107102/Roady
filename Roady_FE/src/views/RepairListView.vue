@@ -2,6 +2,7 @@
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { damagesApi } from '@/api/damages'
+import type { DamageListQuery } from '@/api/damages'
 import type { DamageListItem } from '@/types/damage'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
@@ -55,23 +56,37 @@ const loading = ref(false)
 const fetchError = ref<string | null>(null)
 let fetchSeq = 0
 
+async function fetchAllPages(
+  query: Omit<DamageListQuery, 'page' | 'size'>,
+): Promise<DamageListItem[]> {
+  const firstPage = await damagesApi.list({ ...query, page: 0, size: 100 })
+  if (firstPage.totalPages <= 1) return firstPage.content
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: firstPage.totalPages - 1 }, (_, index) =>
+      damagesApi.list({ ...query, page: index + 1, size: 100 }),
+    ),
+  )
+
+  return [firstPage, ...remainingPages].flatMap((page) => page.content)
+}
+
 async function fetchItems() {
   const seq = ++fetchSeq
   loading.value = true
   fetchError.value = null
   try {
     const base = {
-      size: 1000,
       ...(appliedFrom.value ? { from: toApiFromDateTime(appliedFrom.value) } : {}),
       ...(appliedTo.value ? { to: toApiToDateTime(appliedTo.value) } : {}),
     }
     const [req, inProg, done] = await Promise.all([
-      damagesApi.list({ ...base, status: 'REQUESTED' }),
-      damagesApi.list({ ...base, status: 'REPAIR_IN_PROGRESS' }),
-      damagesApi.list({ ...base, status: 'REPAIR_COMPLETED' }),
+      fetchAllPages({ ...base, status: 'REQUESTED' }),
+      fetchAllPages({ ...base, status: 'REPAIR_IN_PROGRESS' }),
+      fetchAllPages({ ...base, status: 'REPAIR_COMPLETED' }),
     ])
     if (seq !== fetchSeq) return
-    allItems.value = [...req.content, ...inProg.content, ...done.content]
+    allItems.value = [...req, ...inProg, ...done]
   } catch {
     if (seq !== fetchSeq) return
     fetchError.value = '목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
@@ -221,15 +236,8 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 
     <!-- 본문 -->
     <div class="repair-body">
-      <!-- 목록 헤더: 제목 + 상태 필터 + 정렬 -->
+      <!-- 목록 헤더: 상태 필터 + 정렬 -->
       <div class="list-header">
-        <div class="list-title-group">
-          <h2 class="list-title">보수 관리</h2>
-          <span class="list-count">
-            현재 <strong>{{ totalCount.toLocaleString('ko-KR') }}</strong>건
-          </span>
-        </div>
-
         <!-- 인라인 상태 체크박스 필터 -->
         <fieldset class="status-filters" aria-label="보수 상태 필터">
           <legend class="sr-only">보수 상태 필터</legend>
@@ -318,35 +326,9 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 .list-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 1.2rem;
   flex-shrink: 0;
-}
-
-.list-title-group {
-  display: flex;
-  align-items: baseline;
-  gap: 0.8rem;
-  flex-shrink: 0;
-}
-
-.list-title {
-  margin: 0;
-  font-size: var(--krds-pc-font-size-heading-xsmall);
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-text-primary);
-  white-space: nowrap;
-}
-
-.list-count {
-  font-size: var(--krds-pc-font-size-body-small);
-  color: var(--roady-text-tertiary);
-  white-space: nowrap;
-}
-
-.list-count strong {
-  color: var(--roady-text-primary);
-  font-weight: var(--krds-font-weight-bold);
 }
 
 /* ── 상태 필터 ── */
@@ -355,6 +337,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.4rem 1.2rem;
+  min-width: 0;
   padding: 0;
   margin: 0;
   border: 0;
