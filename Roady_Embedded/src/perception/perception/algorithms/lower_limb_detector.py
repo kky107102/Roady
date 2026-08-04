@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -24,6 +24,7 @@ class LowerLimbDetector:
         confidence: float = 0.25,
         image_size: int = 640,
         device: str = "0",
+        class_names: Sequence[str] | None = None,
     ) -> None:
         path = Path(model_path).expanduser().resolve()
         if path.suffix == ".engine":
@@ -31,7 +32,11 @@ class LowerLimbDetector:
                 TensorRTLowerLimbDetector,
             )
 
-            self._backend = TensorRTLowerLimbDetector(path, confidence=confidence)
+            self._backend = TensorRTLowerLimbDetector(
+                path,
+                confidence=confidence,
+                class_names=class_names,
+            )
             self._model = None
             return
 
@@ -49,6 +54,10 @@ class LowerLimbDetector:
         self._image_size = image_size
         self._device = device
         self._backend = None
+
+    def close(self) -> None:
+        if self._backend is not None:
+            self._backend.close()
 
     def detect(self, image: np.ndarray) -> tuple[list[LowerLimbDetection], Any]:
         if image is None or image.size == 0:
