@@ -33,6 +33,7 @@ export interface DamageListItem {
   repairPriority: string | null
   confidenceScore: number | null
   createdAt: string
+  updatedAt?: string | null
 }
 
 export interface DamageSearchResponse {

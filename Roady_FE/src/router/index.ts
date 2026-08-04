@@ -53,8 +53,14 @@ const router = createRouter({
         {
           path: 'repairs',
           name: 'repairs',
-          component: () => import('@/views/PlaceholderView.vue'),
+          component: () => import('@/views/RepairListView.vue'),
           meta: { title: '보수 관리' },
+        },
+        {
+          path: 'repairs/:damageId',
+          name: 'repair-detail',
+          component: () => import('@/views/RepairDetailView.vue'),
+          meta: { title: '보수 사건 상세' },
         },
         {
           path: 'admin/users',
