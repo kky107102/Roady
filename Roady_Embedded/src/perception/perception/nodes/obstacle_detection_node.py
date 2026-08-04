@@ -92,7 +92,7 @@ class ObstacleDetectionNode(Node):
         self._benchmark_metadata["camera_height"] = msg.height
         self._benchmark_metadata["camera_encoding"] = msg.encoding
         temperature = jetson_temperature_c()
-        self._recorder.add(latency_ms, temperature)
+        self._recorder.add(latency_ms, temperature, len(detections))
 
         self._detected_publisher.publish(Bool(data=bool(detections)))
         payload = {

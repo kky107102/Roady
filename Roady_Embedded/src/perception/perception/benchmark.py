@@ -46,13 +46,20 @@ class BenchmarkRecorder:
         self.started_wall: float | None = None
         self.latencies_ms: list[float] = []
         self.temperatures_c: list[float] = []
+        self.detection_counts: list[int] = []
         self.completed = False
 
-    def add(self, latency_ms: float, temperature_c: float | None) -> None:
+    def add(
+        self,
+        latency_ms: float,
+        temperature_c: float | None,
+        detection_count: int = 0,
+    ) -> None:
         if self.started_monotonic is None:
             self.started_monotonic = time.monotonic()
             self.started_wall = time.time()
         self.latencies_ms.append(latency_ms)
+        self.detection_counts.append(detection_count)
         if temperature_c is not None:
             self.temperatures_c.append(temperature_c)
 
@@ -75,6 +82,8 @@ class BenchmarkRecorder:
         elapsed = self.elapsed_sec
         latency = self.latencies_ms
         temperatures = self.temperatures_c
+        detection_counts = self.detection_counts
+        detected_frames = sum(count > 0 for count in detection_counts)
         return {
             "schema_version": 1,
             "label": self.label,
@@ -89,6 +98,18 @@ class BenchmarkRecorder:
             "duration_sec": elapsed,
             "frames": len(latency),
             "end_to_end_fps": len(latency) / elapsed if elapsed > 0 else 0.0,
+            "detections": {
+                "detected_frames": detected_frames,
+                "detection_rate": (
+                    detected_frames / len(detection_counts) if detection_counts else 0.0
+                ),
+                "mean_per_frame": (
+                    sum(detection_counts) / len(detection_counts)
+                    if detection_counts
+                    else 0.0
+                ),
+                "max_per_frame": max(detection_counts, default=0),
+            },
             "latency_ms": {
                 "mean": sum(latency) / len(latency) if latency else 0.0,
                 "p50": percentile(latency, 50),
@@ -123,9 +144,11 @@ class BenchmarkRecorder:
         assert self.history_path is not None
         latency = report["latency_ms"]
         temperature = report["temperature_c"]
+        detections = report["detections"]
         configuration = report["configuration"]
         assert isinstance(latency, dict)
         assert isinstance(temperature, dict)
+        assert isinstance(detections, dict)
         assert isinstance(configuration, dict)
         row = {
             "started_at": report["started_at"],
@@ -133,6 +156,9 @@ class BenchmarkRecorder:
             "duration_sec": report["duration_sec"],
             "frames": report["frames"],
             "fps": report["end_to_end_fps"],
+            "detection_rate": detections["detection_rate"],
+            "detections_mean_per_frame": detections["mean_per_frame"],
+            "detections_max_per_frame": detections["max_per_frame"],
             "latency_mean_ms": latency["mean"],
             "latency_p50_ms": latency["p50"],
             "latency_p95_ms": latency["p95"],
