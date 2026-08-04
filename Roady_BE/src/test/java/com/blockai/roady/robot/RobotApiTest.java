@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.blockai.roady.support.DefaultUserCredentials.PASSWORD;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -34,7 +35,7 @@ class RobotApiTest {
 
     @Test
     void adminCanCreateReadAndUpdateRobot() throws Exception {
-        String adminToken = login("admin", "admin1234");
+        String adminToken = login("admin", PASSWORD);
         Long inspectorId = userId("inspector");
         String serialNumber = uniqueSerialNumber();
 
@@ -78,8 +79,8 @@ class RobotApiTest {
 
     @Test
     void viewerCanReadRobotsButCannotCreateRobot() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Viewer Read Robot", uniqueSerialNumber());
 
@@ -101,7 +102,7 @@ class RobotApiTest {
 
     @Test
     void createRobotRejectsDuplicateSerialNumber() throws Exception {
-        String adminToken = login("admin", "admin1234");
+        String adminToken = login("admin", PASSWORD);
         Long inspectorId = userId("inspector");
         String serialNumber = uniqueSerialNumber();
 
@@ -118,8 +119,8 @@ class RobotApiTest {
 
     @Test
     void inspectorCanCreateAndReadRobotCommands() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Command Robot", uniqueSerialNumber());
 
@@ -147,8 +148,8 @@ class RobotApiTest {
 
     @Test
     void inspectorCanReadPendingCommandsAndUpdateCommandStatus() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Command Status Robot", uniqueSerialNumber());
         Long commandId = createRobotCommand(inspectorToken, robotId, "RETURN_HOME");
@@ -198,8 +199,8 @@ class RobotApiTest {
 
     @Test
     void commandStatusRejectsInvalidTransition() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Invalid Transition Robot", uniqueSerialNumber());
         Long commandId = createRobotCommand(inspectorToken, robotId, "GET_STATUS");
@@ -219,9 +220,9 @@ class RobotApiTest {
 
     @Test
     void viewerCannotCreateOrReadRobotCommands() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Forbidden Command Robot", uniqueSerialNumber());
         Long commandId = createRobotCommand(inspectorToken, robotId, "EMERGENCY_STOP");
@@ -257,9 +258,9 @@ class RobotApiTest {
 
     @Test
     void inspectorCanCreateAndReadRobotStatusLogs() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String inspectorToken = login("inspector", "inspector1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String inspectorToken = login("inspector", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Status Robot", uniqueSerialNumber());
 
@@ -308,8 +309,8 @@ class RobotApiTest {
 
     @Test
     void viewerCannotCreateOrReadRobotStatusLogList() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Forbidden Status Robot", uniqueSerialNumber());
 
@@ -334,8 +335,8 @@ class RobotApiTest {
 
     @Test
     void viewerCanReadLatestRobotLocationFromRedis() throws Exception {
-        String adminToken = login("admin", "admin1234");
-        String viewerToken = login("viewer", "viewer1234");
+        String adminToken = login("admin", PASSWORD);
+        String viewerToken = login("viewer", PASSWORD);
         Long inspectorId = userId("inspector");
         Long robotId = createRobot(adminToken, inspectorId, "Latest Location Robot", uniqueSerialNumber());
 
