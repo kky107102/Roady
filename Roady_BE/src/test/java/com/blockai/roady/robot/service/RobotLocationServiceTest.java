@@ -25,6 +25,7 @@ class RobotLocationServiceTest {
 
     private RobotLocationCache robotLocationCache;
     private RobotLocationPublisher robotLocationPublisher;
+    private RobotTelemetryPersistenceService robotTelemetryPersistenceService;
     private RobotLocationService service;
 
     @BeforeEach
@@ -35,7 +36,14 @@ class RobotLocationServiceTest {
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         robotLocationCache = mock(RobotLocationCache.class);
         robotLocationPublisher = mock(RobotLocationPublisher.class);
-        service = new RobotLocationService(objectMapper, validator, robotLocationCache, robotLocationPublisher);
+        robotTelemetryPersistenceService = mock(RobotTelemetryPersistenceService.class);
+        service = new RobotLocationService(
+                objectMapper,
+                validator,
+                robotLocationCache,
+                robotLocationPublisher,
+                robotTelemetryPersistenceService
+        );
     }
 
     @Test
@@ -56,6 +64,7 @@ class RobotLocationServiceTest {
         ArgumentCaptor<RobotLocationState> captor = ArgumentCaptor.forClass(RobotLocationState.class);
         verify(robotLocationCache).saveLatest(captor.capture());
         verify(robotLocationPublisher).publish(captor.getValue());
+        verify(robotTelemetryPersistenceService).persistIfRequired(captor.getValue());
 
         assertThat(state).isEqualTo(captor.getValue());
         assertThat(state.robotId()).isEqualTo(10L);
