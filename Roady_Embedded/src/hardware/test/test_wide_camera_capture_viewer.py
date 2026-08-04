@@ -47,3 +47,11 @@ def test_save_frame_creates_output_directory_and_timestamped_jpeg(tmp_path):
     assert output.name == "wide_20260803_140506_123456.jpg"
     saved = cv2.imread(str(output))
     assert saved is not None and saved.shape == frame.shape
+
+
+def test_save_frame_supports_an_obstacle_filename_prefix(tmp_path):
+    frame = np.zeros((8, 8, 3), dtype=np.uint8)
+
+    output = save_frame(frame, tmp_path, filename_prefix="obstacle")
+
+    assert output.name.startswith("obstacle_")

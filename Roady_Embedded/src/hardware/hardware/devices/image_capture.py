@@ -45,10 +45,11 @@ def save_frame(
     output_dir: Path,
     jpeg_quality: int = 95,
     captured_at: Optional[datetime] = None,
+    filename_prefix: str = "wide",
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = (captured_at or datetime.now()).strftime("%Y%m%d_%H%M%S_%f")
-    output_path = output_dir / f"wide_{timestamp}.jpg"
+    output_path = output_dir / f"{filename_prefix}_{timestamp}.jpg"
     if not cv2.imwrite(
         str(output_path), frame, [cv2.IMWRITE_JPEG_QUALITY, jpeg_quality]
     ):
