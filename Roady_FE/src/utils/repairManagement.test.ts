@@ -177,6 +177,10 @@ describe('parseStatusesParam', () => {
     expect(parseStatusesParam(undefined)).toEqual([...REPAIR_STATUS_FILTERS])
   })
 
+  it('returns no statuses when the query explicitly contains an empty value', () => {
+    expect(parseStatusesParam('')).toEqual([])
+  })
+
   it('parses a comma-separated string of backend status codes', () => {
     const result = parseStatusesParam('REQUESTED,REPAIR_COMPLETED')
     expect(result).toEqual(['requested', 'completed'])
@@ -214,6 +218,10 @@ describe('statusesToParam', () => {
 
   it('returns a single code for one status', () => {
     expect(statusesToParam(['in_progress'])).toBe('REPAIR_IN_PROGRESS')
+  })
+
+  it('returns an empty value when all statuses are cleared', () => {
+    expect(statusesToParam([])).toBe('')
   })
 })
 

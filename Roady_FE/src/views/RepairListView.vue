@@ -145,7 +145,7 @@ function toggleStatus(filter: RepairStatusFilter, checked: boolean) {
   const current = activeStatuses.value
   if (checked) {
     if (!current.includes(filter)) setStatuses([...current, filter])
-  } else if (current.length > 1) {
+  } else {
     setStatuses(current.filter((s) => s !== filter))
   }
 }
@@ -156,8 +156,7 @@ const isAllSelected = computed(
 
 const allChecked = computed({
   get: () => isAllSelected.value,
-  set: (v: boolean) =>
-    setStatuses(v ? [...REPAIR_STATUS_FILTERS] : [REPAIR_STATUS_FILTERS[0]!]),
+  set: (v: boolean) => setStatuses(v ? [...REPAIR_STATUS_FILTERS] : []),
 })
 
 const requestedChecked = computed({
@@ -294,6 +293,8 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
           :empty-description="
             totalCount === 0
               ? '탐지 검토에서 &quot;보수 필요&quot;로 판정한 사건이 여기에 표시됩니다.'
+              : activeStatuses.length === 0
+                ? '선택된 보수 상태가 없습니다.'
               : '다른 상태 필터를 선택해 보세요.'
           "
           @retry="fetchItems"

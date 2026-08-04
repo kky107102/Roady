@@ -2,15 +2,27 @@
 import { ref, watch, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { damagesApi } from '@/api/damages'
+import { repairsApi } from '@/api/repairs'
+import { useNotificationStore } from '@/stores/notification'
 import type { DamageDetail, DamageImage } from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import RepairRequestModal from '@/components/repairs/RepairRequestModal.vue'
+import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vue'
+import {
+  buildRepairRequestText,
+  formatCaseId,
+  formatRepairLocation,
+  formatPriorityLabel,
+  formatDamageTypeLabel,
+} from '@/utils/repairRequest'
 
 // ── 라우터 ──────────────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
+const notification = useNotificationStore()
 
 const damageId = computed(() => {
   const raw = route.params.damageId
@@ -86,14 +98,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
 const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
   URGENT: 'danger',
   HIGH: 'warning',
@@ -102,25 +106,10 @@ const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
   LOW: 'neutral',
 }
 
-const DAMAGE_TYPE_LABELS: Record<string, string> = {
-  LARGE_MISSING: '큰 결손',
-  SMALL_MISSING: '작은 결손',
-  MISSING: '큰 결손',
-  WEAR: '마모',
-  BREAKAGE: '작은 결손',
-  CRACK: '균열',
-  OTHER: '기타',
-}
-
 const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
   REQUESTED: { label: '요청 전', type: 'warning' },
   REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
   REPAIR_COMPLETED: { label: '보수 완료', type: 'success' },
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
 }
 
 function formatDateTime(str: string | null | undefined): string {
@@ -137,6 +126,13 @@ function formatDateTime(str: string | null | undefined): string {
   })
 }
 
+function formatDate(str: string | null | undefined): string {
+  if (!str) return '-'
+  const d = new Date(str)
+  if (isNaN(d.getTime())) return str
+  return d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
+
 function formatLocation(d: DamageDetail): string {
   const address = d.roadAddressName?.trim() || d.addressName?.trim()
   if (address) return `${address} 주변`
@@ -151,26 +147,131 @@ const currentStatusInfo = computed(() => {
   return REPAIR_STATUS_MAP[status] ?? { label: status, type: 'neutral' as BadgeType }
 })
 
-const priorityLabel = computed(() => {
-  const p = detail.value?.processingPriority
-  if (!p) return '미지정'
-  return PRIORITY_LABELS[p] ?? p
-})
+const priorityLabel = computed(() => formatPriorityLabel(detail.value?.processingPriority))
 
 const priorityType = computed<BadgeType>(() => {
   const p = detail.value?.processingPriority
   return p ? (PRIORITY_BADGE_TYPES[p] ?? 'neutral') : 'neutral'
 })
 
-const damageTypeLabel = computed(() => {
-  const t = detail.value?.reviewDamageType
-  if (!t) return '-'
-  return DAMAGE_TYPE_LABELS[t] ?? t
-})
+const damageTypeLabel = computed(() => formatDamageTypeLabel(detail.value?.reviewDamageType))
 
 const loadedImages = computed(() =>
   (detail.value?.images ?? []).filter((img) => imageBlobUrls.value.has(img.id)),
 )
+
+const caseIdText = computed(() => {
+  if (!detail.value) return ''
+  return formatCaseId(detail.value.id, detail.value.createdAt)
+})
+
+// ── 보수 요청 모달 상태 ────────────────────────────────────
+const requestModalOpen = ref(false)
+const requestModalReadonly = ref(false)
+const requestConfirmOpen = ref(false)
+const pendingNote = ref<string | null>(null)
+const requestSubmitting = ref(false)
+
+function openRequestModal(readonly = false) {
+  requestModalReadonly.value = readonly
+  requestModalOpen.value = true
+}
+
+function closeRequestModal() {
+  if (requestSubmitting.value) return
+  requestModalOpen.value = false
+}
+
+function onRequestModalConfirm(note: string | null) {
+  requestModalOpen.value = false
+  pendingNote.value = note
+  requestConfirmOpen.value = true
+}
+
+async function confirmRepairRequest() {
+  if (!detail.value || requestSubmitting.value) return
+  requestSubmitting.value = true
+  try {
+    const updated = await repairsApi.submitRequest(detail.value.id, {
+      note: pendingNote.value,
+    })
+    detail.value = updated
+    requestConfirmOpen.value = false
+    notification.success('보수 요청 처리되었습니다.')
+  } catch {
+    notification.error('보수 요청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    requestSubmitting.value = false
+  }
+}
+
+// ── 요청 취소 확인 다이얼로그 ─────────────────────────────
+const cancelConfirmOpen = ref(false)
+const cancelSubmitting = ref(false)
+
+async function confirmCancelRequest() {
+  if (!detail.value || cancelSubmitting.value) return
+  cancelSubmitting.value = true
+  try {
+    const updated = await repairsApi.cancelRequest(detail.value.id)
+    detail.value = updated
+    cancelConfirmOpen.value = false
+    notification.success('보수 요청이 취소되었습니다.')
+  } catch {
+    notification.error('요청 취소 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    cancelSubmitting.value = false
+  }
+}
+
+// ── 보수 완료 모달 ─────────────────────────────────────────
+const completionModalOpen = ref(false)
+const completionSubmitting = ref(false)
+
+async function onCompletionConfirm(completedAt: string) {
+  if (!detail.value || completionSubmitting.value) return
+  completionSubmitting.value = true
+  try {
+    const updated = await repairsApi.completeRepair(detail.value.id, { completedAt })
+    detail.value = updated
+    completionModalOpen.value = false
+    notification.success('보수 완료 처리되었습니다.')
+  } catch {
+    notification.error('보수 완료 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    completionSubmitting.value = false
+  }
+}
+
+// ── 요청 정보 복사 ─────────────────────────────────────────
+const copyState = ref<'idle' | 'success' | 'error'>('idle')
+let copyStateTimer: ReturnType<typeof setTimeout> | null = null
+
+async function copyRequestInfo() {
+  if (!detail.value) return
+  const url = window.location.href
+  const text = buildRepairRequestText(detail.value, url)
+  try {
+    await navigator.clipboard.writeText(text)
+    copyState.value = 'success'
+    notification.success('요청 정보가 클립보드에 복사되었습니다.')
+  } catch {
+    copyState.value = 'error'
+    notification.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.')
+  } finally {
+    if (copyStateTimer) clearTimeout(copyStateTimer)
+    copyStateTimer = setTimeout(() => { copyState.value = 'idle' }, 3000)
+  }
+}
+
+onUnmounted(() => {
+  if (copyStateTimer) clearTimeout(copyStateTimer)
+})
+
+// ── 보수 담당자 지정 여부 ──────────────────────────────────
+// NOTE: 현재 API에 보수 담당자 전용 필드가 없으므로 항상 수정/취소 가능으로 처리.
+// 백엔드에서 repair person 필드를 추가하면 이 computed를 업데이트해야 함.
+const canModifyRequest = computed(() => true)
 </script>
 
 <template>
@@ -217,7 +318,7 @@ const loadedImages = computed(() =>
       <!-- ── 사건 핵심 정보 ── -->
       <section class="case-hero" aria-label="사건 핵심 정보">
         <div class="case-badges">
-          <span class="badge-case-id">{{ formatCaseId(detail.id, detail.createdAt) }}</span>
+          <span class="badge-case-id">{{ caseIdText }}</span>
           <StatusBadge :type="priorityType" :label="priorityLabel" />
           <StatusBadge
             v-if="currentStatusInfo"
@@ -328,7 +429,7 @@ const loadedImages = computed(() =>
           </section>
         </div>
 
-        <!-- 오른쪽: 보수 상태 이력 영역 (향후 확장용 플레이스홀더) -->
+        <!-- 오른쪽: 보수 현황 -->
         <div class="col-side">
           <section class="card" aria-label="보수 현황">
             <h3 class="card-title">보수 현황</h3>
@@ -341,11 +442,269 @@ const loadedImages = computed(() =>
               />
               <span v-else class="text-tertiary">-</span>
             </div>
-            <p class="side-note">보수 요청·완료 처리는 현장 담당자 앱에서 진행됩니다.</p>
+
+            <!-- ── REQUESTED: 요청 전 ── -->
+            <template v-if="detail.currentStatus === 'REQUESTED'">
+              <div class="action-section" aria-label="보수 요청 액션">
+                <p class="action-description">
+                  외부 보수 담당자에게 보수 요청을 전송하세요.
+                </p>
+                <div class="action-btn-group">
+                  <button
+                    type="button"
+                    class="krds-btn medium filled primary action-btn"
+                    @click="openRequestModal(false)"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <line x1="22" y1="2" x2="11" y2="13" />
+                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                    </svg>
+                    보수 요청
+                  </button>
+                  <button
+                    type="button"
+                    class="krds-btn medium outline action-btn"
+                    :aria-label="copyState === 'success' ? '복사 완료' : '요청 정보 클립보드에 복사'"
+                    @click="copyRequestInfo"
+                  >
+                    <svg
+                      v-if="copyState !== 'success'"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    <svg
+                      v-else
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    {{ copyState === 'success' ? '복사 완료' : '요청 정보 복사' }}
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <!-- ── REPAIR_IN_PROGRESS: 요청 완료 ── -->
+            <template v-else-if="detail.currentStatus === 'REPAIR_IN_PROGRESS'">
+              <dl class="repair-info-list">
+                <div class="repair-info-row">
+                  <dt class="repair-info-label">요청 일자</dt>
+                  <dd class="repair-info-value">{{ formatDate(detail.updatedAt) }}</dd>
+                </div>
+                <div class="repair-info-row">
+                  <dt class="repair-info-label">보수 담당자</dt>
+                  <dd class="repair-info-value text-tertiary">-</dd>
+                </div>
+              </dl>
+              <div class="action-section" aria-label="요청 완료 상태 액션">
+                <div class="action-btn-group">
+                  <button
+                    type="button"
+                    class="krds-btn medium outline action-btn"
+                    @click="openRequestModal(true)"
+                  >
+                    요청서 확인
+                  </button>
+                </div>
+                <div class="action-btn-group action-btn-group--secondary">
+                  <button
+                    type="button"
+                    class="krds-btn small outline action-btn"
+                    :disabled="!canModifyRequest"
+                    :aria-disabled="!canModifyRequest"
+                    :title="!canModifyRequest ? '보수 담당자가 지정된 후에는 수정할 수 없습니다.' : undefined"
+                    @click="openRequestModal(false)"
+                  >
+                    요청서 내용 수정
+                  </button>
+                  <button
+                    type="button"
+                    class="krds-btn small outline action-btn cancel-btn"
+                    :disabled="!canModifyRequest"
+                    :aria-disabled="!canModifyRequest"
+                    :title="!canModifyRequest ? '보수 담당자가 지정된 후에는 취소할 수 없습니다.' : undefined"
+                    @click="cancelConfirmOpen = true"
+                  >
+                    요청 취소
+                  </button>
+                </div>
+                <div class="action-btn-group action-btn-group--complete">
+                  <button
+                    type="button"
+                    class="krds-btn medium filled primary action-btn"
+                    @click="completionModalOpen = true"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                      <polyline points="22 4 12 14.01 9 11.01" />
+                    </svg>
+                    보수 완료
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <!-- ── REPAIR_COMPLETED: 보수 완료 ── -->
+            <template v-else-if="detail.currentStatus === 'REPAIR_COMPLETED'">
+              <dl class="repair-info-list">
+                <div class="repair-info-row">
+                  <dt class="repair-info-label">완료 일자</dt>
+                  <dd class="repair-info-value">{{ formatDate(detail.updatedAt) }}</dd>
+                </div>
+                <div class="repair-info-row">
+                  <dt class="repair-info-label">보수 담당자</dt>
+                  <dd class="repair-info-value text-tertiary">-</dd>
+                </div>
+              </dl>
+              <div class="action-section" aria-label="보수 완료 상태 액션">
+                <div class="action-btn-group">
+                  <button
+                    type="button"
+                    class="krds-btn medium outline action-btn"
+                    @click="openRequestModal(true)"
+                  >
+                    요청서 확인
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <!-- ── 기타 상태 ── -->
+            <template v-else>
+              <p class="side-note">
+                현재 상태({{ detail.currentStatus }})는 보수 관리 대상이 아닙니다.
+              </p>
+            </template>
           </section>
         </div>
       </div>
     </div>
+
+    <!-- ── 모달들 ── -->
+
+    <!-- 요청서 상세 모달 -->
+    <RepairRequestModal
+      v-if="requestModalOpen && detail"
+      :detail="detail"
+      :image-blob-urls="imageBlobUrls"
+      :images-loading="imagesLoading"
+      :readonly="requestModalReadonly"
+      :submitting="requestSubmitting"
+      @close="closeRequestModal"
+      @confirm="onRequestModalConfirm"
+    />
+
+    <!-- 보수 요청 2차 확인 다이얼로그 -->
+    <Teleport to="body">
+      <div
+        v-if="requestConfirmOpen"
+        class="confirm-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label="보수 요청 확인"
+        @click.self="!requestSubmitting && (requestConfirmOpen = false)"
+      >
+        <div class="confirm-panel">
+          <p class="confirm-message">해당 사건을 보수 요청 처리하시겠습니까?</p>
+          <div class="confirm-actions">
+            <button
+              type="button"
+              class="krds-btn medium outline"
+              :disabled="requestSubmitting"
+              @click="requestConfirmOpen = false"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              class="krds-btn medium filled primary"
+              :disabled="requestSubmitting"
+              :aria-busy="requestSubmitting"
+              @click="confirmRepairRequest"
+            >
+              {{ requestSubmitting ? '처리 중...' : '확인' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 요청 취소 확인 다이얼로그 -->
+    <Teleport to="body">
+      <div
+        v-if="cancelConfirmOpen"
+        class="confirm-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label="요청 취소 확인"
+        @click.self="!cancelSubmitting && (cancelConfirmOpen = false)"
+      >
+        <div class="confirm-panel">
+          <p class="confirm-message">보수 요청을 취소하시겠습니까?</p>
+          <div class="confirm-actions">
+            <button
+              type="button"
+              class="krds-btn medium outline"
+              :disabled="cancelSubmitting"
+              @click="cancelConfirmOpen = false"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              class="krds-btn medium filled primary cancel-confirm-btn"
+              :disabled="cancelSubmitting"
+              :aria-busy="cancelSubmitting"
+              @click="confirmCancelRequest"
+            >
+              {{ cancelSubmitting ? '처리 중...' : '확인' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 보수 완료 모달 -->
+    <RepairCompletionModal
+      v-if="completionModalOpen"
+      :submitting="completionSubmitting"
+      @close="completionModalOpen = false"
+      @confirm="onCompletionConfirm"
+    />
   </div>
 </template>
 
@@ -615,7 +974,9 @@ const loadedImages = computed(() =>
   display: flex;
   align-items: center;
   gap: 1.2rem;
-  padding: 1rem 0;
+  padding-bottom: 1.2rem;
+  border-bottom: 1px solid var(--roady-border-default);
+  margin-bottom: 1.2rem;
 }
 
 .status-row-label {
@@ -625,6 +986,124 @@ const loadedImages = computed(() =>
   min-width: 6rem;
 }
 
+/* ── 보수 정보 목록 ── */
+.repair-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin: 0 0 1.6rem;
+}
+
+.repair-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.repair-info-label {
+  flex-shrink: 0;
+  min-width: 7rem;
+  font-size: 1.3rem;
+  font-weight: var(--krds-font-weight-bold);
+  color: var(--roady-text-tertiary);
+}
+
+.repair-info-value {
+  font-size: 1.4rem;
+  color: var(--roady-text-primary);
+}
+
+/* ── 액션 섹션 ── */
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.action-description {
+  margin: 0;
+  font-size: 1.3rem;
+  color: var(--roady-text-secondary);
+  line-height: 1.5;
+}
+
+.action-btn-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.action-btn-group--secondary {
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--roady-border-default);
+}
+
+.action-btn-group--complete {
+  padding-top: 0.4rem;
+}
+
+.action-btn {
+  width: 100%;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.cancel-btn {
+  color: var(--roady-status-danger, #e74c3c);
+  border-color: var(--roady-status-danger, #e74c3c);
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(231, 76, 60, 0.06);
+}
+
+/* ── 확인 다이얼로그 ── */
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3100;
+  padding: 2rem;
+}
+
+.confirm-panel {
+  background: var(--roady-surface-default);
+  border-radius: 1.2rem;
+  padding: 2.4rem;
+  max-width: 36rem;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.confirm-message {
+  margin: 0;
+  font-size: 1.6rem;
+  font-weight: var(--krds-font-weight-bold);
+  color: var(--roady-text-primary);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.cancel-confirm-btn {
+  background: var(--roady-status-danger, #e74c3c);
+  border-color: var(--roady-status-danger, #e74c3c);
+}
+
+/* ── 공통 ── */
 .side-note {
   margin: 1.2rem 0 0;
   padding: 1rem 1.2rem;
