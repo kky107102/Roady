@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { RepairCompletePayload } from '@/types/repair'
 import type { DamageImage } from '@/types/damage'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 
 const props = withDefaults(
   defineProps<{
@@ -51,6 +52,9 @@ function localToday(): string {
 const completionDate = ref(props.completedAt?.slice(0, 10) ?? localToday())
 const completionNote = ref(props.note ?? '')
 const dateError = ref('')
+const modalRef = ref<HTMLElement | null>(null)
+
+useDialogFocus(modalRef)
 
 const todayStr = computed(localToday)
 
@@ -107,9 +111,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 <template>
   <Teleport to="body">
     <div
+      ref="modalRef"
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       :aria-label="readonly ? '완료 보고서 확인' : '보수 완료 처리'"
       @click.self="!submitting && emit('close')"
     >
@@ -321,11 +327,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--roady-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: var(--roady-z-modal);
   padding: 2rem;
 }
 
@@ -336,8 +342,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   max-width: 64rem;
   max-height: 90dvh;
   background: var(--roady-surface-default);
-  border-radius: 1.2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  border-radius: var(--roady-radius-dialog);
+  box-shadow: var(--roady-shadow-dialog);
   overflow: hidden;
 }
 
@@ -368,10 +374,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   height: 3.6rem;
   border: none;
   background: none;
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   cursor: pointer;
   color: var(--roady-text-secondary);
-  transition: background-color 0.1s;
+  transition: background-color var(--roady-transition-fast);
 }
 
 .modal-close-btn:hover {

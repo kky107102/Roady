@@ -18,6 +18,7 @@ import ErrorState from '@/components/common/ErrorState.vue'
 import RepairRequestModal from '@/components/repairs/RepairRequestModal.vue'
 import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vue'
 import { useNotificationStore } from '@/stores/notification'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 import {
   buildRepairRequestText,
   formatCaseId,
@@ -77,6 +78,13 @@ const requestViewOpen = ref(false)
 const completionReportOpen = ref(false)
 const requestCopyState = ref<'idle' | 'success' | 'error'>('idle')
 const completionCopyState = ref<'idle' | 'success' | 'error'>('idle')
+const noRepairDialogRef = ref<HTMLElement | null>(null)
+const resetVerdictDialogRef = ref<HTMLElement | null>(null)
+const reviewDialogRef = ref<HTMLElement | null>(null)
+
+useDialogFocus(noRepairDialogRef, noRepairModalOpen)
+useDialogFocus(resetVerdictDialogRef, resetVerdictModalOpen)
+useDialogFocus(reviewDialogRef, reviewModalOpen)
 let requestCopyTimer: ReturnType<typeof setTimeout> | null = null
 let completionCopyTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -945,6 +953,7 @@ async function copyCompletionReport() {
       @click.self="noRepairModalOpen = false"
     >
       <section
+        ref="noRepairDialogRef"
         class="review-modal review-modal--confirm"
         role="alertdialog"
         aria-modal="true"
@@ -985,6 +994,7 @@ async function copyCompletionReport() {
       @click.self="resetVerdictModalOpen = false"
     >
       <section
+        ref="resetVerdictDialogRef"
         class="review-modal review-modal--confirm"
         role="alertdialog"
         aria-modal="true"
@@ -1020,6 +1030,7 @@ async function copyCompletionReport() {
 
     <div v-if="reviewModalOpen" class="review-modal-backdrop" @click.self="reviewModalOpen = false">
       <form
+        ref="reviewDialogRef"
         class="review-modal"
         role="dialog"
         aria-modal="true"
@@ -1866,12 +1877,12 @@ async function copyCompletionReport() {
 .review-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: var(--roady-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgb(15 23 42 / 48%);
+  background: var(--roady-overlay);
 }
 
 .review-modal {
@@ -1879,9 +1890,9 @@ async function copyCompletionReport() {
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   padding: 24px;
-  border-radius: 16px;
+  border-radius: var(--roady-radius-dialog);
   background: var(--roady-surface-default);
-  box-shadow: 0 20px 50px rgb(15 23 42 / 24%);
+  box-shadow: var(--roady-shadow-dialog);
 }
 
 .review-modal--confirm {

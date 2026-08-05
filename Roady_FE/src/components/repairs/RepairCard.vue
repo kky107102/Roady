@@ -92,14 +92,14 @@ const repairStatus = computed<{ label: string; type: BadgeType }>(() => {
   margin: 0 12px 12px;
   padding: 16px;
   border: 1px solid var(--roady-border-default);
-  border-radius: 16px;
+  border-radius: var(--roady-radius-list-card);
   background: var(--roady-surface-default);
   text-align: left;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgb(15 23 42 / 6%);
+  box-shadow: var(--roady-shadow-list-card);
   transition:
-    border-color 0.12s,
-    box-shadow 0.12s;
+    border-color var(--roady-transition-fast),
+    box-shadow var(--roady-transition-fast);
 }
 
 .repair-card:first-of-type {
@@ -108,13 +108,13 @@ const repairStatus = computed<{ label: string; type: BadgeType }>(() => {
 
 .repair-card:hover {
   border-color: color-mix(in srgb, var(--roady-brand-primary) 45%, var(--roady-border-default));
-  box-shadow: 0 5px 12px rgb(15 23 42 / 10%);
+  box-shadow: var(--roady-shadow-list-card-hover);
 }
 
 .repair-card.is-selected {
   border: 2px solid var(--roady-brand-primary);
   padding: 15px;
-  box-shadow: 0 5px 12px rgb(22 58 95 / 16%);
+  box-shadow: var(--roady-shadow-list-card-selected);
 }
 
 .card-body {

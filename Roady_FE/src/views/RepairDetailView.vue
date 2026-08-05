@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 import { useRoute, useRouter } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import { repairsApi } from '@/api/repairs'
@@ -183,9 +184,16 @@ const officialName = computed(() => {
 const requestModalOpen = ref(false)
 const requestModalMode = ref<'create' | 'view' | 'edit'>('create')
 const requestConfirmOpen = ref(false)
+const requestConfirmDialogRef = ref<HTMLElement | null>(null)
 const pendingRequest = ref<RepairRequestPayload | null>(null)
 const requestSubmitting = ref(false)
 const requestActionHandledFor = ref<string | null>(null)
+
+useDialogFocus(requestConfirmDialogRef, requestConfirmOpen, {
+  onEscape: () => {
+    if (!requestSubmitting.value) requestConfirmOpen.value = false
+  },
+})
 
 function openRequestModal(mode: 'create' | 'view' | 'edit') {
   requestModalMode.value = mode
@@ -285,7 +293,14 @@ async function confirmRepairRequest() {
 
 // ── 요청 취소 확인 다이얼로그 ─────────────────────────────
 const cancelConfirmOpen = ref(false)
+const cancelConfirmDialogRef = ref<HTMLElement | null>(null)
 const cancelSubmitting = ref(false)
+
+useDialogFocus(cancelConfirmDialogRef, cancelConfirmOpen, {
+  onEscape: () => {
+    if (!cancelSubmitting.value) cancelConfirmOpen.value = false
+  },
+})
 
 async function confirmCancelRequest() {
   if (!detail.value || cancelSubmitting.value) return
@@ -353,7 +368,14 @@ async function onCompletionConfirm(payload: RepairCompletePayload) {
 }
 
 const noRepairConfirmOpen = ref(false)
+const noRepairConfirmDialogRef = ref<HTMLElement | null>(null)
 const noRepairSubmitting = ref(false)
+
+useDialogFocus(noRepairConfirmDialogRef, noRepairConfirmOpen, {
+  onEscape: () => {
+    if (!noRepairSubmitting.value) noRepairConfirmOpen.value = false
+  },
+})
 
 async function confirmNoRepair() {
   if (!detail.value || noRepairSubmitting.value) return
@@ -758,9 +780,11 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="requestConfirmOpen"
+        ref="requestConfirmDialogRef"
         class="confirm-backdrop"
         role="dialog"
         aria-modal="true"
+        tabindex="-1"
         aria-label="보수 요청 확인"
         @click.self="!requestSubmitting && (requestConfirmOpen = false)"
       >
@@ -793,9 +817,11 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="noRepairConfirmOpen"
+        ref="noRepairConfirmDialogRef"
         class="confirm-backdrop"
         role="dialog"
         aria-modal="true"
+        tabindex="-1"
         aria-label="보수 불필요 처리 확인"
         @click.self="!noRepairSubmitting && (noRepairConfirmOpen = false)"
       >
@@ -828,9 +854,11 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="cancelConfirmOpen"
+        ref="cancelConfirmDialogRef"
         class="confirm-backdrop"
         role="dialog"
         aria-modal="true"
+        tabindex="-1"
         aria-label="요청 취소 확인"
         @click.self="!cancelSubmitting && (cancelConfirmOpen = false)"
       >

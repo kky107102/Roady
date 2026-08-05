@@ -263,6 +263,7 @@ function showSupportMessage(message: string) {
 }
 
 .account-links .krds-btn {
+  min-height: 4.4rem;
   padding-inline: 1.2rem;
   color: var(--roady-text-secondary);
   font-size: var(--krds-pc-font-size-label-small);

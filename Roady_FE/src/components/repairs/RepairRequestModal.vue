@@ -6,6 +6,7 @@ import type { RepairRequestPayload } from '@/types/repair'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 import {
   formatCaseId,
   formatRepairLocation,
@@ -53,6 +54,9 @@ const priority = ref(props.detail.processingPriority ?? '')
 const damageType = ref(props.detail.reviewDamageType ?? '')
 const repairerId = ref<number | null>(props.detail.repairerId ?? null)
 const formError = ref('')
+const modalRef = ref<HTMLElement | null>(null)
+
+useDialogFocus(modalRef)
 
 const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: '긴급' },
@@ -144,9 +148,11 @@ function handleConfirm() {
 <template>
   <Teleport to="body">
     <div
+      ref="modalRef"
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       :aria-label="readonly ? '요청서 확인' : editing ? '보수 요청서 수정' : '보수 요청서 작성'"
       @click.self="emit('close')"
     >
@@ -415,11 +421,11 @@ function handleConfirm() {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--roady-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: var(--roady-z-modal);
   padding: 2rem;
 }
 
@@ -430,8 +436,8 @@ function handleConfirm() {
   max-width: 64rem;
   max-height: 90dvh;
   background: var(--roady-surface-default);
-  border-radius: 1.2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  border-radius: var(--roady-radius-dialog);
+  box-shadow: var(--roady-shadow-dialog);
   overflow: hidden;
 }
 
@@ -466,7 +472,7 @@ function handleConfirm() {
   padding: 0 1rem;
   border: 1px solid var(--roady-border-default);
   background: var(--roady-surface-default);
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   color: var(--roady-text-primary);
   font-size: 1.4rem;
   font-weight: var(--krds-font-weight-medium);
@@ -490,10 +496,10 @@ function handleConfirm() {
   height: 3.6rem;
   border: none;
   background: none;
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   cursor: pointer;
   color: var(--roady-text-secondary);
-  transition: background-color 0.1s;
+  transition: background-color var(--roady-transition-fast);
 }
 
 .modal-close-btn:hover {

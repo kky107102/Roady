@@ -545,7 +545,7 @@ onUnmounted(() => {
   position: absolute;
   right: 1.6rem;
   bottom: 1.6rem;
-  z-index: 600;
+  z-index: var(--roady-z-map-control);
   display: flex;
   align-items: center;
   gap: 0.8rem;
