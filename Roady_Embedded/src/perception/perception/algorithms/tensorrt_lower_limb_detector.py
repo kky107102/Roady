@@ -7,7 +7,10 @@ from typing import Sequence
 
 import cv2
 import numpy as np
-import tensorrt as trt
+try:
+    import tensorrt as trt
+except ImportError:  # TensorRT is installed only on the Jetson target.
+    trt = None
 
 
 @dataclass(frozen=True)
@@ -121,6 +124,8 @@ class TensorRTLowerLimbDetector:
         iou_threshold: float = 0.45,
         class_names: Sequence[str] | None = None,
     ) -> None:
+        if trt is None:
+            raise RuntimeError("TensorRT Python bindings are required for .engine inference")
         path = Path(engine_path).expanduser().resolve()
         if not path.is_file():
             raise FileNotFoundError(path)
@@ -154,7 +159,13 @@ class TensorRTLowerLimbDetector:
         self._output_name = outputs[0]
         self._input_shape = tuple(self._engine.get_tensor_shape(self._input_name))
         self._output_shape = tuple(self._engine.get_tensor_shape(self._output_name))
-        if self._input_shape != (1, 3, 640, 640):
+        if (
+            len(self._input_shape) != 4
+            or self._input_shape[0] != 1
+            or self._input_shape[1] != 3
+            or self._input_shape[2] <= 0
+            or self._input_shape[3] <= 0
+        ):
             raise RuntimeError(f"Unsupported engine input shape: {self._input_shape}")
 
         self._input_dtype = np.dtype(trt.nptype(self._engine.get_tensor_dtype(self._input_name)))
@@ -207,13 +218,13 @@ class TensorRTLowerLimbDetector:
 
     def _preprocess(self, image: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         height, width = image.shape[:2]
-        target = self._input_shape[-1]
-        scale = min(target / width, target / height)
+        target_height, target_width = self._input_shape[-2:]
+        scale = min(target_width / width, target_height / height)
         resized_width = round(width * scale)
         resized_height = round(height * scale)
         resized = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
-        pad_x = (target - resized_width) / 2.0
-        pad_y = (target - resized_height) / 2.0
+        pad_x = (target_width - resized_width) / 2.0
+        pad_y = (target_height - resized_height) / 2.0
         left = round(pad_x - 0.1)
         right = round(pad_x + 0.1)
         top = round(pad_y - 0.1)
@@ -235,23 +246,13 @@ class TensorRTLowerLimbDetector:
         pad_x: float,
         pad_y: float,
     ) -> list[TensorRTDetection]:
-        predictions = output[0].T
-        class_scores = predictions[:, 4:]
-        class_ids = np.argmax(class_scores, axis=1)
-        confidences = class_scores[np.arange(len(predictions)), class_ids]
-        selected = confidences >= self._confidence
-        predictions = predictions[selected]
-        confidences = confidences[selected]
-        class_ids = class_ids[selected]
-        if not len(predictions):
+        boxes_xyxy, confidences, class_ids, already_nms = decode_yolo_output(
+            output, self._confidence, len(self._class_names)
+        )
+        if not len(boxes_xyxy):
             return []
-
-        boxes_xywh = predictions[:, :4]
-        boxes_xyxy = np.empty_like(boxes_xywh)
-        boxes_xyxy[:, 0] = (boxes_xywh[:, 0] - boxes_xywh[:, 2] / 2 - pad_x) / scale
-        boxes_xyxy[:, 1] = (boxes_xywh[:, 1] - boxes_xywh[:, 3] / 2 - pad_y) / scale
-        boxes_xyxy[:, 2] = (boxes_xywh[:, 0] + boxes_xywh[:, 2] / 2 - pad_x) / scale
-        boxes_xyxy[:, 3] = (boxes_xywh[:, 1] + boxes_xywh[:, 3] / 2 - pad_y) / scale
+        boxes_xyxy[:, [0, 2]] = (boxes_xyxy[:, [0, 2]] - pad_x) / scale
+        boxes_xyxy[:, [1, 3]] = (boxes_xyxy[:, [1, 3]] - pad_y) / scale
         boxes_xyxy[:, [0, 2]] = boxes_xyxy[:, [0, 2]].clip(0, image_width - 1)
         boxes_xyxy[:, [1, 3]] = boxes_xyxy[:, [1, 3]].clip(0, image_height - 1)
 
@@ -259,15 +260,23 @@ class TensorRTLowerLimbDetector:
             [float(x1), float(y1), float(x2 - x1), float(y2 - y1)]
             for x1, y1, x2, y2 in boxes_xyxy
         ]
-        keep = cv2.dnn.NMSBoxes(
-            nms_boxes,
-            confidences.astype(float).tolist(),
-            self._confidence,
-            self._iou_threshold,
+        keep = (
+            np.arange(len(boxes_xyxy))
+            if already_nms
+            else np.asarray(
+                cv2.dnn.NMSBoxes(
+                    nms_boxes,
+                    confidences.astype(float).tolist(),
+                    self._confidence,
+                    self._iou_threshold,
+                )
+            ).reshape(-1)
         )
         detections: list[TensorRTDetection] = []
-        for index in np.asarray(keep).reshape(-1):
+        for index in keep:
             class_id = int(class_ids[index])
+            if class_id < 0 or class_id >= len(self._class_names):
+                continue
             xyxy = tuple(float(value) for value in boxes_xyxy[index])
             detections.append(
                 TensorRTDetection(
@@ -278,3 +287,48 @@ class TensorRTLowerLimbDetector:
                 )
             )
         return detections
+
+
+def decode_yolo_output(
+    output: np.ndarray,
+    confidence_threshold: float,
+    class_count: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, bool]:
+    """Decode YOLO26 end-to-end rows or legacy Ultralytics raw predictions."""
+    predictions = np.asarray(output)
+    if predictions.ndim == 3 and predictions.shape[0] == 1:
+        predictions = predictions[0]
+    if predictions.ndim != 2:
+        raise RuntimeError(f"Unsupported TensorRT output shape: {output.shape}")
+
+    # YOLO26 end-to-end output: [N, 6] = xyxy, confidence, class_id.
+    if predictions.shape[1] == 6 and predictions.shape[0] != 4 + class_count:
+        selected = predictions[:, 4] >= confidence_threshold
+        rows = predictions[selected]
+        return (
+            rows[:, :4].astype(np.float32, copy=True),
+            rows[:, 4].astype(np.float32, copy=False),
+            rows[:, 5].astype(np.int32, copy=False),
+            True,
+        )
+
+    channels = 4 + class_count
+    if predictions.shape[0] == channels:
+        predictions = predictions.T
+    elif predictions.shape[1] != channels:
+        raise RuntimeError(f"Unsupported TensorRT output shape: {output.shape}")
+
+    class_scores = predictions[:, 4:]
+    class_ids = np.argmax(class_scores, axis=1)
+    confidences = class_scores[np.arange(len(predictions)), class_ids]
+    selected = confidences >= confidence_threshold
+    predictions = predictions[selected]
+    confidences = confidences[selected]
+    class_ids = class_ids[selected]
+    boxes_xywh = predictions[:, :4]
+    boxes_xyxy = np.empty_like(boxes_xywh, dtype=np.float32)
+    boxes_xyxy[:, 0] = boxes_xywh[:, 0] - boxes_xywh[:, 2] / 2
+    boxes_xyxy[:, 1] = boxes_xywh[:, 1] - boxes_xywh[:, 3] / 2
+    boxes_xyxy[:, 2] = boxes_xywh[:, 0] + boxes_xywh[:, 2] / 2
+    boxes_xyxy[:, 3] = boxes_xywh[:, 1] + boxes_xywh[:, 3] / 2
+    return boxes_xyxy, confidences.astype(np.float32), class_ids.astype(np.int32), False
