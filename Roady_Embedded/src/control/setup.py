@@ -20,6 +20,7 @@ setup(
             'motor_node = control.motor_node:main',
             'lidar_warning_node = control.lidar_warning_node:main',
             'tactile_tracer_node = control.tactile_tracer_node:main',
+            'main_control_node = control.main_control_node:main',
         ],
     },
 )
