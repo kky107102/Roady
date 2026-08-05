@@ -5,7 +5,6 @@ import time
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image
 from std_msgs.msg import Header
 
@@ -13,15 +12,18 @@ from hardware.devices.camera import CameraConfig, CameraWorker
 
 
 class ObstacleCameraNode(Node):
-    """Publishes frames from the camera dedicated to obstacle detection."""
+    """Publishes USB camera frames for obstacle detection."""
 
     def __init__(self):
         super().__init__("obstacle_camera_node")
 
-        self.declare_parameter("device_index", 2)
+        self.declare_parameter("device_index", 0)
         self.declare_parameter(
             "device_path",
-            "/dev/v4l/by-id/usb-046d_Brio_100_2515ZBA0WRC8-video-index0",
+            (
+                "/dev/v4l/by-id/"
+                "usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0"
+            ),
         )
         self.declare_parameter("backend", "v4l2")
         self.declare_parameter("pixel_format", "MJPG")
@@ -39,10 +41,10 @@ class ObstacleCameraNode(Node):
         fps = self.get_parameter("fps").value
         backend = self.get_parameter("backend").value
         pixel_format = self.get_parameter("pixel_format").value
-        topic = str(self.get_parameter("topic").value)
+        topic = self.get_parameter("topic").value
         device_path = str(self.get_parameter("device_path").value)
 
-        self._frame_id = str(self.get_parameter("frame_id").value)
+        self._frame_id = self.get_parameter("frame_id").value
         self._worker = CameraWorker(
             CameraConfig(
                 name="obstacle_camera",
@@ -56,12 +58,7 @@ class ObstacleCameraNode(Node):
                 auto_exposure=bool(self.get_parameter("auto_exposure").value),
             )
         )
-        image_qos = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-        )
-        self._publisher = self.create_publisher(Image, topic, image_qos)
+        self._publisher = self.create_publisher(Image, topic, 10)
         self._last_published_frame_id = -1
         self._published_frame_count = 0
         self._last_error_log_time = 0.0

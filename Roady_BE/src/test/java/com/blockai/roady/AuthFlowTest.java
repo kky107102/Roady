@@ -10,6 +10,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import static com.blockai.roady.support.DefaultUserCredentials.PASSWORD;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -27,7 +28,7 @@ class AuthFlowTest {
     void adminLoginSuccess() throws Exception {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginRequest("admin", "admin1234")))
+                        .content(loginRequest("admin", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tokenType").value("Bearer"))
                 .andExpect(jsonPath("$.accessToken").exists())
@@ -101,7 +102,7 @@ class AuthFlowTest {
 
     @Test
     void meReturnsAuthenticatedUser() throws Exception {
-        String accessToken = login("admin", "admin1234");
+        String accessToken = login("admin", PASSWORD);
 
         mockMvc.perform(get("/api/auth/me")
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken)))
@@ -112,7 +113,7 @@ class AuthFlowTest {
 
     @Test
     void adminCanReadUsers() throws Exception {
-        String accessToken = login("admin", "admin1234");
+        String accessToken = login("admin", PASSWORD);
 
         mockMvc.perform(get("/api/users")
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken)))
@@ -121,8 +122,21 @@ class AuthFlowTest {
     }
 
     @Test
+    void inspectorCanReadActiveRepairers() throws Exception {
+        String accessToken = login("inspector", PASSWORD);
+
+        mockMvc.perform(get("/api/users")
+                        .param("role", "REPAIRER")
+                        .param("active", "true")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(accessToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].role").value("REPAIRER"))
+                .andExpect(jsonPath("$[0].active").value(true));
+    }
+
+    @Test
     void viewerCannotReadUsers() throws Exception {
-        String accessToken = login("viewer", "viewer1234");
+        String accessToken = login("viewer", PASSWORD);
 
         mockMvc.perform(get("/api/users")
                         .header(HttpHeaders.AUTHORIZATION, bearer(accessToken)))

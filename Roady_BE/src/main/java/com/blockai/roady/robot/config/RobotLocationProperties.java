@@ -9,6 +9,7 @@ public class RobotLocationProperties {
 
     private String redisKeyPattern = "roady:robots:{robotId}:location";
     private Duration ttl = Duration.ofMinutes(5);
+    private Duration rdbPersistenceInterval = Duration.ofMinutes(1);
 
     public String getRedisKeyPattern() {
         return redisKeyPattern;
@@ -28,5 +29,13 @@ public class RobotLocationProperties {
 
     public void setTtl(Duration ttl) {
         this.ttl = ttl;
+    }
+
+    public Duration getRdbPersistenceInterval() {
+        return rdbPersistenceInterval;
+    }
+
+    public void setRdbPersistenceInterval(Duration rdbPersistenceInterval) {
+        this.rdbPersistenceInterval = rdbPersistenceInterval;
     }
 }

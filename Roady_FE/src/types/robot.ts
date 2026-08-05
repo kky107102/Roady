@@ -44,6 +44,19 @@ export interface RobotLatestStatus {
   recordedAt: string | null
 }
 
+export interface RobotLocationMessage {
+  robotId: number
+  latitude: number
+  longitude: number
+  batteryLevel: number | null
+  operationStatus: RobotOperationStatus | null
+  connectionStatus: RobotConnectionStatus | null
+  errorCode: string | null
+  errorMessage: string | null
+  recordedAt: string | null
+  receivedAt: string | null
+}
+
 export interface Robot {
   id: number
   userId: number

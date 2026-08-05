@@ -148,7 +148,7 @@ const badgeSizes = ['small', 'medium', 'large'] as const
         </div>
       </div>
 
-      <div class="card-grid cols-3" style="margin-top: 1.6rem;">
+      <div class="card-grid cols-3" style="margin-top: 1.6rem">
         <div class="card" v-for="size in badgeSizes" :key="size">
           <p class="card-label">크기 — {{ size }}</p>
           <div class="badge-row">
@@ -235,12 +235,12 @@ const badgeSizes = ['small', 'medium', 'large'] as const
           </button>
           <button
             type="button"
-            class="krds-btn medium outline"
+            class="krds-btn medium secondary"
             @click="
-              notif.success('저장 완료');
-              notif.error('처리 실패');
-              notif.warning('주의 필요');
-              notif.info('새 이벤트');
+              notif.success('저장 완료')
+              notif.error('처리 실패')
+              notif.warning('주의 필요')
+              notif.info('새 이벤트')
             "
           >
             전체 동시 표시

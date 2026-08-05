@@ -19,7 +19,12 @@ setup(
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
+            "damage_detection_node = perception.nodes.damage_detection_node:main",
             "mock_damage_detection_node = perception.nodes.mock_damage_detection_node:main",
+            "visualize_mock_damage = perception.tools.visualize_mock_damage:main",
+            "person_damage_pipeline_test_node = perception.nodes.person_damage_pipeline_test_node:main",
+            "obstacle_detection_node = perception.nodes.obstacle_detection_node:main",
+            "safety_fusion_node = perception.nodes.safety_fusion_node:main",
         ],
     },
 )

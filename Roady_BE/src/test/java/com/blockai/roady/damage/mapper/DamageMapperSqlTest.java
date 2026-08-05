@@ -5,6 +5,7 @@ import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -23,6 +24,11 @@ class DamageMapperSqlTest {
 
         assertThat(normalize(boundSql.getSql()))
                 .contains("d.reported_by")
+                .contains("assigned_user.name AS assigned_to_name")
+                .contains("d.repairer_id")
+                .contains("repairer_user.name AS repairer_name")
+                .contains("d.repair_completed_at")
+                .contains("d.repair_completion_note")
                 .contains("WHERE d.id = ?");
     }
 
@@ -109,6 +115,76 @@ class DamageMapperSqlTest {
                 .contains("ORDER BY d.created_at DESC, d.id DESC")
                 .doesNotContain("JOIN")
                 .doesNotContain("LIMIT");
+    }
+
+    @Test
+    void transitionToRepairInProgressRequiresRequestedStatus() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("processingPriority", "HIGH");
+        parameters.put("reviewDamageType", "CRACK");
+        parameters.put("repairerId", 9L);
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".transitionToRepairInProgress")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("SET current_status = 'REPAIR_IN_PROGRESS'")
+                .contains("processing_priority = ?")
+                .contains("review_damage_type = ?")
+                .contains("repairer_id = ?")
+                .contains("WHERE id = ? AND current_status = 'REQUESTED'");
+    }
+
+    @Test
+    void completeRepairStoresCompletionReportAndRequiresRepairInProgressStatus() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("completedAt", LocalDate.of(2026, 8, 4));
+        parameters.put("completionNote", "done");
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".completeRepair")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("current_status = 'REPAIR_COMPLETED'")
+                .contains("repair_completed_at = ?")
+                .contains("repair_completion_note = ?")
+                .contains("WHERE id = ? AND current_status = 'REPAIR_IN_PROGRESS'");
+    }
+
+    @Test
+    void cancelRepairReturnsDamageToRequestedAndClearsAssignment() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".cancelRepairRequest")
+                .getBoundSql(Map.of("damageId", 3L));
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("current_status = 'REQUESTED'")
+                .contains("repairer_id = NULL")
+                .contains("WHERE id = ? AND current_status = 'REPAIR_IN_PROGRESS'");
+    }
+
+    @Test
+    void insertRepairRequestHistoryStoresStateTransitionAndNote() {
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("damageId", 3L);
+        parameters.put("requestedBy", 2L);
+        parameters.put("repairerId", 9L);
+        parameters.put("beforeStatus", "REQUESTED");
+        parameters.put("afterStatus", "REPAIR_IN_PROGRESS");
+        parameters.put("note", "hello");
+        parameters.put("requestedAt", LocalDateTime.of(2026, 8, 4, 15, 0));
+
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".insertRepairRequestHistory")
+                .getBoundSql(parameters);
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("INSERT INTO repair_request_histories")
+                .contains("damage_id, requested_by, repairer_id, before_status, after_status, note, requested_at");
     }
 
     private Configuration configuration() {

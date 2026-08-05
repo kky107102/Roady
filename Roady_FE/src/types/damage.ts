@@ -1,27 +1,39 @@
 export type DamageStatus =
   | 'COLLECTED'
-  | 'REVIEW_REQUIRED'
-  | 'RECEIVED'
-  | 'REPAIR_SCHEDULED'
-  | 'REPAIRING'
+  | 'AI_ANALYZING'
+  | 'AI_ANALYZED'
+  | 'REQUESTED'
+  | 'REPAIR_IN_PROGRESS'
   | 'REPAIR_COMPLETED'
-  | 'REPAIR_NOT_REQUIRED'
+  | 'CANCELED'
 
 export interface DamageListItem {
   id: number
   robotId: number | null
   assignedTo: number | null
   description: string | null
+  addressName?: string | null
+  roadAddressName?: string | null
+  regionCode?: string | null
+  region1DepthName?: string | null
+  region2DepthName?: string | null
+  region3DepthName?: string | null
+  geocodedAt?: string | null
   latitude: number | null
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
+  reviewDamageType?: string | null
+  reviewNote?: string | null
   imageCount: number
   damageScore: number | null
+  damageType?: string | null
   repairRequired: boolean | null
   repairPriority: string | null
   confidenceScore: number | null
   createdAt: string
+  updatedAt?: string | null
 }
 
 export interface DamageSearchResponse {
@@ -47,11 +59,28 @@ export interface DamageDetail {
   robotId: number | null
   reportedBy: number | null
   assignedTo: number | null
+  assignedToName?: string | null
+  repairerId?: number | null
+  repairerName?: string | null
+  repairRequestedAt?: string | null
+  repairRequestNote?: string | null
+  repairCompletedAt?: string | null
+  repairCompletionNote?: string | null
   description: string | null
+  addressName?: string | null
+  roadAddressName?: string | null
+  regionCode?: string | null
+  region1DepthName?: string | null
+  region2DepthName?: string | null
+  region3DepthName?: string | null
+  geocodedAt?: string | null
   latitude: number | null
   longitude: number | null
   capturedAt: string | null
   currentStatus: DamageStatus
+  processingPriority?: string | null
+  reviewDamageType?: string | null
+  reviewNote?: string | null
   imageCount: number
   images: DamageImage[]
   createdAt: string
@@ -63,6 +92,7 @@ export interface DamageAnalysis {
   damageId: number
   damaged: boolean | null
   damageScore: number | null
+  damageType: string | null
   repairRequired: boolean | null
   repairPriority: string | null
   confidenceScore: number | null

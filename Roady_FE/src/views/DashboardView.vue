@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import CommonMap from '@/components/common/CommonMap.vue'
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
@@ -8,9 +9,37 @@ import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import RecentDamageList from '@/components/damages/RecentDamageList.vue'
 import { toDamageMapMarkers } from '@/utils/damageMap'
+import { reviewTabForDamage } from '@/utils/damageReview'
 
 const store = useDashboardStore()
-const damageMarkers = computed(() => toDamageMapMarkers(store.damages))
+const router = useRouter()
+
+const hasTrendData = computed(() =>
+  store.timeSeries.items.some((item) => item.totalCount > 0),
+)
+
+function damageDetailQuery(id: string | number) {
+  const damage = store.damages.find((item) => String(item.id) === String(id))
+  return {
+    review: damage ? reviewTabForDamage(damage) : 'pending',
+    damageId: String(id),
+  }
+}
+
+const damageMarkers = computed(() =>
+  toDamageMapMarkers(store.damages).map((marker) => ({
+    ...marker,
+    actionLabel: '상세보기',
+    actionHref: router.resolve({
+      name: 'damages',
+      query: damageDetailQuery(marker.id),
+    }).href,
+  })),
+)
+
+function openDamageDetail(id: string | number) {
+  router.push({ name: 'damages', query: damageDetailQuery(id) })
+}
 
 const REFRESH_MS = 5 * 60 * 1000
 
@@ -41,129 +70,252 @@ onUnmounted(() => {
 
     <!-- 스크롤 콘텐츠 영역 -->
     <div class="dashboard-scroll">
-    <div class="dashboard">
+      <div class="dashboard">
+        <!-- 로딩 오버레이 -->
+        <div v-if="store.loading" class="dashboard__loading">
+          <LoadingSpinner label="대시보드 데이터 불러오는 중" />
+        </div>
 
-    <!-- 로딩 오버레이 -->
-    <div v-if="store.loading" class="dashboard__loading">
-      <LoadingSpinner label="대시보드 데이터 불러오는 중" />
-    </div>
+        <!-- 인라인 에러 배너 (레이아웃은 유지) -->
+        <div v-if="store.error && !store.loading" class="dashboard__error-banner" role="alert">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>{{ store.error }}</span>
+          <button type="button" class="error-banner__retry" @click="store.fetchAll">
+            다시 시도
+          </button>
+        </div>
 
-    <!-- 인라인 에러 배너 (레이아웃은 유지) -->
-    <div v-if="store.error && !store.loading" class="dashboard__error-banner" role="alert">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-      </svg>
-      <span>{{ store.error }}</span>
-      <button type="button" class="error-banner__retry" @click="store.fetchAll">다시 시도</button>
-    </div>
+        <!-- 통계 요약 카드 -->
+        <section class="dashboard__stats" aria-label="통계 요약">
+          <StatCard label="신규 탐지" :count="store.totalCount" :to="{ name: 'damages' }">
+            <template #icon>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.35-4.35" />
+              </svg>
+            </template>
+          </StatCard>
 
-      <!-- 통계 요약 카드 -->
-      <section class="dashboard__stats" aria-label="통계 요약">
-        <StatCard label="신규 탐지" :count="store.totalCount" :to="{ name: 'damages' }">
-          <template #icon>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-          </template>
-        </StatCard>
+          <StatCard
+            label="긴급 / 고위험"
+            :count="store.highSeverityCount"
+            variant="danger"
+            :to="{ name: 'damages' }"
+          >
+            <template #icon>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path
+                  d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            </template>
+          </StatCard>
 
-        <StatCard label="긴급 / 고위험" :count="store.highSeverityCount" variant="danger" :to="{ name: 'damages' }">
-          <template #icon>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </template>
-        </StatCard>
+          <StatCard
+            label="검토 대기"
+            :count="store.reviewRequiredCount"
+            :to="{ name: 'damages', query: { status: 'AI_ANALYZED' } }"
+          >
+            <template #icon>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+            </template>
+          </StatCard>
 
-        <StatCard label="검토 대기" :count="store.reviewRequiredCount" :to="{ name: 'damages', query: { status: 'REVIEW_REQUIRED' } }">
-          <template #icon>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-              <line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-          </template>
-        </StatCard>
+          <StatCard label="진행 중 보수" :count="store.repairingCount" :to="{ name: 'repairs' }">
+            <template #icon>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </template>
+          </StatCard>
 
-        <StatCard label="진행 중 보수" :count="store.repairingCount" :to="{ name: 'repairs' }">
-          <template #icon>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-            </svg>
-          </template>
-        </StatCard>
+          <StatCard
+            label="운행 중 로디"
+            :count="store.activeRobotCount"
+            variant="dark"
+            :to="{ name: 'robots' }"
+          >
+            <template #icon>
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+              </svg>
+            </template>
+          </StatCard>
+        </section>
 
-        <StatCard label="운행 중 로디" :count="store.activeRobotCount" variant="dark" :to="{ name: 'robots' }">
-          <template #icon>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-            </svg>
-          </template>
-        </StatCard>
-      </section>
-
-      <!-- 메인 콘텐츠 영역 -->
-      <div class="dashboard__main">
-        <section class="dashboard__map-section" aria-label="실시간 탐지 현황">
-          <div class="section-header">
-            <div>
-              <h2 class="section-title">실시간 탐지 현황</h2>
-              <p class="section-subtitle">
-                현재 조회 기간에 수집된 탐지 사건 위치입니다. 마커를 선택하면 상태를 확인할 수 있습니다.
-              </p>
+        <!-- 메인 콘텐츠 영역 -->
+        <div class="dashboard__main">
+          <section class="dashboard__map-section" aria-label="실시간 탐지 현황">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">실시간 탐지 현황</h2>
+                <p class="section-subtitle">
+                  현재 조회 기간에 수집된 탐지 사건 위치입니다. 마커를 선택하면 상태를 확인할 수
+                  있습니다.
+                </p>
+              </div>
+              <span class="map-marker-count">위치 확인 {{ damageMarkers.length }}건</span>
             </div>
-            <span class="map-marker-count">위치 확인 {{ damageMarkers.length }}건</span>
-          </div>
-          <CommonMap
-            class="dashboard-map"
-            :markers="damageMarkers"
-            map-label="대시보드 실시간 탐지 현황 지도"
-            empty-message="위치 정보가 있는 탐지 사건이 없습니다."
-          />
-        </section>
+            <CommonMap
+              class="dashboard-map"
+              :markers="damageMarkers"
+              center-popup-on-select
+              map-label="대시보드 실시간 탐지 현황 지도"
+              empty-message="위치 정보가 있는 탐지 사건이 없습니다."
+              @marker-select="openDamageDetail"
+            />
+          </section>
 
-        <!-- 신규 탐지 알림 -->
-        <section class="dashboard__alert-section" aria-label="신규 탐지 알림">
-          <div class="section-header">
-            <h2 class="section-title">신규 탐지 알림</h2>
-          </div>
-          <RecentDamageList />
-        </section>
-      </div>
-
-      <!-- 하단 콘텐츠 영역 -->
-      <div class="dashboard__bottom">
-        <!-- 탐지 추이 차트 -->
-        <section class="dashboard__chart-section" aria-label="탐지 추이 분석">
-          <div class="section-header">
-            <div>
-              <h2 class="section-title">탐지 추이 분석</h2>
-              <p class="section-subtitle">
-                지난 7일간 일별 탐지 건수
-                <span class="mock-badge" aria-label="임시 데이터">임시 데이터</span>
-              </p>
+          <!-- 신규 탐지 알림 -->
+          <section class="dashboard__alert-section" aria-label="신규 탐지 알림">
+            <div class="section-header">
+              <h2 class="section-title">신규 탐지 알림</h2>
             </div>
-          </div>
-          <TrendChart :data="store.timeSeries" />
-        </section>
+            <RecentDamageList />
+          </section>
+        </div>
 
-        <!-- 긴급 확인 필요 사건 (별도 작업) -->
-        <section class="dashboard__urgent-section" aria-label="긴급 확인 필요 사건">
-          <div class="section-header">
-            <h2 class="section-title">긴급 확인 필요 사건</h2>
-          </div>
-          <div class="panel-placeholder">
-            <p>긴급 사건 목록은 추후 구현됩니다.</p>
-          </div>
-        </section>
+        <!-- 하단 콘텐츠 영역 -->
+        <div class="dashboard__bottom">
+          <!-- 탐지 추이 차트 -->
+          <section class="dashboard__chart-section" aria-label="탐지 추이 분석">
+            <div class="section-header">
+              <div>
+                <h2 class="section-title">탐지 추이 분석</h2>
+                <p class="section-subtitle">
+                  선택한 기간의 탐지 및 보수 완료 건수
+                </p>
+              </div>
+            </div>
+            <DashboardToolbar
+              v-model="store.trendFilter"
+              compact
+              @apply="store.applyTrendFilter"
+            />
+            <div v-if="store.trendError" class="chart-error" role="alert">
+              <span>{{ store.trendError }}</span>
+              <button type="button" class="error-banner__retry" @click="store.fetchTrend">
+                다시 시도
+              </button>
+            </div>
+            <div
+              v-if="!store.trendError"
+              class="trend-chart-wrap"
+              :aria-busy="store.trendLoading"
+            >
+              <LoadingSpinner v-if="store.trendLoading" label="탐지 추이 데이터를 불러오는 중" />
+              <div v-else-if="!hasTrendData" class="trend-empty" role="status">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="m7 16 4-4 3 3 5-6" />
+                </svg>
+                <p>선택한 기간에 탐지된 사건이 없습니다.</p>
+              </div>
+              <TrendChart v-else :data="store.timeSeries" />
+            </div>
+          </section>
+
+          <!-- 긴급 확인 필요 사건 (별도 작업) -->
+          <section class="dashboard__urgent-section" aria-label="긴급 확인 필요 사건">
+            <div class="section-header">
+              <h2 class="section-title">긴급 확인 필요 사건</h2>
+            </div>
+            <div class="panel-placeholder">
+              <p>긴급 사건 목록은 추후 구현됩니다.</p>
+            </div>
+          </section>
+        </div>
       </div>
-    </div>  <!-- .dashboard -->
-    </div>  <!-- .dashboard-scroll -->
-  </div>  <!-- .dashboard-view -->
+      <!-- .dashboard -->
+    </div>
+    <!-- .dashboard-scroll -->
+  </div>
+  <!-- .dashboard-view -->
 </template>
 
 <style scoped>
@@ -268,6 +420,44 @@ onUnmounted(() => {
   border-radius: 0.8rem;
   background: var(--roady-surface-default);
   min-width: 0;
+}
+
+.trend-chart-wrap {
+  min-height: 24rem;
+  display: grid;
+  place-items: center;
+}
+
+.trend-chart-wrap :deep(.trend-chart) {
+  width: 100%;
+}
+
+.trend-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  color: var(--roady-text-tertiary);
+  text-align: center;
+}
+
+.trend-empty p {
+  margin: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+.chart-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1.2rem;
+  border: 1px solid var(--roady-status-danger);
+  border-radius: 0.6rem;
+  color: var(--roady-status-danger);
+  background: color-mix(in srgb, var(--roady-status-danger) 8%, transparent);
+  font-size: var(--krds-pc-font-size-body-small);
 }
 
 .section-header {

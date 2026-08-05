@@ -97,6 +97,46 @@ public interface UserAccountMapper {
     })
     List<UserAccount> findAll();
 
+    @Select("""
+            <script>
+            SELECT
+                id,
+                username,
+                password_hash,
+                email,
+                name,
+                assigned_region_code,
+                role,
+                active,
+                created_at
+            FROM users
+            <where>
+                <if test="role != null">
+                    AND role = #{role}
+                </if>
+                <if test="active != null">
+                    AND active = #{active}
+                </if>
+            </where>
+            ORDER BY created_at ASC, id ASC
+            </script>
+            """)
+    @ConstructorArgs({
+            @Arg(column = "id", javaType = Long.class, id = true),
+            @Arg(column = "username", javaType = String.class),
+            @Arg(column = "password_hash", javaType = String.class),
+            @Arg(column = "email", javaType = String.class),
+            @Arg(column = "name", javaType = String.class),
+            @Arg(column = "assigned_region_code", javaType = String.class),
+            @Arg(column = "role", javaType = UserRole.class),
+            @Arg(column = "active", javaType = boolean.class),
+            @Arg(column = "created_at", javaType = LocalDateTime.class)
+    })
+    List<UserAccount> findAllByFilters(
+            @Param("role") UserRole role,
+            @Param("active") Boolean active
+    );
+
     @Select("SELECT COUNT(*) > 0 FROM users WHERE username = #{username}")
     boolean existsByUsername(@Param("username") String username);
 

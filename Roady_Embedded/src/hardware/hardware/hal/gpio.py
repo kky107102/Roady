@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import os
+import subprocess
 from typing import Optional
 
 
@@ -100,66 +102,120 @@ class RaspberryPiGpio(GpioBackend):
 
 
 class _JetsonInput(DigitalInput):
-    def __init__(self, gpio, pin: int) -> None:
-        self._gpio, self._pin, self._closed = gpio, pin, False
+    def __init__(self, line) -> None:
+        self._line, self._closed = line, False
 
     def read(self) -> bool:
-        return bool(self._gpio.input(self._pin))
+        return bool(self._line.get_value())
 
     def close(self) -> None:
         if not self._closed:
-            self._gpio.cleanup(self._pin)
+            self._line.release()
             self._closed = True
 
 
 class _JetsonOutput(DigitalOutput):
-    def __init__(self, gpio, pin: int) -> None:
-        self._gpio, self._pin, self._closed = gpio, pin, False
+    def __init__(self, line) -> None:
+        self._line, self._closed = line, False
 
     def write(self, value: bool) -> None:
-        self._gpio.output(self._pin, self._gpio.HIGH if value else self._gpio.LOW)
+        self._line.set_value(1 if value else 0)
 
     def close(self) -> None:
         if not self._closed:
-            self._gpio.cleanup(self._pin)
+            self._line.release()
             self._closed = True
 
 
 class JetsonGpio(GpioBackend):
-    """Jetson.GPIO backend. Pin arguments use BOARD numbering."""
+    """Jetson Orin gpiod backend using physical BOARD pin numbering.
+
+    L4T r36.4.x can restore the SFIO bit while requesting a GPIO. Each line is
+    therefore requested first and its PADCTL register is corrected afterwards.
+    """
+
+    _PINS = {
+        7: ("PAC.06", "0x2448030"),
+        15: ("PN.01", "0x2440020"),
+        29: ("PQ.05", "0x2430068"),
+        31: ("PQ.06", "0x2430070"),
+        33: ("PH.00", "0x2434040"),
+    }
+    _OUTPUT_PADCTL = "0x00000004"
+    _INPUT_PADCTL = "0x00000050"
+    _INPUT_PULL_DOWN_PADCTL = "0x00000054"
 
     def __init__(self) -> None:
         try:
-            import Jetson.GPIO as GPIO
+            import gpiod
         except ImportError as exc:
             raise RuntimeError(
-                "Jetson.GPIO is required: sudo apt install python3-jetson-gpio"
+                "gpiod is required: sudo apt install python3-libgpiod"
             ) from exc
-        self._gpio = GPIO
-        GPIO.setwarnings(False)
-        GPIO.setmode(GPIO.BOARD)
+        if os.geteuid() != 0:
+            raise RuntimeError("Jetson GPIO PADCTL 설정을 위해 sudo로 실행하세요")
+        self._gpiod = gpiod
         self._devices = []
 
     def input(self, pin: int, *, pull_up: Optional[bool] = None) -> DigitalInput:
-        if pull_up is None:
-            self._gpio.setup(pin, self._gpio.IN)
-        else:
-            pull = self._gpio.PUD_UP if pull_up else self._gpio.PUD_DOWN
-            self._gpio.setup(pin, self._gpio.IN, pull_up_down=pull)
-        device = _JetsonInput(self._gpio, pin)
+        if pull_up is True:
+            raise ValueError("Jetson 입력은 검증된 외부 pull-up 배선을 사용하세요")
+        line = self._request_line(pin, self._gpiod.LINE_REQ_DIR_IN, "ROADY_INPUT")
+        value = self._INPUT_PULL_DOWN_PADCTL if pull_up is False else self._INPUT_PADCTL
+        try:
+            self._configure_padctl(pin, value)
+        except Exception:
+            line.release()
+            raise
+        device = _JetsonInput(line)
         self._devices.append(device)
         return device
 
     def output(self, pin: int, *, initial: bool = False) -> DigitalOutput:
-        level = self._gpio.HIGH if initial else self._gpio.LOW
-        self._gpio.setup(pin, self._gpio.OUT, initial=level)
-        device = _JetsonOutput(self._gpio, pin)
+        line = self._request_line(pin, self._gpiod.LINE_REQ_DIR_OUT, "ROADY_OUTPUT")
+        try:
+            self._configure_padctl(pin, self._OUTPUT_PADCTL)
+        except Exception:
+            line.release()
+            raise
+        device = _JetsonOutput(line)
+        device.write(initial)
         self._devices.append(device)
         return device
 
     def close(self) -> None:
         while self._devices:
             self._devices.pop().close()
+
+    def _request_line(self, pin: int, request_type: int, consumer: str):
+        line_name, _ = self._pin_info(pin)
+        line = self._gpiod.find_line(line_name)
+        if line is None:
+            raise RuntimeError(f"GPIO 라인을 찾을 수 없습니다: {line_name}")
+        line.request(consumer=consumer, type=request_type)
+        return line
+
+    def _configure_padctl(self, pin: int, value: str) -> None:
+        line_name, address = self._pin_info(pin)
+        subprocess.run(["busybox", "devmem", address, "w", value], check=True)
+        result = subprocess.run(
+            ["busybox", "devmem", address], check=True, capture_output=True, text=True
+        )
+        actual = result.stdout.strip()
+        if actual.lower() != value.lower():
+            raise RuntimeError(
+                f"{line_name} PADCTL 설정 실패: expected={value}, actual={actual}"
+            )
+        print(f"{line_name} PADCTL={actual}")
+
+    def _pin_info(self, pin: int) -> tuple[str, str]:
+        try:
+            return self._PINS[pin]
+        except KeyError as exc:
+            supported = ", ".join(str(value) for value in sorted(self._PINS))
+            raise ValueError(
+                f"지원하지 않는 Jetson BOARD pin {pin}; 사용 가능: {supported}"
+            ) from exc
 
 
 def create_gpio_backend(platform: str) -> GpioBackend:

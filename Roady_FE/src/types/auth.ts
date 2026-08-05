@@ -22,6 +22,17 @@ export interface AuthUser {
   role: UserRole
 }
 
+export interface UserSummary {
+  id: number
+  username: string
+  email: string
+  name: string
+  assignedRegionCode: string | null
+  role: UserRole
+  active: boolean
+  createdAt: string
+}
+
 export interface ApiErrorResponse {
   timestamp?: string
   status?: number

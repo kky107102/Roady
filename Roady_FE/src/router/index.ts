@@ -24,7 +24,7 @@ const router = createRouter({
     {
       path: '/',
       component: () => import('@/layouts/MainLayout.vue'),
-      meta: { requiresAuth: true },  // 로그인 필요 여부 변환(기본: true)
+      meta: { requiresAuth: true }, // 로그인 필요 여부 변환(기본: true)
       children: [
         {
           path: '',
@@ -36,7 +36,7 @@ const router = createRouter({
           path: 'damages',
           name: 'damages',
           component: () => import('@/views/DamageListView.vue'),
-          meta: { title: '탐지·사건 관리' },
+          meta: { title: '탐지 검토' },
         },
         {
           path: 'robots',
@@ -53,8 +53,14 @@ const router = createRouter({
         {
           path: 'repairs',
           name: 'repairs',
-          component: () => import('@/views/PlaceholderView.vue'),
-          meta: { title: '보수 요청 이력' },
+          component: () => import('@/views/RepairListView.vue'),
+          meta: { title: '보수 관리' },
+        },
+        {
+          path: 'repairs/:damageId',
+          name: 'repair-detail',
+          component: () => import('@/views/RepairDetailView.vue'),
+          meta: { title: '보수 사건 상세' },
         },
         {
           path: 'admin/users',

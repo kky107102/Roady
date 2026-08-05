@@ -109,6 +109,11 @@ CREATE TABLE IF NOT EXISTS damages (
     captured_at DATETIME(6) NULL,
     current_status VARCHAR(30) NOT NULL DEFAULT 'COLLECTED',
     processing_priority VARCHAR(30) NULL,
+    review_damage_type VARCHAR(30) NULL,
+    review_note VARCHAR(1000) NULL,
+    repairer_id BIGINT NULL,
+    repair_completed_at DATE NULL,
+    repair_completion_note VARCHAR(1000) NULL,
     created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
     PRIMARY KEY (id),
@@ -118,13 +123,33 @@ CREATE TABLE IF NOT EXISTS damages (
     INDEX idx_damages_robot_created_at (robot_id, created_at),
     INDEX idx_damages_reported_by_created_at (reported_by, created_at),
     INDEX idx_damages_assigned_to_created_at (assigned_to, created_at),
+    INDEX idx_damages_repairer_created_at (repairer_id, created_at),
     INDEX idx_damages_address_name (address_name),
     INDEX idx_damages_road_address_name (road_address_name),
     INDEX idx_damages_region_code_created_at (region_code, created_at DESC, id DESC),
     INDEX idx_damages_latitude_longitude (latitude, longitude),
     CONSTRAINT fk_damages_robot FOREIGN KEY (robot_id) REFERENCES robots (id),
     CONSTRAINT fk_damages_reported_by FOREIGN KEY (reported_by) REFERENCES users (id),
-    CONSTRAINT fk_damages_assigned_to FOREIGN KEY (assigned_to) REFERENCES users (id)
+    CONSTRAINT fk_damages_assigned_to FOREIGN KEY (assigned_to) REFERENCES users (id),
+    CONSTRAINT fk_damages_repairer FOREIGN KEY (repairer_id) REFERENCES users (id)
+);
+
+CREATE TABLE IF NOT EXISTS repair_request_histories (
+    id BIGINT NOT NULL AUTO_INCREMENT,
+    damage_id BIGINT NOT NULL,
+    repair_assignment_id BIGINT NULL,
+    requested_by BIGINT NOT NULL,
+    repairer_id BIGINT NULL,
+    before_status VARCHAR(30) NOT NULL,
+    after_status VARCHAR(30) NOT NULL,
+    note VARCHAR(1000) NULL,
+    requested_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_repair_request_histories_damage_requested_at (damage_id, requested_at DESC),
+    INDEX idx_repair_request_histories_assignment_requested_at (repair_assignment_id, requested_at DESC),
+    CONSTRAINT fk_repair_request_histories_damage FOREIGN KEY (damage_id) REFERENCES damages (id) ON DELETE CASCADE,
+    CONSTRAINT fk_repair_request_histories_requested_by FOREIGN KEY (requested_by) REFERENCES users (id),
+    CONSTRAINT fk_repair_request_histories_repairer FOREIGN KEY (repairer_id) REFERENCES users (id)
 );
 
 CREATE TABLE IF NOT EXISTS damage_images (

@@ -79,7 +79,7 @@ describe('localDate', () => {
     it('날짜와 상태 필터가 함께 올바르게 변환된다', () => {
       const from = '2026-07-01'
       const to = '2026-07-29'
-      const status = 'REVIEW_REQUIRED'
+      const status = 'AI_ANALYZED'
 
       const query = {
         from: toApiFromDateTime(from),
@@ -89,7 +89,7 @@ describe('localDate', () => {
 
       expect(query.from).toBe('2026-07-01T00:00:00')
       expect(query.to).toBe('2026-07-30T00:00:00')
-      expect(query.status).toBe('REVIEW_REQUIRED')
+      expect(query.status).toBe('AI_ANALYZED')
     })
 
     it('시작일이 종료일보다 뒤이면 변환 후에도 from이 to보다 크거나 같다 (UI 검증으로 막아야 하는 케이스)', () => {

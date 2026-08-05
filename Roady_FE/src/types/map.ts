@@ -10,4 +10,18 @@ export interface MapMarkerItem {
   title: string
   details?: MapMarkerDetail[]
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral'
+  actionLabel?: string
+  actionHref?: string
+}
+
+export interface MapCoordinate {
+  latitude: number
+  longitude: number
+}
+
+export interface MapPathItem {
+  id: string | number
+  points: MapCoordinate[]
+  tone?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral'
+  label?: string
 }

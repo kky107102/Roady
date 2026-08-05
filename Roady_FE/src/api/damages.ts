@@ -39,7 +39,27 @@ export const damagesApi = {
     return data
   },
 
-  clearDetailCache() {
-    detailCache.clear()
+  async updateReview(
+    damageId: number,
+    status: 'AI_ANALYZED' | 'REQUESTED' | 'CANCELED',
+    processingPriority?: string | null,
+    reviewDamageType?: string | null,
+    reviewNote?: string | null,
+  ): Promise<void> {
+    await http.patch(`/damages/${damageId}/review`, {
+      status,
+      processingPriority: processingPriority || null,
+      reviewDamageType: reviewDamageType || null,
+      reviewNote: reviewNote?.trim() || null,
+    })
+    detailCache.delete(damageId)
+  },
+
+  clearDetailCache(damageId?: number) {
+    if (damageId == null) {
+      detailCache.clear()
+      return
+    }
+    detailCache.delete(damageId)
   },
 }

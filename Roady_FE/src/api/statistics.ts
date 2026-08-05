@@ -3,7 +3,7 @@ import type {
   StatQuery,
   TimeSeriesResponse,
   StatusStatResponse,
-  SeverityStatResponse,
+  RepairPriorityStatResponse,
 } from '@/types/statistics'
 
 export const statisticsApi = {
@@ -21,10 +21,11 @@ export const statisticsApi = {
     return data
   },
 
-  async bySeverity(query: Omit<StatQuery, 'unit'>) {
-    const { data } = await http.get<SeverityStatResponse>('/statistics/damages/by-severity', {
-      params: query,
-    })
+  async byRepairPriority(query: Omit<StatQuery, 'unit'>) {
+    const { data } = await http.get<RepairPriorityStatResponse>(
+      '/statistics/damages/by-repair-priority',
+      { params: query },
+    )
     return data
   },
 }

@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { Teleport, TransitionGroup } from 'vue'
+import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
-import type { Toast, ToastType } from '@/stores/notification'
+import type { Toast, ToastAction, ToastType } from '@/stores/notification'
 
 const store = useNotificationStore()
+const router = useRouter()
+
+async function runAction(toast: Toast, action: ToastAction) {
+  store.removeToast(toast.id)
+  if (action.onClick) {
+    await action.onClick()
+  } else if (action.to) {
+    await router.push(action.to)
+  }
+}
 
 const icons: Record<ToastType, string> = {
   success:
@@ -40,7 +50,20 @@ const icons: Record<ToastType, string> = {
           >
             <path :d="icons[toast.type]" />
           </svg>
-          <span class="toast-message">{{ toast.message }}</span>
+          <div class="toast-content">
+            <span class="toast-message">{{ toast.message }}</span>
+            <div v-if="toast.actions?.length" class="toast-actions">
+              <button
+                v-for="action in toast.actions"
+                :key="action.label"
+                type="button"
+                class="toast-action"
+                @click="runAction(toast, action)"
+              >
+                {{ action.label }}
+              </button>
+            </div>
+          </div>
           <button
             type="button"
             class="toast-close"
@@ -139,11 +162,34 @@ const icons: Record<ToastType, string> = {
 }
 
 .toast-message {
-  flex: 1;
+  display: block;
   color: var(--roady-text-primary);
   font-size: var(--krds-pc-font-size-body-small);
   line-height: 1.6;
   word-break: keep-all;
+}
+
+.toast-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.6rem;
+}
+
+.toast-action {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid currentColor;
+  background: transparent;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
 }
 
 .toast-close {

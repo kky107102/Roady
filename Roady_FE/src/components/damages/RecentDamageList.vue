@@ -7,25 +7,26 @@ import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { reviewTabForDamage } from '@/utils/damageReview'
 
 const STATUS_LABELS: Record<DamageStatus, string> = {
-  COLLECTED: '탐지됨',
-  REVIEW_REQUIRED: '검토 필요',
-  RECEIVED: '접수됨',
-  REPAIR_SCHEDULED: '보수 예정',
-  REPAIRING: '보수 중',
+  COLLECTED: '수집완료',
+  AI_ANALYZING: 'AI 분석중',
+  AI_ANALYZED: 'AI 분석완료',
+  REQUESTED: '검토 완료',
+  REPAIR_IN_PROGRESS: '보수 중',
+  CANCELED: '취소',
   REPAIR_COMPLETED: '보수 완료',
-  REPAIR_NOT_REQUIRED: '보수 불필요',
 }
 
 const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
   COLLECTED: 'neutral',
-  REVIEW_REQUIRED: 'warning',
-  RECEIVED: 'info',
-  REPAIR_SCHEDULED: 'info',
-  REPAIRING: 'warning',
+  AI_ANALYZING: 'info',
+  AI_ANALYZED: 'warning',
+  REQUESTED: 'info',
+  REPAIR_IN_PROGRESS: 'warning',
+  CANCELED: 'neutral',
   REPAIR_COMPLETED: 'success',
-  REPAIR_NOT_REQUIRED: 'neutral',
 }
 
 function formatDateTime(str: string | null): string {
@@ -71,33 +72,37 @@ onMounted(load)
       {{ error }}
     </div>
 
-    <EmptyState
-      v-else-if="items.length === 0"
-      title="탐지된 사건이 없습니다"
-    />
+    <EmptyState v-else-if="items.length === 0" title="탐지된 사건이 없습니다" />
 
     <template v-else>
       <ul class="rdl-items" role="list">
-        <li v-for="item in items" :key="item.id" class="rdl-item">
-          <div class="rdl-item-header">
-            <span class="rdl-item-id">#{{ item.id }}</span>
-            <StatusBadge
-              :type="STATUS_BADGE_TYPES[item.currentStatus]"
-              :label="STATUS_LABELS[item.currentStatus]"
-            />
-          </div>
-          <p class="rdl-item-desc">{{ item.description ?? '설명 없음' }}</p>
-          <time class="rdl-item-time" :datetime="item.capturedAt ?? item.createdAt">
-            {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
-          </time>
+        <li v-for="item in items" :key="item.id">
+          <RouterLink
+            :to="{
+              name: 'damages',
+              query: { review: reviewTabForDamage(item), damageId: String(item.id) },
+            }"
+            class="rdl-item"
+            :aria-label="`탐지 사건 #${item.id} 상세보기`"
+          >
+            <div class="rdl-item-header">
+              <span class="rdl-item-id">#{{ item.id }}</span>
+              <StatusBadge
+                :type="STATUS_BADGE_TYPES[item.currentStatus]"
+                :label="STATUS_LABELS[item.currentStatus]"
+              />
+            </div>
+            <p class="rdl-item-desc">{{ item.description ?? '설명 없음' }}</p>
+            <time class="rdl-item-time" :datetime="item.capturedAt ?? item.createdAt">
+              {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
+            </time>
+          </RouterLink>
         </li>
       </ul>
     </template>
 
     <div class="rdl-footer">
-      <RouterLink :to="{ name: 'damages' }" class="rdl-view-all">
-        모두 보기 →
-      </RouterLink>
+      <RouterLink :to="{ name: 'damages' }" class="rdl-view-all"> 모두 보기 → </RouterLink>
     </div>
   </div>
 </template>
@@ -136,10 +141,23 @@ onMounted(load)
   gap: 0.4rem;
   padding: 1rem 0;
   border-bottom: 1px solid var(--roady-border-default);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 0.15s;
 }
 
-.rdl-item:last-child {
+.rdl-items > li:last-child .rdl-item {
   border-bottom: none;
+}
+
+.rdl-item:hover {
+  background: var(--roady-surface-background);
+}
+
+.rdl-item:focus-visible {
+  border-radius: 0.4rem;
+  outline: 0.3rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
 }
 
 .rdl-item-header {

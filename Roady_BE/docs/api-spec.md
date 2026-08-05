@@ -29,7 +29,7 @@
 | 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
 | 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색, 지역코드·기간 필터 및 페이지 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
-| 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태 및 처리 우선순위 수정 |
+| 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태, 처리 우선순위, 판정 파손 유형, 비고 수정 |
 | 파손 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 구현됨 | 파손 이미지 바이너리 조회 |
 | 파손 | `GET` | `/api/damages/map-markers` | 구현됨 | 지도 표시용 파손 마커 조회 |
 | 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
@@ -63,7 +63,7 @@
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | 설계안 | AI 분석 재시도 |
 | AI 분석 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 수정 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | 설계안 | AI 분석 결과 확정 |
-| 처리 상태 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 처리 상태 및 우선순위 수정 |
+| 처리 상태 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 처리 상태, 우선순위, 판정 파손 유형, 비고 수정 |
 | 보수 배정 | `POST` | `/api/repair-assignments` | 설계안 | 보수 담당자와 예정일 배정, 파손 상태 변경, 요청 이력 저장 |
 | 보수 배정 | `GET` | `/api/repair-assignments` | 설계안 | 보수 배정 목록 조회 |
 | 보수 배정 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 상세 조회 |
@@ -373,7 +373,7 @@ refresh token을 삭제하여 재발급을 막는다.
 
 ## 4. 사용자 관리 API
 
-사용자 관리 API는 모두 `ADMIN` 권한이 필요하다.
+사용자 생성·수정 API는 `ADMIN` 권한이 필요하다. 사용자 목록 조회는 보수 담당자 선택을 위해 `ADMIN`, `INSPECTOR`가 사용할 수 있다.
 
 ### 4.1 사용자 목록 조회
 
@@ -382,9 +382,16 @@ refresh token을 삭제하여 재발급을 막는다.
 | 항목 | 내용 |
 | --- | --- |
 | Method | `GET` |
-| URL | `/api/users` |
+| URL | `/api/users?role=REPAIRER&active=true` |
 | 인증 | 필요 |
-| 권한 | `ADMIN` |
+| 권한 | `ADMIN`, `INSPECTOR` |
+
+#### Query Parameter
+
+| 필드 | 타입 | 필수 | 설명 |
+| --- | --- | --- | --- |
+| `role` | string | 아니오 | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` 중 하나 |
+| `active` | boolean | 아니오 | 계정 활성 여부 |
 
 #### Response `200 OK`
 
@@ -421,7 +428,7 @@ refresh token을 삭제하여 재발급을 막는다.
 | 상태 코드 | 발생 상황 |
 | --- | --- |
 | `401` | 인증 실패 |
-| `403` | 관리자 권한 없음 |
+| `403` | `ADMIN`, `INSPECTOR` 권한 없음 |
 
 ### 4.2 사용자 생성
 
@@ -686,6 +693,9 @@ curl -X POST "http://localhost:8080/api/damages" \
   "robotId": 1,
   "reportedBy": 2,
   "assignedTo": null,
+  "assignedToName": null,
+  "repairerId": null,
+  "repairerName": null,
   "description": "도로 균열 감지",
   "addressName": "경기 안성시 죽산면 죽산리 343-1",
   "roadAddressName": "경기 안성시 죽산초교길 69-4",
@@ -699,6 +709,12 @@ curl -X POST "http://localhost:8080/api/damages" \
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
   "processingPriority": null,
+  "reviewDamageType": null,
+  "reviewNote": null,
+  "repairRequestedAt": null,
+  "repairRequestNote": null,
+  "repairCompletedAt": null,
+  "repairCompletionNote": null,
   "imageCount": 2,
   "images": [
     {
@@ -769,6 +785,8 @@ curl -X POST "http://localhost:8080/api/damages" \
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "COLLECTED",
       "processingPriority": null,
+      "reviewDamageType": null,
+      "reviewNote": null,
       "imageCount": 2,
       "createdAt": "2026-07-22T14:30:01"
     }
@@ -801,6 +819,8 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 처리 상태 |
 | `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `content[].reviewDamageType` | string, null | 관리자가 판정한 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER` |
+| `content[].reviewNote` | string, null | 관리자 판정 비고. 공백은 `null`로 저장하며 최대 1,000자 |
 | `content[].imageCount` | number | 연결된 이미지 수 |
 | `content[].createdAt` | string | 생성 일시 |
 | `page` | number | 현재 페이지 번호 |
@@ -847,7 +867,6 @@ curl -X POST "http://localhost:8080/api/damages" \
     "AI_ANALYZING": 12,
     "AI_ANALYZED": 23,
     "REQUESTED": 18,
-    "REPAIR_SCHEDULED": 10,
     "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
     "CANCELED": 5
@@ -944,6 +963,9 @@ curl -X POST "http://localhost:8080/api/damages" \
   "robotId": 1,
   "reportedBy": 2,
   "assignedTo": null,
+  "assignedToName": null,
+  "repairerId": 9,
+  "repairerName": "김보수",
   "description": "도로 균열 감지",
   "addressName": "경기 안성시 죽산면 죽산리 343-1",
   "roadAddressName": "경기 안성시 죽산초교길 69-4",
@@ -957,6 +979,12 @@ curl -X POST "http://localhost:8080/api/damages" \
   "capturedAt": "2026-07-22T14:30:00",
   "currentStatus": "COLLECTED",
   "processingPriority": null,
+  "reviewDamageType": null,
+  "reviewNote": null,
+  "repairRequestedAt": "2026-08-04T10:00:00",
+  "repairRequestNote": "현장 교체 요청",
+  "repairCompletedAt": null,
+  "repairCompletionNote": null,
   "imageCount": 2,
   "images": [
     {
@@ -973,6 +1001,8 @@ curl -X POST "http://localhost:8080/api/damages" \
   "updatedAt": "2026-07-22T14:30:01"
 }
 ```
+
+`GET /api/damages/{damageId}`와 검토·보수 상태 전환 응답은 `assignedToName`, `repairerId`, `repairerName`, `repairRequestedAt`, `repairRequestNote`, `repairCompletedAt`, `repairCompletionNote`를 포함한다. 담당자가 없으면 해당 ID와 이름은 모두 `null`이다. `repairCompletedAt`은 `YYYY-MM-DD`, 요청 시각은 ISO-8601 일시 형식이다.
 
 #### DamageImageResponse
 
@@ -1411,6 +1441,8 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
       "capturedAt": "2026-07-22T14:30:00",
       "currentStatus": "AI_ANALYZED",
       "processingPriority": "URGENT",
+      "reviewDamageType": "CRACK",
+      "reviewNote": "현장 확인 필요",
       "imageCount": 2,
       "damageScore": 82,
       "damageType": "CRACK",
@@ -1446,9 +1478,11 @@ GET /api/damages?from=2026-07-01T00:00:00&to=2026-08-01T00:00:00&status=AI_ANALY
 | `content[].capturedAt` | string, null | 촬영 일시 |
 | `content[].currentStatus` | string | 현재 파손 처리 상태 |
 | `content[].processingPriority` | string, null | 관리자가 수정한 처리 우선순위. `LOW`, `NORMAL`, `HIGH`, `URGENT` |
+| `content[].reviewDamageType` | string, null | 관리자가 판정한 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER` |
+| `content[].reviewNote` | string, null | 관리자 판정 비고. 공백은 `null`로 저장하며 최대 1,000자 |
 | `content[].imageCount` | number | 등록된 이미지 수 |
 | `content[].damageScore` | number, null | 최신 성공 AI 분석의 파손 점수 |
-| `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
+| `content[].damageType` | string, null | 최신 성공 AI 분석의 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK` |
 | `content[].repairRequired` | boolean, null | 최신 성공 AI 분석의 보수 필요 여부 |
 | `content[].repairPriority` | string, null | 최신 성공 AI 분석의 보수 우선순위 |
 | `content[].confidenceScore` | number, null | 최신 성공 AI 분석의 신뢰도 |
@@ -1483,7 +1517,6 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
     "AI_ANALYZING": 12,
     "AI_ANALYZED": 23,
     "REQUESTED": 18,
-    "REPAIR_SCHEDULED": 10,
     "REPAIR_IN_PROGRESS": 8,
     "REPAIR_COMPLETED": 27,
     "CANCELED": 5
@@ -1556,7 +1589,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `damageId` | number | 파손 ID |
 | `damaged` | boolean | 파손 여부 |
 | `damageScore` | number | 파손 점수. 0~100 |
-| `damageType` | string, null | 파손 유형. `MISSING`, `WEAR`, `BREAKAGE`, `CRACK` |
+| `damageType` | string, null | 파손 유형. `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK` |
 | `repairRequired` | boolean, null | 보수 필요 여부 |
 | `repairPriority` | string, null | `LOW`, `NORMAL`, `HIGH`, `URGENT` |
 | `confidenceScore` | number, null | 분석 신뢰도. 0~1 |
@@ -1574,8 +1607,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `COLLECTED` | 수집 완료 |
 | `AI_ANALYZING` | AI 분석중 |
 | `AI_ANALYZED` | AI 분석완료 |
-| `REQUESTED` | 요청 완료 |
-| `REPAIR_SCHEDULED` | 보수 예정 |
+| `REQUESTED` | 검토 완료(요청 전) |
 | `REPAIR_IN_PROGRESS` | 보수 중 |
 | `REPAIR_COMPLETED` | 보수 완료 |
 | `CANCELED` | 취소 |
@@ -1583,34 +1615,53 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 권장 상태 전이는 다음과 같다.
 
 ```text
-COLLECTED -> AI_ANALYZING -> AI_ANALYZED -> REQUESTED -> REPAIR_SCHEDULED -> REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
+COLLECTED -> AI_ANALYZING -> AI_ANALYZED -> REQUESTED -> REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
 COLLECTED -> CANCELED
 AI_ANALYZING -> CANCELED
 AI_ANALYZED -> CANCELED
 REQUESTED -> CANCELED
-REPAIR_SCHEDULED -> CANCELED
+REPAIR_IN_PROGRESS -> REQUESTED
 ```
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 관리자 검토 수정 | `PATCH` | `/api/damages/{damageId}/review` | `ADMIN`, `INSPECTOR` | 검토 단계에서 처리 상태와 관리자 처리 우선순위를 수정한다. 변경 이력은 저장하지 않는다. |
+| 관리자 검토 수정 | `PATCH` | `/api/damages/{damageId}/review` | `ADMIN`, `INSPECTOR` | 검토 단계에서 처리 상태, 관리자 처리 우선순위, 판정 파손 유형, 비고를 수정한다. 변경 이력은 저장하지 않는다. |
 
 #### UpdateDamageReviewRequest
 
 ```json
 {
   "status": "REQUESTED",
-  "processingPriority": "URGENT"
+  "processingPriority": "HIGH",
+  "reviewDamageType": "LARGE_MISSING",
+  "reviewNote": "현장 확인 필요"
 }
 ```
 
-`status`와 `processingPriority`는 둘 중 하나 이상 전달해야 한다. `status`는 검토 단계에서 사용하는 `AI_ANALYZED`, `REQUESTED`, `CANCELED`만 허용한다. `processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`만 허용한다. 관리자가 보수 필요로 판단하면 `REQUESTED`, 보수 불필요 또는 오탐이면 `CANCELED`로 수정한다.
+`status`는 필수이며 검토 단계에서 사용하는 `AI_ANALYZED`, `REQUESTED`, `CANCELED`만 허용한다. `REQUESTED`로 판정할 때는 `processingPriority`와 `reviewDamageType`이 필수다. `processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`만 허용한다. `reviewDamageType`은 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER`만 허용한다. `reviewNote`는 선택 입력이고 공백 문자열은 `null`로 저장하며 최대 1,000자까지 허용한다.
+
+판정을 되돌릴 때는 `status`를 `AI_ANALYZED`로 전달한다. 이때 `processingPriority`, `reviewDamageType`, `reviewNote`는 모두 `null`로 초기화한다. 보수 불필요 또는 오탐 판정은 `status`를 `CANCELED`로 변경하며, 이때도 관리자 판정 필드는 모두 `null`로 초기화한다.
+
+#### UpdateDamageReviewResponse
+
+성공 응답은 최신 상세 조회 응답과 같은 형태이며, 아래 필드를 반드시 포함한다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `currentStatus` | string | 변경된 현재 처리 상태 |
+| `processingPriority` | string, null | 관리자 처리 우선순위 |
+| `reviewDamageType` | string, null | 관리자 판정 파손 유형 |
+| `reviewNote` | string, null | 관리자 판정 비고 |
 
 ### 11.2 보수 요청 및 배정
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_SCHEDULED`로 변경하며 보수 요청 이력을 저장한다. |
+| 보수 진행 전환 | `POST` | `/api/damages/{damageId}/repair-request` | `ADMIN`, `INSPECTOR` | 검토 완료(`REQUESTED`) 파손을 보수 진행 중(`REPAIR_IN_PROGRESS`)으로 변경하고 우선순위, 파손 유형, 보수 담당자와 요청 메모를 저장한다. |
+| 보수 요청서 수정 | `PATCH` | `/api/damages/{damageId}/repair-request` | `ADMIN`, `INSPECTOR` | 보수 진행 중 상태를 유지하면서 요청서 필드를 수정하고 수정 이력을 저장한다. |
+| 보수 완료 처리 | `PATCH` | `/api/damages/{damageId}/repair-complete` | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 보수 완료(`REPAIR_COMPLETED`)로 변경하고 완료 일자와 메모를 저장한다. |
+| 보수 요청 취소 | `PATCH` | `/api/damages/{damageId}/repair-cancel` | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 검토 완료(`REQUESTED`)로 되돌리고 취소 이력을 저장해 재요청 가능하게 한다. |
+| 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_IN_PROGRESS`로 변경하며 보수 요청 이력을 저장한다. |
 | 보수 배정 목록 조회 | `GET` | `/api/repair-assignments` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 담당자, 기간, 상태 기준으로 배정 목록을 조회한다. |
 | 보수 배정 상세 조회 | `GET` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 배정 상세 정보를 조회한다. |
 | 보수 배정 수정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | `ADMIN`, `INSPECTOR` | 담당자, 예정일, 메모를 수정한다. |
@@ -1619,6 +1670,67 @@ REPAIR_SCHEDULED -> CANCELED
 | 보수 요청 이력 조회 | `GET` | `/api/repair-assignments/{assignmentId}/request-histories` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 보수 요청/배정/취소 시 저장된 이력을 조회한다. |
 
 보수 요청/배정은 `damages.current_status`가 `REQUESTED`인 파손에 대해 수행한다. 등록 시 `repair_assignments`에 담당자와 예정일을 저장하고, `damages.assigned_to`와 `damages.current_status`를 함께 갱신한다. 관리자 검토 이력은 저장하지 않지만, 보수 요청/배정 이력은 `repair_request_histories`에 저장한다.
+
+#### CreateDamageRepairRequest
+
+검토 완료 파손을 보수 진행 상태로 전환하면서 보수 요청 정보를 저장한다.
+
+```json
+{
+  "processingPriority": "HIGH",
+  "reviewDamageType": "CRACK",
+  "repairerId": 9,
+  "note": "현장 교체 요청"
+}
+```
+
+`processingPriority`는 `LOW`, `NORMAL`, `HIGH`, `URGENT`, `reviewDamageType`은 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRACK`, `OTHER`만 허용한다. 생략하면 기존 검토 값을 유지한다. `repairerId`는 `REPAIRER` 역할 사용자만 허용하며 미지정 시 `null`이다. `note`는 선택 입력이고 공백 문자열은 `null`로 저장하며 최대 1,000자까지 허용한다. 상태 변경과 `repair_request_histories` 이력 저장은 하나의 트랜잭션으로 실행한다.
+
+#### UpdateDamageRepairRequest
+
+`PATCH /api/damages/{damageId}/repair-request`는 `REPAIR_IN_PROGRESS` 상태에서 `processingPriority`, `reviewDamageType`, `repairerId`, `note`를 수정한다. 요청 본문은 `CreateDamageRepairRequest`와 같고 상태는 유지된다. 수정 이력은 변경 전·후 상태를 모두 `REPAIR_IN_PROGRESS`로 기록한다.
+
+#### CompleteDamageRepairRequest
+
+```json
+{
+  "completedAt": "2026-08-04",
+  "note": "파손 블록 교체 완료"
+}
+```
+
+`completedAt`은 필수이며 미래 날짜를 허용하지 않는다. 서버 처리 시각인 `updatedAt`과 별도로 `damages.repair_completed_at`에 저장하고, `note`는 `damages.repair_completion_note`와 이력에 함께 저장한다.
+
+#### CancelDamageRepairRequest
+
+```json
+{
+  "note": "담당자 재배정 필요"
+}
+```
+
+취소하면 현재 보수 담당자와 완료 정보를 초기화하지만, `repair_request_histories`의 취소 이력은 유지한다. 이후 동일 파손에 다시 보수 요청할 수 있다.
+
+성공 응답은 최신 `DamageSummaryResponse`이며 다음 보수 관리 필드를 포함한다.
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `assignedToName` | string, null | 일반 처리 담당자 이름 |
+| `repairerId` | number, null | 보수 담당자 ID |
+| `repairerName` | string, null | 보수 담당자 이름 |
+| `repairRequestedAt` | string, null | 최근 보수 요청 시각 |
+| `repairRequestNote` | string, null | 최근 보수 요청 또는 수정 메모 |
+| `repairCompletedAt` | string, null | 보수 완료 일자. `YYYY-MM-DD` |
+| `repairCompletionNote` | string, null | 보수 완료 메모 |
+
+상태 전환 규칙은 다음과 같다.
+
+```text
+POST /api/damages/{damageId}/repair-request: REQUESTED -> REPAIR_IN_PROGRESS
+PATCH /api/damages/{damageId}/repair-request: REPAIR_IN_PROGRESS -> REPAIR_IN_PROGRESS
+PATCH /api/damages/{damageId}/repair-complete: REPAIR_IN_PROGRESS -> REPAIR_COMPLETED
+PATCH /api/damages/{damageId}/repair-cancel: REPAIR_IN_PROGRESS -> REQUESTED
+```
 
 #### CreateRepairAssignmentRequest
 
@@ -1641,7 +1753,7 @@ REPAIR_SCHEDULED -> CANCELED
 처리 규칙은 다음과 같다.
 
 ```text
-damages.current_status: REQUESTED -> REPAIR_SCHEDULED
+damages.current_status: REQUESTED -> REPAIR_IN_PROGRESS
 damages.assigned_to: repairerId로 갱신
 repair_assignments: 보수 배정 정보 저장
 repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, note 저장
@@ -1657,7 +1769,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
   "assignedBy": 2,
   "scheduledDate": "2026-07-30",
   "note": "보행량이 적은 오전 시간대 작업 권장",
-  "damageStatus": "REPAIR_SCHEDULED",
+  "damageStatus": "REPAIR_IN_PROGRESS",
   "createdAt": "2026-07-29T10:00:00",
   "updatedAt": "2026-07-29T10:00:00"
 }
@@ -1674,7 +1786,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
     "requestedBy": 2,
     "repairerId": 5,
     "beforeStatus": "REQUESTED",
-    "afterStatus": "REPAIR_SCHEDULED",
+    "afterStatus": "REPAIR_IN_PROGRESS",
     "note": "보행량이 적은 오전 시간대 작업 권장",
     "requestedAt": "2026-07-29T10:00:00"
   }
@@ -1705,7 +1817,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
 }
 ```
 
-취소는 `REQUESTED` 또는 `REPAIR_SCHEDULED` 상태에서 허용한다. 성공 시 `damages.current_status`를 `CANCELED`로 변경하고, `repair_request_histories.note`에 취소 사유를 저장한다.
+취소는 `REQUESTED` 또는 `REPAIR_IN_PROGRESS` 상태에서 허용한다. 성공 시 `damages.current_status`를 `CANCELED`로 변경하고, `repair_request_histories.note`에 취소 사유를 저장한다.
 
 ### 11.3 보수 결과 후속 확장
 
@@ -1792,7 +1904,6 @@ GET /api/statistics/damages/by-status?from=2026-07-01T00:00:00&to=2026-08-01T00:
     "AI_ANALYZING": 4,
     "AI_ANALYZED": 4,
     "REQUESTED": 4,
-    "REPAIR_SCHEDULED": 3,
     "REPAIR_IN_PROGRESS": 2,
     "REPAIR_COMPLETED": 12,
     "CANCELED": 4

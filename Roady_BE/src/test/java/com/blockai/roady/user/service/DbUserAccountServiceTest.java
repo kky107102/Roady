@@ -10,8 +10,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -22,6 +24,28 @@ class DbUserAccountServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Test
+    void findAllPassesRoleAndActiveFiltersToMapper() {
+        DbUserAccountService service = new DbUserAccountService(userAccountMapper, passwordEncoder);
+        UserAccount repairer = new UserAccount(
+                9L,
+                "repairer",
+                "hash",
+                "repairer@roady.local",
+                "Repairer",
+                null,
+                UserRole.REPAIRER,
+                true,
+                LocalDateTime.of(2026, 8, 4, 10, 0)
+        );
+        when(userAccountMapper.findAllByFilters(UserRole.REPAIRER, true)).thenReturn(List.of(repairer));
+
+        List<UserAccount> result = service.findAll(UserRole.REPAIRER, true);
+
+        assertThat(result).containsExactly(repairer);
+        verify(userAccountMapper).findAllByFilters(UserRole.REPAIRER, true);
+    }
 
     @Test
     void updateAssignedRegionStoresTrimmedRegionCode() {

@@ -23,12 +23,13 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=Path,
-        default=WORKSPACE / "ROADY_AI/models/edge/tactile_damage_candidate_yolo11n_best.pt",
+        default=WORKSPACE / "ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt",
     )
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--conf", type=float, default=0.15)
+    parser.add_argument("--imgsz", type=int, default=768)
+    parser.add_argument("--conf", type=float, default=0.10)
     parser.add_argument("--device", default=0)
+    parser.add_argument("--damage-only", action="store_true")
     args = parser.parse_args()
 
     model = YOLO(str(args.model))
@@ -53,6 +54,8 @@ def main() -> None:
 
             for box in result.boxes:
                 class_id = int(box.cls.item())
+                if args.damage_only and class_id != 1:
+                    continue
                 confidence = float(box.conf.item())
                 x1, y1, x2, y2 = (int(value) for value in box.xyxy[0].tolist())
                 name = result.names[class_id]

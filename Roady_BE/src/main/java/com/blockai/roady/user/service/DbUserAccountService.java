@@ -60,6 +60,11 @@ public class DbUserAccountService implements UserAccountService {
     }
 
     @Override
+    public List<UserAccount> findAll(UserRole role, Boolean active) {
+        return userAccountMapper.findAllByFilters(role, active);
+    }
+
+    @Override
     public UserAccount updateRole(Long id, UserRole role) {
         int updatedRows = userAccountMapper.updateRole(id, role);
         if (updatedRows == 0) {

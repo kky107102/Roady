@@ -22,6 +22,14 @@ const PRESETS = [
 ]
 
 function setPreset(offset: number, idx: number) {
+  if (props.activePreset === idx) {
+    emit('update:activePreset', null)
+    emit('update:from', '')
+    emit('update:to', '')
+    emit('preset-apply', { from: '', to: '' })
+    return
+  }
+
   const fromStr = localDateOffset(offset)
   const toStr = todayLocalStr()
   emit('update:activePreset', idx)

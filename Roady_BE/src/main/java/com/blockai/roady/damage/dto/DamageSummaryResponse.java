@@ -3,6 +3,7 @@ package com.blockai.roady.damage.dto;
 import com.blockai.roady.damage.domain.DamageSummary;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record DamageSummaryResponse(
@@ -23,6 +24,15 @@ public record DamageSummaryResponse(
         LocalDateTime capturedAt,
         String currentStatus,
         String processingPriority,
+        String reviewDamageType,
+        String reviewNote,
+        String assignedToName,
+        Long repairerId,
+        String repairerName,
+        LocalDateTime repairRequestedAt,
+        String repairRequestNote,
+        LocalDate repairCompletedAt,
+        String repairCompletionNote,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -47,6 +57,15 @@ public record DamageSummaryResponse(
                 damage.capturedAt(),
                 damage.currentStatus(),
                 damage.processingPriority(),
+                damage.reviewDamageType(),
+                damage.reviewNote(),
+                damage.assignedToName(),
+                damage.repairerId(),
+                damage.repairerName(),
+                damage.repairRequestedAt(),
+                damage.repairRequestNote(),
+                damage.repairCompletedAt(),
+                damage.repairCompletionNote(),
                 damage.imageCount(),
                 damage.createdAt(),
                 damage.updatedAt()

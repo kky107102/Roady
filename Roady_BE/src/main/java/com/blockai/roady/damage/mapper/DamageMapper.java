@@ -17,6 +17,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -91,6 +92,9 @@ public interface DamageMapper {
                 d.robot_id,
                 d.reported_by,
                 d.assigned_to,
+                assigned_user.name AS assigned_to_name,
+                d.repairer_id,
+                repairer_user.name AS repairer_name,
                 d.description,
                 d.address_name,
                 d.road_address_name,
@@ -104,10 +108,33 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
+                (
+                    SELECT rrh.requested_at
+                    FROM repair_request_histories rrh
+                    WHERE rrh.damage_id = d.id
+                      AND rrh.before_status = 'REQUESTED'
+                      AND rrh.after_status = 'REPAIR_IN_PROGRESS'
+                    ORDER BY rrh.requested_at DESC, rrh.id DESC
+                    LIMIT 1
+                ) AS repair_requested_at,
+                (
+                    SELECT rrh.note
+                    FROM repair_request_histories rrh
+                    WHERE rrh.damage_id = d.id
+                      AND rrh.after_status = 'REPAIR_IN_PROGRESS'
+                    ORDER BY rrh.requested_at DESC, rrh.id DESC
+                    LIMIT 1
+                ) AS repair_request_note,
+                d.repair_completed_at,
+                d.repair_completion_note,
                 COUNT(di.id) AS image_count,
                 d.created_at,
                 d.updated_at
             FROM damages d
+            LEFT JOIN users assigned_user ON assigned_user.id = d.assigned_to
+            LEFT JOIN users repairer_user ON repairer_user.id = d.repairer_id
             LEFT JOIN damage_images di ON di.damage_id = d.id
             WHERE d.id = #{id}
             GROUP BY
@@ -115,6 +142,9 @@ public interface DamageMapper {
                 d.robot_id,
                 d.reported_by,
                 d.assigned_to,
+                assigned_user.name,
+                d.repairer_id,
+                repairer_user.name,
                 d.description,
                 d.address_name,
                 d.road_address_name,
@@ -128,6 +158,10 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
+                d.repair_completed_at,
+                d.repair_completion_note,
                 d.created_at,
                 d.updated_at
             """)
@@ -149,6 +183,15 @@ public interface DamageMapper {
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "processing_priority", javaType = String.class),
+            @Arg(column = "review_damage_type", javaType = String.class),
+            @Arg(column = "review_note", javaType = String.class),
+            @Arg(column = "assigned_to_name", javaType = String.class),
+            @Arg(column = "repairer_id", javaType = Long.class),
+            @Arg(column = "repairer_name", javaType = String.class),
+            @Arg(column = "repair_requested_at", javaType = LocalDateTime.class),
+            @Arg(column = "repair_request_note", javaType = String.class),
+            @Arg(column = "repair_completed_at", javaType = LocalDate.class),
+            @Arg(column = "repair_completion_note", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "created_at", javaType = LocalDateTime.class),
             @Arg(column = "updated_at", javaType = LocalDateTime.class)
@@ -175,6 +218,8 @@ public interface DamageMapper {
                 d.captured_at,
                 d.current_status,
                 d.processing_priority,
+                d.review_damage_type,
+                d.review_note,
                 (
                     SELECT COUNT(*)
                     FROM damage_images di
@@ -251,6 +296,8 @@ public interface DamageMapper {
             @Arg(column = "captured_at", javaType = LocalDateTime.class),
             @Arg(column = "current_status", javaType = String.class),
             @Arg(column = "processing_priority", javaType = String.class),
+            @Arg(column = "review_damage_type", javaType = String.class),
+            @Arg(column = "review_note", javaType = String.class),
             @Arg(column = "image_count", javaType = long.class),
             @Arg(column = "damage_score", javaType = Integer.class),
             @Arg(column = "damage_type", javaType = String.class),
@@ -273,23 +320,112 @@ public interface DamageMapper {
     );
 
     @Update("""
-            <script>
             UPDATE damages
-            <set>
-                <if test="status != null">
-                    current_status = #{status},
-                </if>
-                <if test="processingPriority != null">
-                    processing_priority = #{processingPriority},
-                </if>
-            </set>
+            SET
+                current_status = #{status},
+                processing_priority = #{processingPriority},
+                review_damage_type = #{reviewDamageType},
+                review_note = #{reviewNote}
             WHERE id = #{damageId}
-            </script>
             """)
     int updateReview(
             @Param("damageId") Long damageId,
             @Param("status") String status,
-            @Param("processingPriority") String processingPriority
+            @Param("processingPriority") String processingPriority,
+            @Param("reviewDamageType") String reviewDamageType,
+            @Param("reviewNote") String reviewNote
+    );
+
+    @Update("""
+            UPDATE damages
+            SET
+                current_status = 'REPAIR_IN_PROGRESS',
+                processing_priority = #{processingPriority},
+                review_damage_type = #{reviewDamageType},
+                repairer_id = #{repairerId},
+                repair_completed_at = NULL,
+                repair_completion_note = NULL
+            WHERE id = #{damageId}
+              AND current_status = 'REQUESTED'
+            """)
+    int transitionToRepairInProgress(
+            @Param("damageId") Long damageId,
+            @Param("processingPriority") String processingPriority,
+            @Param("reviewDamageType") String reviewDamageType,
+            @Param("repairerId") Long repairerId
+    );
+
+    @Update("""
+            UPDATE damages
+            SET
+                processing_priority = #{processingPriority},
+                review_damage_type = #{reviewDamageType},
+                repairer_id = #{repairerId}
+            WHERE id = #{damageId}
+              AND current_status = 'REPAIR_IN_PROGRESS'
+            """)
+    int updateRepairRequest(
+            @Param("damageId") Long damageId,
+            @Param("processingPriority") String processingPriority,
+            @Param("reviewDamageType") String reviewDamageType,
+            @Param("repairerId") Long repairerId
+    );
+
+    @Update("""
+            UPDATE damages
+            SET
+                current_status = 'REPAIR_COMPLETED',
+                repair_completed_at = #{completedAt},
+                repair_completion_note = #{completionNote}
+            WHERE id = #{damageId}
+              AND current_status = 'REPAIR_IN_PROGRESS'
+            """)
+    int completeRepair(
+            @Param("damageId") Long damageId,
+            @Param("completedAt") LocalDate completedAt,
+            @Param("completionNote") String completionNote
+    );
+
+    @Update("""
+            UPDATE damages
+            SET
+                current_status = 'REQUESTED',
+                repairer_id = NULL,
+                repair_completed_at = NULL,
+                repair_completion_note = NULL
+            WHERE id = #{damageId}
+              AND current_status = 'REPAIR_IN_PROGRESS'
+            """)
+    int cancelRepairRequest(@Param("damageId") Long damageId);
+
+    @Insert("""
+            INSERT INTO repair_request_histories (
+                damage_id,
+                requested_by,
+                repairer_id,
+                before_status,
+                after_status,
+                note,
+                requested_at
+            )
+            VALUES (
+                #{damageId},
+                #{requestedBy},
+                #{repairerId},
+                #{beforeStatus},
+                #{afterStatus},
+                #{note},
+                #{requestedAt}
+            )
+            """)
+    int insertRepairRequestHistory(
+            @Param("damageId") Long damageId,
+            @Param("requestedBy") Long requestedBy,
+            @Param("repairerId") Long repairerId,
+            @Param("beforeStatus") String beforeStatus,
+            @Param("afterStatus") String afterStatus,
+            @Param("note") String note,
+            @Param("requestedAt") LocalDateTime requestedAt
     );
 
     @Select("""

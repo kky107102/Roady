@@ -71,6 +71,15 @@ public class InMemoryUserAccountService implements UserAccountService {
     }
 
     @Override
+    public List<UserAccount> findAll(UserRole role, Boolean active) {
+        return usersById.values().stream()
+                .filter(user -> role == null || user.role() == role)
+                .filter(user -> active == null || user.active() == active)
+                .sorted(Comparator.comparing(UserAccount::createdAt))
+                .toList();
+    }
+
+    @Override
     public UserAccount updateRole(Long id, UserRole role) {
         return usersById.compute(id, (ignored, user) -> {
             if (user == null) {

@@ -5,25 +5,36 @@ import {
   latLngBounds,
   map as createMap,
   marker as createMarker,
+  polyline as createPolyline,
   tileLayer,
   type Map,
   type Marker,
+  type Polyline,
 } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapMarkerItem } from '@/types/map'
+import type { MapMarkerItem, MapPathItem } from '@/types/map'
 
 interface Props {
   markers?: MapMarkerItem[]
+  paths?: MapPathItem[]
   center?: [number, number]
   zoom?: number
+  focusedCenter?: [number, number] | null
+  focusZoom?: number
+  rightInset?: number
+  centerPopupOnSelect?: boolean
   emptyMessage?: string
   mapLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   markers: () => [],
+  paths: () => [],
   center: () => [37.5665, 126.978],
   zoom: 12,
+  focusZoom: 16,
+  rightInset: 0,
+  centerPopupOnSelect: false,
   emptyMessage: '표시할 위치 정보가 없습니다.',
   mapLabel: '지도',
 })
@@ -34,7 +45,9 @@ const emit = defineEmits<{
 const mapElement = ref<HTMLElement | null>(null)
 let mapInstance: Map | null = null
 let markerInstances: Marker[] = []
+let pathInstances: Polyline[] = []
 let resizeObserver: ResizeObserver | null = null
+let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
 
 function markerIcon(tone: MapMarkerItem['tone']) {
   const normalizedTone = tone ?? 'primary'
@@ -49,9 +62,9 @@ function markerIcon(tone: MapMarkerItem['tone']) {
   return divIcon({
     className: 'roady-map-marker-wrapper',
     html: `<span class="roady-map-marker roady-map-marker--${normalizedTone}"><span class="roady-map-marker__symbol">${symbols[normalizedTone]}</span></span>`,
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -34],
+    iconSize: [44, 44],
+    iconAnchor: [22, 42],
+    popupAnchor: [0, -38],
   })
 }
 
@@ -59,10 +72,27 @@ function popupContent(item: MapMarkerItem): HTMLElement {
   const container = document.createElement('div')
   container.className = 'roady-map-popup'
 
+  const header = document.createElement('div')
+  header.className = 'roady-map-popup__header'
+
   const title = document.createElement('strong')
   title.className = 'roady-map-popup__title'
   title.textContent = item.title
-  container.append(title)
+  header.append(title)
+
+  if (item.actionHref) {
+    const action = document.createElement('a')
+    action.className = 'roady-map-popup__action'
+    action.href = item.actionHref
+    action.textContent = item.actionLabel ?? '상세보기'
+    action.addEventListener('click', (event) => {
+      event.preventDefault()
+      emit('markerSelect', item.id)
+    })
+    header.append(action)
+  }
+
+  container.append(header)
 
   if (item.details?.length) {
     const list = document.createElement('dl')
@@ -86,9 +116,73 @@ function clearMarkers() {
   markerInstances = []
 }
 
+function centerMarkerPopup(item: MapMarkerItem) {
+  if (!props.centerPopupOnSelect || !mapInstance) return
+  mapInstance.stop()
+  const zoom = mapInstance.getZoom()
+  const markerPx = mapInstance.project([item.latitude, item.longitude], zoom)
+  // Offset center upward so the marker appears ~80px below viewport center,
+  // leaving the popup (which opens above the marker) visible near the center.
+  const center = mapInstance.unproject(markerPx.subtract([0, 80]), zoom)
+  mapInstance.setView(center, zoom, { animate: false })
+}
+
+function insetAdjustedCenter(center: [number, number]): [number, number] {
+  if (!mapInstance || props.rightInset <= 0) return center
+
+  const mapWidth = mapInstance.getSize().x
+  const safeInset = Math.min(props.rightInset, Math.max(0, mapWidth - 80))
+  const point = mapInstance.project(center, props.focusZoom).add([safeInset / 2, 0])
+  const adjusted = mapInstance.unproject(point, props.focusZoom)
+  return [adjusted.lat, adjusted.lng]
+}
+
+function focusSelectedLocation(animate: boolean) {
+  if (!mapInstance || !props.focusedCenter) return
+  const center = insetAdjustedCenter(props.focusedCenter)
+  if (animate) {
+    mapInstance.flyTo(center, props.focusZoom, { duration: 0.4 })
+  } else {
+    mapInstance.setView(center, props.focusZoom, { animate: false })
+  }
+}
+
+function clearPaths() {
+  pathInstances.forEach((path) => path.remove())
+  pathInstances = []
+}
+
+function pathColor(tone: MapPathItem['tone']): string {
+  const tokenMap = {
+    primary: '--roady-brand-secondary',
+    success: '--roady-status-success',
+    warning: '--roady-status-warning',
+    danger: '--roady-status-danger',
+    neutral: '--roady-text-tertiary',
+  }
+  const token = tokenMap[tone ?? 'primary']
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || 'currentColor'
+}
+
 function renderMarkers() {
   if (!mapInstance) return
   clearMarkers()
+  clearPaths()
+
+  pathInstances = props.paths
+    .filter((path) => path.points.length >= 2)
+    .map((path) =>
+      createPolyline(
+        path.points.map((point) => [point.latitude, point.longitude]),
+        {
+          color: pathColor(path.tone),
+          weight: 5,
+          opacity: 0.8,
+          lineCap: 'round',
+          lineJoin: 'round',
+        },
+      ).addTo(mapInstance as Map),
+    )
 
   markerInstances = props.markers.map((item) => {
     const marker = createMarker([item.latitude, item.longitude], {
@@ -96,24 +190,43 @@ function renderMarkers() {
       title: item.title,
       alt: `${item.title} 위치`,
       keyboard: true,
-    })
-      .bindPopup(popupContent(item), { minWidth: 190 })
-      .addTo(mapInstance as Map)
+    }).addTo(mapInstance as Map)
 
-    marker.on('click', () => emit('markerSelect', item.id))
+    marker.on('click', () => {
+      centerMarkerPopup(item)
+      if (!item.actionHref) emit('markerSelect', item.id)
+      queueMicrotask(() => {
+        if (mapInstance) marker.openPopup()
+      })
+    })
+
+    marker.bindPopup(popupContent(item), {
+      minWidth: 190,
+      autoPan: false,
+    })
+
     return marker
   })
 
-  if (props.markers.length === 1) {
-    const marker = props.markers[0]
-    if (marker) mapInstance.setView([marker.latitude, marker.longitude], 15)
-  } else if (props.markers.length > 1) {
-    const bounds = latLngBounds(
-      props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
-    )
-    mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+  if (props.focusedCenter) {
+    focusSelectedLocation(false)
   } else {
-    mapInstance.setView(props.center, props.zoom)
+    const allCoordinates = [
+      ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
+      ...props.paths.flatMap((path) =>
+        path.points.map((point) => [point.latitude, point.longitude] as [number, number]),
+      ),
+    ]
+
+    if (allCoordinates.length === 1) {
+      const coordinate = allCoordinates[0]
+      if (coordinate) mapInstance.setView(coordinate, 15)
+    } else if (allCoordinates.length > 1) {
+      const bounds = latLngBounds(allCoordinates)
+      mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
+    } else {
+      mapInstance.setView(props.center, props.zoom)
+    }
   }
 }
 
@@ -134,20 +247,47 @@ onMounted(() => {
   renderMarkers()
 
   if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => mapInstance?.invalidateSize())
+    resizeObserver = new ResizeObserver(() =>
+      mapInstance?.invalidateSize({ animate: false, pan: false }),
+    )
     resizeObserver.observe(mapElement.value)
   }
 })
 
 watch(
-  () => props.markers,
+  () => [props.markers, props.paths],
   () => renderMarkers(),
   { deep: true },
 )
 
+watch(
+  () =>
+    [
+      props.focusedCenter?.[0] ?? null,
+      props.focusedCenter?.[1] ?? null,
+      props.focusZoom,
+      props.rightInset,
+    ] as const,
+  ([latitude, longitude], previous) => {
+    if (latitude == null || longitude == null) return
+
+    const locationChanged = !previous || latitude !== previous[0] || longitude !== previous[1]
+    focusSelectedLocation(locationChanged)
+
+    if (focusSettleTimer) clearTimeout(focusSettleTimer)
+    focusSettleTimer = setTimeout(() => {
+      focusSelectedLocation(false)
+      focusSettleTimer = null
+    }, 300)
+  },
+  { flush: 'post' },
+)
+
 onBeforeUnmount(() => {
+  if (focusSettleTimer) clearTimeout(focusSettleTimer)
   resizeObserver?.disconnect()
   clearMarkers()
+  clearPaths()
   mapInstance?.remove()
   mapInstance = null
 })
@@ -165,6 +305,11 @@ onBeforeUnmount(() => {
         <span v-for="detail in marker.details" :key="detail.label">
           {{ detail.label }} {{ detail.value }}
         </span>
+      </li>
+    </ul>
+    <ul v-if="paths.length" class="common-map__summary">
+      <li v-for="path in paths" :key="path.id">
+        {{ path.label || '이동 경로' }} {{ path.points.length }}개 위치
       </li>
     </ul>
   </div>
@@ -217,13 +362,19 @@ onBeforeUnmount(() => {
 }
 
 :global(.roady-map-marker-wrapper) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 :global(.roady-map-marker) {
   position: relative;
   display: block;
+  box-sizing: border-box;
   width: 2.8rem;
   height: 2.8rem;
   border: 0.4rem solid var(--roady-surface-default);
@@ -231,6 +382,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 0.3rem 0.8rem color-mix(in srgb, var(--roady-text-primary) 28%, transparent);
   background: var(--roady-brand-secondary);
   transform: rotate(-45deg);
+  pointer-events: none;
 }
 
 :global(.roady-map-marker__symbol) {
@@ -242,6 +394,7 @@ onBeforeUnmount(() => {
   font-weight: var(--krds-font-weight-bold);
   line-height: 1;
   transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: none;
 }
 
 :global(.roady-map-marker--success) {
@@ -267,10 +420,36 @@ onBeforeUnmount(() => {
 }
 
 :global(.roady-map-popup__title) {
-  display: block;
+  min-width: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+:global(.roady-map-popup__header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
   padding-bottom: 0.8rem;
   border-bottom: 1px solid var(--roady-border-default);
-  font-size: var(--krds-pc-font-size-body-small);
+}
+
+:global(.roady-map-popup__action) {
+  flex-shrink: 0;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+:global(.roady-map-popup__action:hover) {
+  color: var(--roady-brand-primary);
+}
+
+:global(.roady-map-popup__action:focus-visible) {
+  border-radius: 0.2rem;
+  outline: 0.2rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
 }
 
 :global(.roady-map-popup__details) {

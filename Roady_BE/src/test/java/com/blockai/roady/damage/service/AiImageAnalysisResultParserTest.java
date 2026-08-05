@@ -54,6 +54,23 @@ class AiImageAnalysisResultParserTest {
     }
 
     @Test
+    void parseNormalizesLegacyAiDamageTypes() {
+        ParsedAiImageAnalysisResult missing = parser.parse("""
+                {
+                  "damageType": "MISSING"
+                }
+                """);
+        ParsedAiImageAnalysisResult breakage = parser.parse("""
+                {
+                  "damageType": "BREAKAGE"
+                }
+                """);
+
+        assertThat(missing.damageType()).isEqualTo("LARGE_MISSING");
+        assertThat(breakage.damageType()).isEqualTo("SMALL_MISSING");
+    }
+
+    @Test
     void parseReturnsEmptyResultForInvalidJson() {
         ParsedAiImageAnalysisResult result = parser.parse("not-json");
 
