@@ -13,7 +13,6 @@ from std_msgs.msg import String
 from perception.algorithms.damage_event_pipeline import DamageEventPipeline, ReadyDamageEvent
 from perception.algorithms.person_pipeline_test_adapter import (
     PersonAsTactileDetector,
-    PersonRoiClassifier,
 )
 from storage.damage_repository import DamageLocation, DamageRepository
 
@@ -31,7 +30,6 @@ class PersonDamagePipelineTestNode(Node):
         self.declare_parameter("model_path", "artifacts/obstacle_lower_limb/best.engine")
         self.declare_parameter("device", "0")
         self.declare_parameter("detect_confidence", 0.15)
-        self.declare_parameter("classify_confidence", 0.10)
         self.declare_parameter("confirm_count", 3)
         self.declare_parameter("confirm_window_sec", 2.0)
         self.declare_parameter("candidate_timeout_sec", 1.0)
@@ -46,20 +44,14 @@ class PersonDamagePipelineTestNode(Node):
             confidence=float(self.get_parameter("detect_confidence").value),
             device=str(self.get_parameter("device").value),
         )
-        self._classifier = PersonRoiClassifier(self._detector)
         self._pipeline = DamageEventPipeline(
             detector=self._detector,
-            classifier=self._classifier,
-            classification_threshold=float(
-                self.get_parameter("classify_confidence").value
-            ),
+            detection_threshold=float(self.get_parameter("detect_confidence").value),
             confirm_count=int(self.get_parameter("confirm_count").value),
             confirm_window_sec=float(self.get_parameter("confirm_window_sec").value),
             candidate_timeout_sec=float(
                 self.get_parameter("candidate_timeout_sec").value
             ),
-            tile_size=640,
-            tile_overlap=0.0,
         )
         self._latest_location: DamageLocation | None = None
         self._frame_count = 0
@@ -190,7 +182,6 @@ class PersonDamagePipelineTestNode(Node):
         )
 
     def destroy_node(self):
-        self._classifier.close()
         self._detector.close()
         return super().destroy_node()
 
