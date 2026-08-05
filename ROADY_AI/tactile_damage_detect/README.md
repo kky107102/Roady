@@ -41,7 +41,7 @@ SHA-256:
 488e33c14e3d3fb2a764da05ce4cf7d8b38d783993f1bb1600018c73b80db388
 ```
 
-기존 `tactile_damage_candidate_yolo11n_best.pt`는 비교 및 롤백용으로 유지한다.
+기존 YOLO11n 모델과 별도 손상 분류기는 운영 대상에서 제외한다.
 
 ## 파일
 
