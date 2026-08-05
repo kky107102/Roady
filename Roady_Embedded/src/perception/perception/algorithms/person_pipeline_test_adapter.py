@@ -5,13 +5,12 @@ from typing import Any
 
 import numpy as np
 
-from perception.algorithms.damage_classifier import DamageClassification
 from perception.algorithms.damage_detector import DamageDetection
 from perception.algorithms.lower_limb_detector import LowerLimbDetector
 
 
 class PersonAsTactileDetector:
-    """Test-only adapter mapping foot/lower-leg boxes to tactile-block ROIs."""
+    """Test-only adapter mapping foot/lower-leg boxes to damage candidates."""
 
     def __init__(
         self,
@@ -33,8 +32,8 @@ class PersonAsTactileDetector:
         height, width = image.shape[:2]
         mapped = [
             DamageDetection(
-                class_id=0,
-                label="tactile_block",
+                class_id=1,
+                label="damage_candidate",
                 confidence=detection.confidence,
                 xyxy=_expand_bbox(detection.xyxy, width, height, scale=1.8),
             )
@@ -44,33 +43,8 @@ class PersonAsTactileDetector:
         self.last_detections = tuple(mapped)
         return mapped, raw
 
-    def detect_person_score(self, image: np.ndarray) -> float:
-        detections, _ = self._backend.detect(image)
-        return max(
-            (
-                detection.confidence
-                for detection in detections
-                if detection.label in {"foot", "lower_leg"}
-            ),
-            default=0.0,
-        )
-
     def close(self) -> None:
         self._backend.close()
-
-
-class PersonRoiClassifier:
-    """Test-only second stage that confirms a person inside the detected ROI."""
-
-    def __init__(self, detector: PersonAsTactileDetector) -> None:
-        self._detector = detector
-
-    def classify(self, image: np.ndarray) -> DamageClassification:
-        score = self._detector.detect_person_score(image)
-        return DamageClassification(damage_score=score, normal_score=1.0 - score)
-
-    def close(self) -> None:
-        return None
 
 
 def _expand_bbox(

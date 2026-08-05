@@ -7,7 +7,6 @@ from typing import Protocol
 import cv2
 import numpy as np
 
-from perception.algorithms.damage_classifier import DamageClassification
 from perception.algorithms.damage_detector import DamageDetection
 
 
@@ -16,10 +15,6 @@ BBox = tuple[float, float, float, float]
 
 class Detector(Protocol):
     def detect(self, image: np.ndarray): ...
-
-
-class Classifier(Protocol):
-    def classify(self, image: np.ndarray) -> DamageClassification: ...
 
 
 @dataclass(frozen=True)
@@ -43,6 +38,9 @@ class DamageCandidate:
     best_location: tuple[float, float] | None = None
     confirmed: bool = False
     ready_emitted: bool = False
+    reported: bool = False
+    velocity_x: float = 0.0
+    velocity_y: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -56,7 +54,7 @@ class ReadyDamageEvent:
 
 
 class DamageEventPipeline:
-    """Combines detect/classify evidence and emits one representative event.
+    """Tracks damage-candidate detections and emits one representative event.
 
     Matching is image-coordinate based for now. A ground/world-coordinate matcher
     can replace ``_match_candidate`` when odometry and camera calibration arrive.
@@ -65,36 +63,37 @@ class DamageEventPipeline:
     def __init__(
         self,
         detector: Detector,
-        classifier: Classifier,
         detection_threshold: float = 0.15,
-        classification_threshold: float = 0.275,
         confirm_count: int = 3,
         confirm_window_sec: float = 2.0,
+        min_confirm_duration_sec: float = 0.4,
+        min_observation_interval_sec: float = 0.1,
         candidate_timeout_sec: float = 1.0,
-        tile_size: int = 320,
-        tile_overlap: float = 0.30,
+        reported_track_cooldown_sec: float = 5.0,
         match_center_ratio: float = 0.20,
     ) -> None:
         if confirm_count < 1:
             raise ValueError("confirm_count must be positive")
-        if not 0.0 <= tile_overlap < 1.0:
-            raise ValueError("tile_overlap must be in [0, 1)")
         self.detector = detector
-        self.classifier = classifier
         self.detection_threshold = detection_threshold
-        self.classification_threshold = classification_threshold
         self.confirm_count = confirm_count
         self.confirm_window_sec = confirm_window_sec
+        self.min_confirm_duration_sec = min_confirm_duration_sec
+        self.min_observation_interval_sec = min_observation_interval_sec
         self.candidate_timeout_sec = candidate_timeout_sec
-        self.tile_size = tile_size
-        self.tile_overlap = tile_overlap
+        self.reported_track_cooldown_sec = reported_track_cooldown_sec
         self.match_center_ratio = match_center_ratio
         self._candidates: dict[int, DamageCandidate] = {}
         self._next_id = 1
+        self._last_detections: tuple[DamageDetection, ...] = ()
 
     @property
     def candidates(self) -> tuple[DamageCandidate, ...]:
         return tuple(self._candidates.values())
+
+    @property
+    def last_detections(self) -> tuple[DamageDetection, ...]:
+        return self._last_detections
 
     def process(
         self,
@@ -105,12 +104,12 @@ class DamageEventPipeline:
         if frame is None or frame.size == 0:
             raise ValueError("frame is empty")
         detections, _ = self.detector.detect(frame)
+        self._last_detections = tuple(detections)
         evidence = self._collect_detector_evidence(detections)
-        evidence.extend(self._collect_classifier_evidence(frame, detections))
         merged = self._merge_frame_evidence(evidence)
 
         for item in merged:
-            candidate = self._match_candidate(item.bbox, frame.shape)
+            candidate = self._match_candidate(item.bbox, frame.shape, timestamp)
             if candidate is None:
                 candidate = self._new_candidate(item, timestamp)
             self._observe(candidate, item, frame, timestamp, location)
@@ -126,7 +125,8 @@ class DamageEventPipeline:
         candidate = self._candidates.get(candidate_id)
         if candidate is None or not candidate.ready_emitted:
             raise KeyError(f"candidate is not awaiting acknowledgement: {candidate_id}")
-        del self._candidates[candidate_id]
+        candidate.reported = True
+        candidate.ready_emitted = False
 
     def retry(self, candidate_id: int) -> None:
         """Allow a failed persistence attempt to be emitted on the next frame."""
@@ -148,36 +148,6 @@ class DamageEventPipeline:
             if detection.label == "damage_candidate"
             and detection.confidence >= self.detection_threshold
         ]
-
-    def _collect_classifier_evidence(
-        self,
-        frame: np.ndarray,
-        detections: list[DamageDetection],
-    ) -> list[DamageEvidence]:
-        items: list[DamageEvidence] = []
-        for detection in detections:
-            if detection.label != "tactile_block":
-                continue
-            clipped = _clip_bbox(detection.xyxy, frame.shape[1], frame.shape[0])
-            x1, y1, x2, y2 = (int(round(value)) for value in clipped)
-            roi = frame[y1:y2, x1:x2]
-            if roi.size == 0:
-                continue
-            for tile_bbox, tile in overlapping_tiles(
-                roi, self.tile_size, self.tile_overlap
-            ):
-                classification = self.classifier.classify(tile)
-                if classification.damage_score < self.classification_threshold:
-                    continue
-                tx1, ty1, tx2, ty2 = tile_bbox
-                items.append(
-                    DamageEvidence(
-                        bbox=(x1 + tx1, y1 + ty1, x1 + tx2, y1 + ty2),
-                        score=classification.damage_score,
-                        sources=frozenset({"classifier"}),
-                    )
-                )
-        return items
 
     def _merge_frame_evidence(
         self, evidence: list[DamageEvidence]
@@ -223,7 +193,7 @@ class DamageEventPipeline:
         return candidate
 
     def _match_candidate(
-        self, bbox: BBox, frame_shape: tuple[int, ...]
+        self, bbox: BBox, frame_shape: tuple[int, ...], timestamp: float
     ) -> DamageCandidate | None:
         diagonal = float(np.hypot(frame_shape[1], frame_shape[0]))
         best: DamageCandidate | None = None
@@ -231,8 +201,20 @@ class DamageEventPipeline:
         for candidate in self._candidates.values():
             if candidate.ready_emitted:
                 continue
-            overlap = _iou(candidate.last_bbox, bbox)
-            distance = _center_distance(candidate.last_bbox, bbox) / max(diagonal, 1.0)
+            elapsed = max(0.0, timestamp - candidate.last_seen_at)
+            predicted_bbox = _shift_bbox(
+                candidate.last_bbox,
+                candidate.velocity_x * elapsed,
+                candidate.velocity_y * elapsed,
+            )
+            overlap = max(
+                _iou(candidate.last_bbox, bbox),
+                _iou(predicted_bbox, bbox),
+            )
+            distance = min(
+                _center_distance(candidate.last_bbox, bbox),
+                _center_distance(predicted_bbox, bbox),
+            ) / max(diagonal, 1.0)
             if overlap <= 0.01 and distance > self.match_center_ratio:
                 continue
             cost = distance - overlap
@@ -249,16 +231,45 @@ class DamageEventPipeline:
         timestamp: float,
         location: tuple[float, float] | None,
     ) -> None:
+        previous_seen_at = candidate.last_seen_at
+        previous_center = _bbox_center(candidate.last_bbox)
+        current_center = _bbox_center(evidence.bbox)
+        elapsed = timestamp - previous_seen_at
+        if candidate.observation_times and elapsed > 0:
+            instant_velocity_x = (current_center[0] - previous_center[0]) / elapsed
+            instant_velocity_y = (current_center[1] - previous_center[1]) / elapsed
+            smoothing = 0.35
+            candidate.velocity_x = (
+                (1.0 - smoothing) * candidate.velocity_x
+                + smoothing * instant_velocity_x
+            )
+            candidate.velocity_y = (
+                (1.0 - smoothing) * candidate.velocity_y
+                + smoothing * instant_velocity_y
+            )
         candidate.last_seen_at = timestamp
         candidate.last_bbox = evidence.bbox
-        # Detector and classifier evidence from one processed frame must count
-        # as one observation even if imperfect merging associates both here.
-        if not candidate.observation_times or candidate.observation_times[-1] != timestamp:
+        if candidate.reported:
+            return
+        # Multiple overlapping detections in one frame count as one observation.
+        if (
+            not candidate.observation_times
+            or timestamp - candidate.observation_times[-1]
+            >= self.min_observation_interval_sec
+        ):
             candidate.observation_times.append(timestamp)
         cutoff = timestamp - self.confirm_window_sec
         while candidate.observation_times and candidate.observation_times[0] < cutoff:
             candidate.observation_times.popleft()
-        if len(candidate.observation_times) >= self.confirm_count:
+        observed_duration = (
+            candidate.observation_times[-1] - candidate.observation_times[0]
+            if len(candidate.observation_times) >= 2
+            else 0.0
+        )
+        if (
+            len(candidate.observation_times) >= self.confirm_count
+            and observed_duration >= self.min_confirm_duration_sec
+        ):
             candidate.confirmed = True
         candidate.best_score = max(candidate.best_score, evidence.score)
 
@@ -273,7 +284,17 @@ class DamageEventPipeline:
         self, timestamp: float, force: bool = False
     ) -> list[ReadyDamageEvent]:
         ready: list[ReadyDamageEvent] = []
+        reported_to_remove = [
+            candidate_id
+            for candidate_id, candidate in self._candidates.items()
+            if candidate.reported
+            and timestamp - candidate.last_seen_at >= self.reported_track_cooldown_sec
+        ]
+        for candidate_id in reported_to_remove:
+            del self._candidates[candidate_id]
         for candidate_id, candidate in self._candidates.items():
+            if candidate.reported:
+                continue
             expired = timestamp - candidate.last_seen_at >= self.candidate_timeout_sec
             if candidate.ready_emitted or (not force and not expired):
                 continue
@@ -307,37 +328,6 @@ class DamageEventPipeline:
         return ready
 
 
-def overlapping_tiles(
-    roi: np.ndarray,
-    tile_size: int = 320,
-    overlap: float = 0.30,
-) -> list[tuple[tuple[int, int, int, int], np.ndarray]]:
-    if roi is None or roi.size == 0:
-        raise ValueError("roi is empty")
-    height, width = roi.shape[:2]
-    tile_width = min(tile_size, width)
-    tile_height = min(tile_size, height)
-    stride_x = max(1, int(round(tile_width * (1.0 - overlap))))
-    stride_y = max(1, int(round(tile_height * (1.0 - overlap))))
-    xs = _tile_starts(width, tile_width, stride_x)
-    ys = _tile_starts(height, tile_height, stride_y)
-    return [
-        ((x, y, x + tile_width, y + tile_height), roi[y : y + tile_height, x : x + tile_width])
-        for y in ys
-        for x in xs
-    ]
-
-
-def _tile_starts(length: int, tile_length: int, stride: int) -> list[int]:
-    if length <= tile_length:
-        return [0]
-    starts = list(range(0, length - tile_length + 1, stride))
-    last = length - tile_length
-    if starts[-1] != last:
-        starts.append(last)
-    return starts
-
-
 def image_quality(frame: np.ndarray, bbox: BBox, confidence: float) -> float:
     crop = expanded_crop(frame, bbox, scale=1.0)
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
@@ -353,6 +343,16 @@ def image_quality(frame: np.ndarray, bbox: BBox, confidence: float) -> float:
         and y2 < frame.shape[0] - margin
     )
     return 0.35 * confidence + 0.30 * sharpness + 0.20 * size_score + 0.15 * complete
+
+
+def _bbox_center(bbox: BBox) -> tuple[float, float]:
+    x1, y1, x2, y2 = bbox
+    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+
+
+def _shift_bbox(bbox: BBox, dx: float, dy: float) -> BBox:
+    x1, y1, x2, y2 = bbox
+    return (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
 
 
 def expanded_crop(frame: np.ndarray, bbox: BBox, scale: float = 1.5) -> np.ndarray:

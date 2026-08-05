@@ -6,7 +6,6 @@ from pathlib import Path
 
 import cv2
 
-from perception.algorithms.damage_classifier import MockDamageClassifier
 from perception.algorithms.damage_detector import DamageDetection, MockDamageDetector
 from perception.algorithms.damage_event_pipeline import DamageEventPipeline
 
@@ -90,7 +89,6 @@ def main() -> None:
     detector = MockDamageDetector()
     pipeline = DamageEventPipeline(
         detector=detector,
-        classifier=MockDamageClassifier(damage_score=0.0),
         confirm_count=3,
         confirm_window_sec=2.0,
         candidate_timeout_sec=1.0,

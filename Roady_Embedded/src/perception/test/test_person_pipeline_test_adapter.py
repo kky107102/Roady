@@ -1,11 +1,6 @@
 import numpy as np
-import pytest
-
 from perception.algorithms.lower_limb_detector import LowerLimbDetection
-from perception.algorithms.person_pipeline_test_adapter import (
-    PersonAsTactileDetector,
-    PersonRoiClassifier,
-)
+from perception.algorithms.person_pipeline_test_adapter import PersonAsTactileDetector
 
 
 class FakeLowerLimbBackend:
@@ -34,33 +29,20 @@ def adapter_with(detections):
     return adapter
 
 
-def test_lower_limb_detection_becomes_tactile_roi_for_pipeline():
+def test_lower_limb_detection_becomes_damage_candidate_for_pipeline():
     adapter = adapter_with([lower_limb("lower_leg", 0.77)])
 
     detections, _ = adapter.detect(np.zeros((200, 200, 3), dtype=np.uint8))
 
     assert len(detections) == 1
-    assert detections[0].label == "tactile_block"
+    assert detections[0].label == "damage_candidate"
     assert detections[0].confidence == 0.77
     assert detections[0].xyxy == (0.0, 0.0, 136.0, 200.0)
 
 
-def test_second_stage_uses_person_confidence_as_classification_score():
-    adapter = adapter_with([lower_limb("foot", 0.68)])
-    classifier = PersonRoiClassifier(adapter)
+def test_non_lower_limb_detection_is_ignored():
+    adapter = adapter_with([lower_limb("person", 0.68)])
 
-    result = classifier.classify(np.zeros((100, 100, 3), dtype=np.uint8))
+    detections, _ = adapter.detect(np.zeros((100, 100, 3), dtype=np.uint8))
 
-    assert result.damage_score == 0.68
-    assert result.normal_score == pytest.approx(0.32)
-
-
-def test_second_stage_is_negative_when_crop_has_no_lower_limb():
-    adapter = adapter_with([])
-
-    result = PersonRoiClassifier(adapter).classify(
-        np.zeros((100, 100, 3), dtype=np.uint8)
-    )
-
-    assert result.damage_score == 0.0
-    assert result.normal_score == 1.0
+    assert detections == []
