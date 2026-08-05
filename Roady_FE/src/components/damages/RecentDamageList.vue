@@ -2,32 +2,12 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import { damagesApi } from '@/api/damages'
-import type { DamageListItem, DamageStatus } from '@/types/damage'
-import type { BadgeType } from '@/components/common/StatusBadge.vue'
-import StatusBadge from '@/components/common/StatusBadge.vue'
+import type { DamageListItem } from '@/types/damage'
+import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { reviewTabForDamage } from '@/utils/damageReview'
-
-const STATUS_LABELS: Record<DamageStatus, string> = {
-  COLLECTED: '수집완료',
-  AI_ANALYZING: 'AI 분석중',
-  AI_ANALYZED: 'AI 분석완료',
-  REQUESTED: '검토 완료',
-  REPAIR_IN_PROGRESS: '보수 중',
-  CANCELED: '취소',
-  REPAIR_COMPLETED: '보수 완료',
-}
-
-const STATUS_BADGE_TYPES: Record<DamageStatus, BadgeType> = {
-  COLLECTED: 'neutral',
-  AI_ANALYZING: 'info',
-  AI_ANALYZED: 'warning',
-  REQUESTED: 'info',
-  REPAIR_IN_PROGRESS: 'warning',
-  CANCELED: 'neutral',
-  REPAIR_COMPLETED: 'success',
-}
+import { formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
 
 function formatDateTime(str: string | null): string {
   if (!str) return '-'
@@ -50,7 +30,7 @@ async function load() {
   loading.value = true
   error.value = null
   try {
-    const res = await damagesApi.list({ size: 5 })
+    const res = await damagesApi.list({ status: 'AI_ANALYZED', size: 5 })
     items.value = res.content
   } catch {
     error.value = '목록을 불러오지 못했습니다.'
@@ -87,9 +67,9 @@ onMounted(load)
           >
             <div class="rdl-item-header">
               <span class="rdl-item-id">#{{ item.id }}</span>
-              <StatusBadge
-                :type="STATUS_BADGE_TYPES[item.currentStatus]"
-                :label="STATUS_LABELS[item.currentStatus]"
+              <AiResultBadge
+                :type="priorityBadgeType(item.repairPriority)"
+                :label="formatPriorityLabel(item.repairPriority, '판단 보류')"
               />
             </div>
             <p class="rdl-item-desc">{{ item.description ?? '설명 없음' }}</p>
@@ -102,7 +82,9 @@ onMounted(load)
     </template>
 
     <div class="rdl-footer">
-      <RouterLink :to="{ name: 'damages' }" class="rdl-view-all"> 모두 보기 → </RouterLink>
+      <RouterLink :to="{ name: 'damages', query: { review: 'pending' } }" class="rdl-view-all">
+        모두 보기 →
+      </RouterLink>
     </div>
   </div>
 </template>

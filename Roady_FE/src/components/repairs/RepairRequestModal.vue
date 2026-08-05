@@ -46,7 +46,9 @@ const emit = defineEmits<{
   edit: []
 }>()
 
-const note = ref<string>(props.detail.repairRequestNote ?? '')
+const note = ref<string>(
+  props.readonly || props.editing ? (props.detail.repairRequestNote ?? '') : '',
+)
 const priority = ref(props.detail.processingPriority ?? '')
 const damageType = ref(props.detail.reviewDamageType ?? '')
 const repairerId = ref<number | null>(props.detail.repairerId ?? null)

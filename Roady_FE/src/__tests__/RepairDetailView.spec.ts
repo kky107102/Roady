@@ -143,10 +143,22 @@ async function mountView(damageId = 6, query: Record<string, string> = {}) {
           template:
             '<div data-testid="completion-modal">' +
             '<button data-testid="completion-close" @click="$emit(\'close\')">닫기</button>' +
+            "<button v-if=\"readonly\" data-testid=\"completion-copy\" @click=\"$emit('copy')\">{{ copyState === 'success' ? '복사 완료' : '내용 복사' }}</button>" +
             "<button data-testid=\"completion-confirm\" @click=\"$emit('confirm', { completedAt: '2026-08-01', note: '완료 처리' })\">확인</button>" +
             '</div>',
-          props: ['submitting', 'readonly', 'completedAt', 'note', 'officialName', 'repairerName'],
-          emits: ['close', 'confirm'],
+          props: [
+            'submitting',
+            'readonly',
+            'completedAt',
+            'requestedAt',
+            'note',
+            'officialName',
+            'repairerName',
+            'beforeImages',
+            'imageBlobUrls',
+            'copyState',
+          ],
+          emits: ['close', 'confirm', 'copy'],
         },
       },
     },
@@ -164,6 +176,16 @@ describe('RepairDetailView', () => {
   })
 
   // ── 로딩/에러 상태 ────────────────────────────────────────
+
+  it('중복 본문 제목 없이 사건 목록 이동 링크를 표시한다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(wrapper.get('[aria-label="사건 목록으로 돌아가기"]').text()).toContain('사건 목록')
+    expect(wrapper.find('.page-title').exists()).toBe(false)
+  })
 
   it('로딩 중 스피너를 표시한다', async () => {
     mockDamagesApi.getDetail.mockReturnValue(new Promise(() => {}))
@@ -606,6 +628,36 @@ describe('RepairDetailView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('요청서 확인')
+  })
+
+  it('완료 보고서 내용을 클립보드에 복사한다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue({
+      ...detailCompleted,
+      assignedToName: '박주무관',
+      repairerName: '김보수',
+      repairRequestedAt: '2026-08-04T14:30:00',
+      repairCompletedAt: '2026-08-05',
+      repairCompletionNote: '점자블록 교체 완료',
+    })
+    mockClipboard.writeText.mockResolvedValue(undefined)
+
+    const wrapper = await mountView()
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '완료 보고서 확인')!
+      .trigger('click')
+    await wrapper.get('[data-testid="completion-copy"]').trigger('click')
+    await flushPromises()
+
+    const calls = mockClipboard.writeText.mock.calls
+    const copied = calls[calls.length - 1]?.[0] ?? ''
+    expect(copied).toContain('[Roady 보수 완료 보고서]')
+    expect(copied).toContain('담당 주무관: 박주무관')
+    expect(copied).toContain('보수 담당자: 김보수')
+    expect(copied).toContain('보수 완료 사진: 이미지 없음')
+    expect(copied).toContain('완료 메모: 점자블록 교체 완료')
+    expect(wrapper.text()).toContain('복사 완료')
   })
 
   it('요청서 확인 버튼 클릭 시 요청서 모달을 연다', async () => {

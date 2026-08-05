@@ -1,29 +1,39 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { RepairCompletePayload } from '@/types/repair'
+import type { DamageImage } from '@/types/damage'
 
 const props = withDefaults(
   defineProps<{
     submitting?: boolean
     readonly?: boolean
     completedAt?: string | null
+    requestedAt?: string | null
     note?: string | null
     officialName?: string | null
     repairerName?: string | null
+    beforeImages?: DamageImage[]
+    imageBlobUrls?: Map<number, string>
+    copyState?: 'idle' | 'success' | 'error'
   }>(),
   {
     submitting: false,
     readonly: false,
     completedAt: null,
+    requestedAt: null,
     note: null,
     officialName: null,
     repairerName: null,
+    beforeImages: () => [],
+    imageBlobUrls: () => new Map<number, string>(),
+    copyState: 'idle',
   },
 )
 
 const emit = defineEmits<{
   close: []
   confirm: [payload: RepairCompletePayload]
+  copy: []
 }>()
 
 // ── 상태 ──────────────────────────────────────────────────────
@@ -43,6 +53,24 @@ const completionNote = ref(props.note ?? '')
 const dateError = ref('')
 
 const todayStr = computed(localToday)
+
+const loadedBeforeImages = computed(() =>
+  props.beforeImages.filter((image) => props.imageBlobUrls.has(image.id)),
+)
+
+function formatDateTime(value: string | null): string {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
 
 function handleNext() {
   if (!completionDate.value) {
@@ -85,7 +113,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
       :aria-label="readonly ? '완료 보고서 확인' : '보수 완료 처리'"
       @click.self="!submitting && emit('close')"
     >
-      <div class="modal-panel">
+      <div class="modal-panel" :class="{ 'is-report': readonly }">
         <!-- 헤더 -->
         <div class="modal-header">
           <h2 class="modal-title">{{ readonly ? '완료 보고서 확인' : '보수 완료 처리' }}</h2>
@@ -124,10 +152,32 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
               <p class="readonly-value">{{ repairerName || '-' }}</p>
             </div>
           </div>
-          <div class="field-group">
-            <span class="field-label">보수 완료 일자</span>
-            <p class="readonly-value">{{ completionDate || '-' }}</p>
+          <div class="date-grid">
+            <div>
+              <span class="field-label">보수 요청 일자</span>
+              <p class="readonly-value">{{ formatDateTime(requestedAt) }}</p>
+            </div>
+            <div>
+              <span class="field-label">보수 완료 일자</span>
+              <p class="readonly-value">{{ completionDate || '-' }}</p>
+            </div>
           </div>
+
+          <section class="report-section" aria-labelledby="before-photo-title">
+            <h3 id="before-photo-title" class="field-label">보수 전 사진</h3>
+            <div v-if="loadedBeforeImages.length" class="report-image-grid">
+              <figure v-for="(image, index) in loadedBeforeImages" :key="image.id">
+                <img :src="imageBlobUrls.get(image.id)" :alt="`보수 전 사진 ${index + 1}`" />
+              </figure>
+            </div>
+            <div v-else class="report-image-empty" role="status">보수 전 이미지가 없습니다.</div>
+          </section>
+
+          <section class="report-section" aria-labelledby="after-photo-title">
+            <h3 id="after-photo-title" class="field-label">보수 완료 사진</h3>
+            <div class="report-image-empty" role="status">보수 완료 이미지가 없습니다.</div>
+          </section>
+
           <div class="field-group">
             <span class="field-label">완료 메모</span>
             <p class="readonly-value readonly-value--note">{{ completionNote || '-' }}</p>
@@ -198,6 +248,28 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         <!-- 푸터 -->
         <div class="modal-footer">
           <template v-if="readonly">
+            <button
+              type="button"
+              class="krds-btn medium secondary"
+              :aria-label="copyState === 'success' ? '복사 완료' : '완료 보고서 내용 복사'"
+              @click="emit('copy')"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {{ copyState === 'success' ? '복사 완료' : '내용 복사' }}
+            </button>
             <button type="button" class="krds-btn medium filled primary" @click="emit('close')">
               확인
             </button>
@@ -267,6 +339,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   border-radius: 1.2rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
   overflow: hidden;
+}
+
+.modal-panel.is-report {
+  max-width: 76rem;
 }
 
 .modal-header {
@@ -364,6 +440,64 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.6rem;
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.6rem;
+}
+
+.date-grid > div,
+.report-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.report-section h3 {
+  margin: 0;
+}
+
+.report-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1.2rem;
+}
+
+.report-image-grid figure {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid var(--roady-border-default);
+  border-radius: 0.8rem;
+  background: var(--roady-surface-background);
+  aspect-ratio: 4 / 3;
+}
+
+.report-image-grid img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.report-image-empty {
+  display: grid;
+  min-height: 10rem;
+  place-items: center;
+  padding: 1.6rem;
+  border: 1px dashed var(--roady-border-default);
+  border-radius: 0.8rem;
+  background: var(--roady-surface-background);
+  color: var(--roady-text-tertiary);
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+@media (max-width: 640px) {
+  .assignment-grid,
+  .date-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .assignment-grid > div {

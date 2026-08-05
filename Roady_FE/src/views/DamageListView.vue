@@ -54,7 +54,13 @@ const appliedTo = computed(() => String(route.query.to || ''))
 const reviewTab = computed<ReviewTab>(() =>
   route.query.review === 'confirmed' ? 'confirmed' : 'pending',
 )
-const sortOrder = ref<DamageSort>(defaultDamageSort(reviewTab.value))
+
+function parseDamageSort(value: unknown, tab: ReviewTab): DamageSort {
+  const raw = Array.isArray(value) ? value[0] : value
+  return raw === 'latest' || raw === 'oldest' || raw === 'priority' ? raw : defaultDamageSort(tab)
+}
+
+const sortOrder = ref<DamageSort>(parseDamageSort(route.query.sort, reviewTab.value))
 
 // ── 폼 상태 (미적용 입력값) ───────────────────────────────
 
@@ -217,9 +223,10 @@ async function loadDamages() {
 // ── URL 변경 → 폼 동기화 + 목록 초기 로드 ───────────────
 
 watch(
-  () => [route.query.from, route.query.to, route.query.review],
+  () => [route.query.from, route.query.to, route.query.review, route.query.sort],
   () => {
     syncFormFromUrl()
+    sortOrder.value = parseDamageSort(route.query.sort, reviewTab.value)
     loadDamages()
   },
   { immediate: true },
@@ -310,7 +317,7 @@ async function submitVerdict(
       isRepairRequired ? decision?.reviewNote : null,
     )
     const toRepairDetailAction = {
-      label: '요청서 작성 바로가기',
+      label: '요청서 작성하기',
       to: {
         name: 'repair-detail',
         params: { damageId: String(damageId) },
@@ -375,7 +382,7 @@ function selectReviewTab(tab: ReviewTab) {
 }
 
 watch(reviewTab, (tab) => {
-  sortOrder.value = defaultDamageSort(tab)
+  sortOrder.value = parseDamageSort(route.query.sort, tab)
   selectedConfirmedStatuses.value = [...CONFIRMED_STATUS_FILTERS]
 })
 

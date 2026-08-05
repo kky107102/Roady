@@ -8,15 +8,14 @@ import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import RecentDamageList from '@/components/damages/RecentDamageList.vue'
+import UrgentDamageList from '@/components/damages/UrgentDamageList.vue'
 import { toDamageMapMarkers } from '@/utils/damageMap'
 import { reviewTabForDamage } from '@/utils/damageReview'
 
 const store = useDashboardStore()
 const router = useRouter()
 
-const hasTrendData = computed(() =>
-  store.timeSeries.items.some((item) => item.totalCount > 0),
-)
+const hasTrendData = computed(() => store.timeSeries.items.some((item) => item.totalCount > 0))
 
 function damageDetailQuery(id: string | number) {
   const damage = store.damages.find((item) => String(item.id) === String(id))
@@ -101,7 +100,11 @@ onUnmounted(() => {
 
         <!-- 통계 요약 카드 -->
         <section class="dashboard__stats" aria-label="통계 요약">
-          <StatCard label="신규 탐지" :count="store.totalCount" :to="{ name: 'damages' }">
+          <StatCard
+            label="신규 탐지"
+            :count="store.newDetectionCount"
+            :to="{ name: 'damages', query: { review: 'pending' } }"
+          >
             <template #icon>
               <svg
                 width="22"
@@ -121,10 +124,10 @@ onUnmounted(() => {
           </StatCard>
 
           <StatCard
-            label="긴급 / 고위험"
-            :count="store.highSeverityCount"
+            label="긴급 확인 필요"
+            :count="store.urgentReviewCount"
             variant="danger"
-            :to="{ name: 'damages' }"
+            :to="{ name: 'damages', query: { review: 'pending', sort: 'priority' } }"
           >
             <template #icon>
               <svg
@@ -148,9 +151,9 @@ onUnmounted(() => {
           </StatCard>
 
           <StatCard
-            label="검토 대기"
-            :count="store.reviewRequiredCount"
-            :to="{ name: 'damages', query: { status: 'AI_ANALYZED' } }"
+            label="요청 전"
+            :count="store.requestedCount"
+            :to="{ name: 'repairs', query: { statuses: 'REQUESTED' } }"
           >
             <template #icon>
               <svg
@@ -164,31 +167,10 @@ onUnmounted(() => {
                 stroke-linejoin="round"
                 aria-hidden="true"
               >
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-            </template>
-          </StatCard>
-
-          <StatCard label="진행 중 보수" :count="store.repairingCount" :to="{ name: 'repairs' }">
-            <template #icon>
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="8" y1="13" x2="16" y2="13" />
+                <line x1="8" y1="17" x2="14" y2="17" />
               </svg>
             </template>
           </StatCard>
@@ -257,27 +239,17 @@ onUnmounted(() => {
             <div class="section-header">
               <div>
                 <h2 class="section-title">탐지 추이 분석</h2>
-                <p class="section-subtitle">
-                  선택한 기간의 탐지 및 보수 완료 건수
-                </p>
+                <p class="section-subtitle">선택한 기간의 탐지 및 보수 완료 건수</p>
               </div>
             </div>
-            <DashboardToolbar
-              v-model="store.trendFilter"
-              compact
-              @apply="store.applyTrendFilter"
-            />
+            <DashboardToolbar v-model="store.trendFilter" compact @apply="store.applyTrendFilter" />
             <div v-if="store.trendError" class="chart-error" role="alert">
               <span>{{ store.trendError }}</span>
               <button type="button" class="error-banner__retry" @click="store.fetchTrend">
                 다시 시도
               </button>
             </div>
-            <div
-              v-if="!store.trendError"
-              class="trend-chart-wrap"
-              :aria-busy="store.trendLoading"
-            >
+            <div v-if="!store.trendError" class="trend-chart-wrap" :aria-busy="store.trendLoading">
               <LoadingSpinner v-if="store.trendLoading" label="탐지 추이 데이터를 불러오는 중" />
               <div v-else-if="!hasTrendData" class="trend-empty" role="status">
                 <svg
@@ -300,14 +272,12 @@ onUnmounted(() => {
             </div>
           </section>
 
-          <!-- 긴급 확인 필요 사건 (별도 작업) -->
+          <!-- 긴급 확인 필요 사건 -->
           <section class="dashboard__urgent-section" aria-label="긴급 확인 필요 사건">
             <div class="section-header">
               <h2 class="section-title">긴급 확인 필요 사건</h2>
             </div>
-            <div class="panel-placeholder">
-              <p>긴급 사건 목록은 추후 구현됩니다.</p>
-            </div>
+            <UrgentDamageList :items="store.urgentDamages" />
           </section>
         </div>
       </div>
@@ -388,7 +358,7 @@ onUnmounted(() => {
 /* ── 통계 카드 행 ── */
 .dashboard__stats {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1.6rem;
 }
 
@@ -495,20 +465,6 @@ onUnmounted(() => {
   font-weight: var(--krds-font-weight-bold);
 }
 
-/* ── 패널 placeholder ── */
-.panel-placeholder {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 0.6rem;
-  background: var(--roady-surface-background);
-  color: var(--roady-text-tertiary);
-  font-size: var(--krds-pc-font-size-body-small);
-  padding: 2.4rem;
-  text-align: center;
-}
-
 /* ── 임시 데이터 배지 ── */
 .mock-badge {
   display: inline-flex;
@@ -525,7 +481,7 @@ onUnmounted(() => {
 /* ── 1440px 이하 대응 ── */
 @media (max-width: 1440px) {
   .dashboard__stats {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
