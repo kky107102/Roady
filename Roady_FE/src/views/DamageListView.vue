@@ -1004,6 +1004,7 @@ onBeforeUnmount(stopDetailResize)
 
 .map-query-loading {
   color: var(--roady-text-secondary);
+  pointer-events: none;
 }
 
 /* ── 상세 패널 (슬라이드) ── */

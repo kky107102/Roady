@@ -393,6 +393,7 @@ onUnmounted(() => {
   inset: 0;
   z-index: 10;
   background: rgb(255 255 255 / 60%);
+  pointer-events: none;
 }
 
 /* ── 에러 배너 ── */
@@ -557,6 +558,7 @@ onUnmounted(() => {
 
 .map-query-loading {
   color: var(--roady-text-secondary);
+  pointer-events: none;
 }
 
 .map-query-error {

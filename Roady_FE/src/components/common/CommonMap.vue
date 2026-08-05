@@ -50,6 +50,8 @@ let markerInstances: Marker[] = []
 let pathInstances: Polyline[] = []
 let resizeObserver: ResizeObserver | null = null
 let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
+let hasAutoFittedContent = false
+let openPopupMarkerId: MapMarkerItem['id'] | null = null
 
 function markerIcon(tone: MapMarkerItem['tone']) {
   const normalizedTone = tone ?? 'primary'
@@ -141,6 +143,7 @@ function insetAdjustedCenter(center: [number, number]): [number, number] {
 
 function focusSelectedLocation(animate: boolean) {
   if (!mapInstance || !props.focusedCenter) return
+  hasAutoFittedContent = true
   const center = insetAdjustedCenter(props.focusedCenter)
   if (animate) {
     mapInstance.flyTo(center, props.focusZoom, { duration: 0.4 })
@@ -151,6 +154,7 @@ function focusSelectedLocation(animate: boolean) {
 
 function fitViewportBounds(animate: boolean) {
   if (!mapInstance || !props.viewportBounds) return
+  hasAutoFittedContent = true
   const { south, north, west, east } = props.viewportBounds
   mapInstance.fitBounds(
     latLngBounds([
@@ -191,6 +195,7 @@ function pathColor(tone: MapPathItem['tone']): string {
 
 function renderMarkers() {
   if (!mapInstance) return
+  const popupToRestore = openPopupMarkerId
   clearMarkers()
   clearPaths()
 
@@ -218,11 +223,15 @@ function renderMarkers() {
     }).addTo(mapInstance as Map)
 
     marker.on('click', () => {
+      openPopupMarkerId = item.id
       centerMarkerPopup(item)
       if (!item.actionHref) emit('markerSelect', item.id)
       queueMicrotask(() => {
         if (mapInstance) marker.openPopup()
       })
+    })
+    marker.on('popupclose', () => {
+      if (openPopupMarkerId === item.id) openPopupMarkerId = null
     })
 
     marker.bindPopup(popupContent(item), {
@@ -230,12 +239,19 @@ function renderMarkers() {
       autoPan: false,
     })
 
+    if (popupToRestore === item.id) {
+      openPopupMarkerId = item.id
+      queueMicrotask(() => {
+        if (mapInstance) marker.openPopup()
+      })
+    }
+
     return marker
   })
 
   if (props.focusedCenter) {
     focusSelectedLocation(false)
-  } else if (!props.viewportBounds) {
+  } else if (!props.viewportBounds && !hasAutoFittedContent) {
     const allCoordinates = [
       ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
       ...props.paths.flatMap((path) =>
@@ -245,10 +261,14 @@ function renderMarkers() {
 
     if (allCoordinates.length === 1) {
       const coordinate = allCoordinates[0]
-      if (coordinate) mapInstance.setView(coordinate, 15)
+      if (coordinate) {
+        mapInstance.setView(coordinate, 15)
+        hasAutoFittedContent = true
+      }
     } else if (allCoordinates.length > 1) {
       const bounds = latLngBounds(allCoordinates)
       mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
+      hasAutoFittedContent = true
     } else {
       mapInstance.setView(props.center, props.zoom)
     }
@@ -270,6 +290,9 @@ onMounted(() => {
   }).addTo(mapInstance)
 
   mapInstance.on('moveend', emitCurrentBounds)
+  mapInstance.on('dragstart zoomstart', () => {
+    hasAutoFittedContent = true
+  })
 
   renderMarkers()
   fitViewportBounds(false)
@@ -396,6 +419,7 @@ onBeforeUnmount(() => {
   max-width: calc(100% - 3.2rem);
   text-align: center;
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .common-map__summary {
