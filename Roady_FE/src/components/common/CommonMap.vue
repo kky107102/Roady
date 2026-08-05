@@ -12,7 +12,7 @@ import {
   type Polyline,
 } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import type { MapMarkerItem, MapPathItem } from '@/types/map'
+import type { MapBounds, MapMarkerItem, MapPathItem } from '@/types/map'
 
 interface Props {
   markers?: MapMarkerItem[]
@@ -20,6 +20,7 @@ interface Props {
   center?: [number, number]
   zoom?: number
   focusedCenter?: [number, number] | null
+  viewportBounds?: MapBounds | null
   focusZoom?: number
   rightInset?: number
   centerPopupOnSelect?: boolean
@@ -40,6 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 const emit = defineEmits<{
   markerSelect: [id: MapMarkerItem['id']]
+  boundsChange: [bounds: MapBounds]
 }>()
 
 const mapElement = ref<HTMLElement | null>(null)
@@ -147,6 +149,29 @@ function focusSelectedLocation(animate: boolean) {
   }
 }
 
+function fitViewportBounds(animate: boolean) {
+  if (!mapInstance || !props.viewportBounds) return
+  const { south, north, west, east } = props.viewportBounds
+  mapInstance.fitBounds(
+    latLngBounds([
+      [south, west],
+      [north, east],
+    ]),
+    { padding: [32, 32], animate },
+  )
+}
+
+function emitCurrentBounds() {
+  if (!mapInstance) return
+  const bounds = mapInstance.getBounds()
+  emit('boundsChange', {
+    south: bounds.getSouth(),
+    north: bounds.getNorth(),
+    west: bounds.getWest(),
+    east: bounds.getEast(),
+  })
+}
+
 function clearPaths() {
   pathInstances.forEach((path) => path.remove())
   pathInstances = []
@@ -210,7 +235,7 @@ function renderMarkers() {
 
   if (props.focusedCenter) {
     focusSelectedLocation(false)
-  } else {
+  } else if (!props.viewportBounds) {
     const allCoordinates = [
       ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
       ...props.paths.flatMap((path) =>
@@ -244,7 +269,10 @@ onMounted(() => {
     attribution: '&copy; OpenStreetMap contributors',
   }).addTo(mapInstance)
 
+  mapInstance.on('moveend', emitCurrentBounds)
+
   renderMarkers()
+  fitViewportBounds(false)
 
   if (typeof ResizeObserver !== 'undefined') {
     resizeObserver = new ResizeObserver(() =>
@@ -258,6 +286,26 @@ watch(
   () => [props.markers, props.paths],
   () => renderMarkers(),
   { deep: true },
+)
+
+watch(
+  () => [
+    props.viewportBounds?.south ?? null,
+    props.viewportBounds?.north ?? null,
+    props.viewportBounds?.west ?? null,
+    props.viewportBounds?.east ?? null,
+  ],
+  ([south, north, west, east], previous) => {
+    if (south == null || north == null || west == null || east == null) return
+    const changed =
+      !previous ||
+      south !== previous[0] ||
+      north !== previous[1] ||
+      west !== previous[2] ||
+      east !== previous[3]
+    if (changed) fitViewportBounds(true)
+  },
+  { flush: 'post' },
 )
 
 watch(
@@ -296,6 +344,7 @@ onBeforeUnmount(() => {
 <template>
   <div class="common-map">
     <div ref="mapElement" class="common-map__canvas" :aria-label="mapLabel"></div>
+    <slot />
     <div v-if="markers.length === 0" class="common-map__empty" role="status">
       {{ emptyMessage }}
     </div>

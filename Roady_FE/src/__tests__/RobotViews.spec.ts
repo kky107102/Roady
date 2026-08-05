@@ -35,6 +35,23 @@ vi.mock('@/composables/useRobotLocationStream', async () => {
   }
 })
 
+vi.mock('@/composables/useAssignedMapRegion', async () => {
+  const { computed, ref } = await import('vue')
+  return {
+    useAssignedMapRegion: () => ({
+      assignedRegionCode: computed(() => ''),
+      assignedRegionName: computed(() => null),
+      options: computed(() => []),
+      selectedCode: computed(() => ''),
+      selectedBounds: computed(() => null),
+      loading: ref(false),
+      error: ref(null),
+      load: vi.fn(),
+      select: vi.fn(),
+    }),
+  }
+})
+
 const robot: Robot = {
   id: 1,
   userId: 10,
@@ -175,7 +192,9 @@ describe('RobotDetailView', () => {
     expect(robotsApi.get).toHaveBeenCalledWith(1)
     expect(wrapper.text()).toContain('로디 1호')
     expect(wrapper.text()).toContain('실시간 위치 및 이동 경로')
-    expect(wrapper.text()).toContain('현재 위치와 이 화면에 접속한 이후 수신된 이동 경로를 표시합니다.')
+    expect(wrapper.text()).toContain(
+      '현재 위치와 이 화면에 접속한 이후 수신된 이동 경로를 표시합니다.',
+    )
     expect(wrapper.text()).toContain('기본 정보')
     expect(wrapper.text()).toContain('수집된 최신 상태가 없습니다.')
     expect(wrapper.text()).toContain('운행 시작')
