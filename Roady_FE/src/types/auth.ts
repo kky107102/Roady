@@ -20,6 +20,8 @@ export interface AuthUser {
   id: number
   username: string
   role: UserRole
+  assignedRegionCode?: string | null
+  assignedRegionName?: string | null
 }
 
 export interface UserSummary {

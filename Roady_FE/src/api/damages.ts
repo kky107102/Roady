@@ -1,5 +1,12 @@
 import http from './http'
-import type { DamageSearchResponse, DamageStatus, DamageDetail, DamageAnalysis } from '@/types/damage'
+import type {
+  DamageSearchResponse,
+  DamageStatus,
+  DamageDetail,
+  DamageAnalysis,
+  DamageMapMarkerResponse,
+} from '@/types/damage'
+import type { MapBounds } from '@/types/map'
 
 export interface DamageListQuery {
   from?: string
@@ -7,8 +14,18 @@ export interface DamageListQuery {
   status?: DamageStatus
   robotId?: number
   assignedTo?: number
+  regionCode?: string
   page?: number
   size?: number
+}
+
+export interface DamageMapMarkerQuery extends MapBounds {
+  from?: string
+  to?: string
+  status?: DamageStatus
+  robotId?: number
+  assignedTo?: number
+  regionCode?: string
 }
 
 // 상세 조회 결과를 메모리에 캐시 (목록 → 상세 패널 전환 시 재요청 없음)
@@ -17,6 +34,13 @@ const detailCache = new Map<number, DamageDetail>()
 export const damagesApi = {
   async list(query?: DamageListQuery) {
     const { data } = await http.get<DamageSearchResponse>('/damages', { params: query })
+    return data
+  },
+
+  async mapMarkers(query: DamageMapMarkerQuery): Promise<DamageMapMarkerResponse[]> {
+    const { data } = await http.get<DamageMapMarkerResponse[]>('/damages/map-markers', {
+      params: query,
+    })
     return data
   },
 

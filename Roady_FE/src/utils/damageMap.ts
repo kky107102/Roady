@@ -1,4 +1,4 @@
-import type { DamageListItem, DamageStatus } from '@/types/damage'
+import type { DamageListItem, DamageMapMarkerResponse, DamageStatus } from '@/types/damage'
 import type { MapMarkerItem } from '@/types/map'
 
 const statusLabels: Record<DamageStatus, string> = {
@@ -26,14 +26,8 @@ function isValidCoordinate(latitude: number | null, longitude: number | null): b
 
 function markerTone(status: DamageStatus): MapMarkerItem['tone'] {
   if (status === 'AI_ANALYZED') return 'danger'
-  if (
-    status === 'REQUESTED' ||
-    status === 'REPAIR_IN_PROGRESS'
-  ) return 'warning'
-  if (
-    status === 'REPAIR_COMPLETED' ||
-    status === 'CANCELED'
-  ) return 'success'
+  if (status === 'REQUESTED' || status === 'REPAIR_IN_PROGRESS') return 'warning'
+  if (status === 'REPAIR_COMPLETED' || status === 'CANCELED') return 'success'
   return 'primary'
 }
 
@@ -51,19 +45,40 @@ export function toDamageMapMarkers(items: DamageListItem[]): MapMarkerItem[] {
   return items.flatMap((item) => {
     if (!isValidCoordinate(item.latitude, item.longitude)) return []
 
-    return [{
-      id: item.id,
-      latitude: item.latitude as number,
-      longitude: item.longitude as number,
-      title: `탐지 사건 #${item.id}`,
-      tone: markerTone(item.currentStatus),
-      details: [
-        { label: '처리 상태', value: statusLabels[item.currentStatus] },
-        { label: '로봇 ID', value: item.robotId == null ? '-' : String(item.robotId) },
-        { label: '탐지 시각', value: formatCapturedAt(item.capturedAt) },
-        { label: '설명', value: item.description || '-' },
-      ],
-    }]
+    return [
+      {
+        id: item.id,
+        latitude: item.latitude as number,
+        longitude: item.longitude as number,
+        title: `탐지 사건 #${item.id}`,
+        tone: markerTone(item.currentStatus),
+        details: [
+          { label: '처리 상태', value: statusLabels[item.currentStatus] },
+          { label: '로봇 ID', value: item.robotId == null ? '-' : String(item.robotId) },
+          { label: '탐지 시각', value: formatCapturedAt(item.capturedAt) },
+          { label: '설명', value: item.description || '-' },
+        ],
+      },
+    ]
+  })
+}
+
+export function mergeDamageMapMarkers(
+  markers: DamageMapMarkerResponse[],
+  items: DamageListItem[],
+): MapMarkerItem[] {
+  const itemsById = new Map(items.map((item) => [item.id, item]))
+  return markers.flatMap((marker) => {
+    const item = itemsById.get(marker.id)
+    if (!item) return []
+    return toDamageMapMarkers([
+      {
+        ...item,
+        latitude: marker.latitude,
+        longitude: marker.longitude,
+        currentStatus: marker.currentStatus,
+      },
+    ])
   })
 }
 

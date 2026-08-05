@@ -27,6 +27,22 @@ const dashboardStore = vi.hoisted(() => ({
 }))
 
 vi.mock('@/stores/dashboard', () => ({ useDashboardStore: () => dashboardStore }))
+vi.mock('@/composables/useAssignedMapRegion', async () => {
+  const { computed, ref } = await import('vue')
+  return {
+    useAssignedMapRegion: () => ({
+      assignedRegionCode: computed(() => ''),
+      assignedRegionName: computed(() => null),
+      options: computed(() => []),
+      selectedCode: computed(() => ''),
+      selectedBounds: computed(() => null),
+      loading: ref(false),
+      error: ref(null),
+      load: vi.fn(),
+      select: vi.fn(),
+    }),
+  }
+})
 
 const { default: DashboardView } = await import('@/views/DashboardView.vue')
 

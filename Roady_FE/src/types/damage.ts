@@ -44,6 +44,13 @@ export interface DamageSearchResponse {
   totalPages: number
 }
 
+export interface DamageMapMarkerResponse {
+  id: number
+  latitude: number
+  longitude: number
+  currentStatus: DamageStatus
+}
+
 export interface DamageImage {
   id: number
   damageId: number

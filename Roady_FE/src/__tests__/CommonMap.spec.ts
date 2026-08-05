@@ -7,6 +7,12 @@ const leaflet = vi.hoisted(() => {
     remove: vi.fn(),
     setView: vi.fn(),
     fitBounds: vi.fn(),
+    getBounds: vi.fn(() => ({
+      getSouth: () => 37.4,
+      getNorth: () => 37.6,
+      getWest: () => 126.8,
+      getEast: () => 127.1,
+    })),
     getSize: vi.fn(() => ({ x: 800 })),
     getZoom: vi.fn(() => 15),
     project: vi.fn(() => ({ subtract: vi.fn(() => ({ x: 100, y: 20 })) })),
@@ -114,6 +120,31 @@ describe('CommonMap', () => {
       animate: false,
     })
     expect(marker?.openPopup).toHaveBeenCalledOnce()
+
+    wrapper.unmount()
+  })
+
+  it('지정한 행정구역 경계로 이동하고 현재 지도 경계를 알린다', async () => {
+    const wrapper = mount(CommonMap, {
+      props: {
+        viewportBounds: { south: 37.4, north: 37.6, west: 126.8, east: 127.1 },
+      },
+    })
+
+    expect(leaflet.mapInstance.fitBounds).toHaveBeenCalledWith(undefined, {
+      padding: [32, 32],
+      animate: false,
+    })
+
+    const moveEndHandler = leaflet.mapInstance.on.mock.calls.find(
+      ([event]) => event === 'moveend',
+    )?.[1] as (() => void) | undefined
+    moveEndHandler?.()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('boundsChange')).toEqual([
+      [{ south: 37.4, north: 37.6, west: 126.8, east: 127.1 }],
+    ])
 
     wrapper.unmount()
   })

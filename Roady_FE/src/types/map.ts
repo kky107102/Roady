@@ -19,6 +19,26 @@ export interface MapCoordinate {
   longitude: number
 }
 
+export interface MapBounds {
+  south: number
+  north: number
+  west: number
+  east: number
+}
+
+export interface MapRegionOption {
+  code: string
+  name: string
+  bounds: MapBounds
+}
+
+export interface AssignedMapRegions {
+  regionCode: string
+  regionName: string
+  bounds: MapBounds
+  emds: MapRegionOption[]
+}
+
 export interface MapPathItem {
   id: string | number
   points: MapCoordinate[]

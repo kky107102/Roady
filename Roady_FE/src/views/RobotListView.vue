@@ -9,6 +9,7 @@ import KrdsTextInput from '@/components/common/KrdsTextInput.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
+import MapRegionFilter from '@/components/common/MapRegionFilter.vue'
 import type { Robot, RobotConnectionStatus, RobotOperationStatus } from '@/types/robot'
 import {
   connectionBadge,
@@ -19,8 +20,10 @@ import {
   operationLabels,
 } from '@/utils/robotDisplay'
 import { toRobotMapMarkers } from '@/utils/robotMap'
+import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
 
 const robots = ref<Robot[]>([])
+const mapRegion = useAssignedMapRegion()
 const loading = ref(true)
 const error = ref(false)
 const sortBy = ref('name-asc')
@@ -108,7 +111,18 @@ const urgentRobots = computed(() =>
     .filter((robot) => getUrgentReasons(robot).length > 0)
     .sort((a, b) => collator.compare(a.name, b.name)),
 )
-const robotMarkers = computed(() => toRobotMapMarkers(robots.value))
+const robotMarkers = computed(() => {
+  const markers = toRobotMapMarkers(robots.value)
+  const bounds = mapRegion.selectedBounds.value
+  if (!bounds) return markers
+  return markers.filter(
+    (marker) =>
+      marker.latitude >= bounds.south &&
+      marker.latitude <= bounds.north &&
+      marker.longitude >= bounds.west &&
+      marker.longitude <= bounds.east,
+  )
+})
 
 function getUrgentReasons(robot: Robot): string[] {
   const reasons: string[] = []
@@ -173,9 +187,21 @@ onMounted(fetchRobots)
         <CommonMap
           class="robot-list-map"
           :markers="robotMarkers"
+          :viewport-bounds="mapRegion.selectedBounds.value"
           map-label="전체 로봇 최신 위치 지도"
           empty-message="위치 정보가 수집된 로봇이 없습니다."
-        />
+        >
+          <MapRegionFilter
+            id="robot-map-region"
+            :model-value="mapRegion.selectedCode.value"
+            :assigned-region-name="mapRegion.assignedRegionName.value"
+            :options="mapRegion.options.value"
+            :loading="mapRegion.loading.value"
+            :error="mapRegion.error.value"
+            @update:model-value="mapRegion.select"
+            @retry="mapRegion.load"
+          />
+        </CommonMap>
       </section>
 
       <section class="overview-card urgent-card" aria-labelledby="urgent-robot-title">

@@ -21,7 +21,11 @@ import DamageCard from '@/components/damages/DamageCard.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
 import type { ReviewDecisionPayload } from '@/components/damages/DamageDetailPanel.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
-import { toDamageMapCenter, toDamageMapMarkers } from '@/utils/damageMap'
+import MapRegionFilter from '@/components/common/MapRegionFilter.vue'
+import { mergeDamageMapMarkers, toDamageMapCenter, toDamageMapMarkers } from '@/utils/damageMap'
+import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
+import type { DamageMapMarkerResponse } from '@/types/damage'
+import type { MapBounds } from '@/types/map'
 import { useNotificationStore } from '@/stores/notification'
 import {
   defaultDamageSort,
@@ -46,6 +50,7 @@ const SORT_OPTIONS: { value: DamageSort; label: string }[] = [
 const route = useRoute()
 const router = useRouter()
 const notification = useNotificationStore()
+const mapRegion = useAssignedMapRegion()
 
 // ── 적용된 필터 (URL = 단일 진실 소스) ────────────────────
 
@@ -188,7 +193,56 @@ const visibleItems = computed(() => {
         })
   return sortReviewDamages(statusFiltered, reviewTab.value, sortOrder.value)
 })
-const damageMarkers = computed(() => toDamageMapMarkers(visibleItems.value))
+const boundaryMarkers = ref<DamageMapMarkerResponse[] | null>(null)
+const currentMapBounds = ref<MapBounds | null>(null)
+const mapMarkersLoading = ref(false)
+const mapMarkersError = ref<string | null>(null)
+let mapMarkerRequestSequence = 0
+
+const damageMarkers = computed(() =>
+  boundaryMarkers.value == null
+    ? toDamageMapMarkers(visibleItems.value)
+    : mergeDamageMapMarkers(boundaryMarkers.value, visibleItems.value),
+)
+
+async function fetchMapMarkers(bounds: MapBounds) {
+  const sequence = ++mapMarkerRequestSequence
+  mapMarkersLoading.value = true
+  mapMarkersError.value = null
+  try {
+    const markers = await damagesApi.mapMarkers({
+      ...bounds,
+      ...(appliedFrom.value ? { from: toApiFromDateTime(appliedFrom.value) } : {}),
+      ...(appliedTo.value ? { to: toApiToDateTime(appliedTo.value) } : {}),
+      ...(mapRegion.assignedRegionCode.value
+        ? { regionCode: mapRegion.assignedRegionCode.value }
+        : {}),
+    })
+    if (sequence === mapMarkerRequestSequence) boundaryMarkers.value = markers
+  } catch {
+    if (sequence === mapMarkerRequestSequence) {
+      mapMarkersError.value = '지도 마커를 불러오지 못했습니다.'
+    }
+  } finally {
+    if (sequence === mapMarkerRequestSequence) mapMarkersLoading.value = false
+  }
+}
+
+function handleMapBoundsChange(bounds: MapBounds) {
+  currentMapBounds.value = bounds
+  void fetchMapMarkers(bounds)
+}
+
+function retryMapMarkers() {
+  if (currentMapBounds.value) void fetchMapMarkers(currentMapBounds.value)
+}
+
+watch(
+  () => visibleItems.value.map((item) => `${item.id}:${item.currentStatus}`).join(','),
+  () => {
+    if (currentMapBounds.value) void fetchMapMarkers(currentMapBounds.value)
+  },
+)
 
 async function loadDamages() {
   const requestSeq = ++listRequestSeq
@@ -243,13 +297,20 @@ function handleApply() {
   const query: Record<string, string> = {}
   if (formFrom.value) query.from = formFrom.value
   if (formTo.value) query.to = formTo.value
+  if (mapRegion.selectedCode.value) query.emd = mapRegion.selectedCode.value
   query.review = reviewTab.value
   router.push({ name: 'damages', query })
 }
 
 function handleReset() {
   activePreset.value = null
-  router.push({ name: 'damages', query: { review: reviewTab.value } })
+  router.push({
+    name: 'damages',
+    query: {
+      review: reviewTab.value,
+      ...(mapRegion.selectedCode.value ? { emd: mapRegion.selectedCode.value } : {}),
+    },
+  })
 }
 
 function handlePresetApply({ from, to }: { from: string; to: string }) {
@@ -582,13 +643,33 @@ onBeforeUnmount(stopDetailResize)
         <CommonMap
           class="damage-map"
           :markers="damageMarkers"
+          :viewport-bounds="mapRegion.selectedBounds.value"
           :focused-center="selectedMapCenter"
           :focus-zoom="16"
           :right-inset="selectedId != null ? detailPanelWidth : 0"
           map-label="조회된 탐지 사건 위치 지도"
           empty-message="위치 정보가 있는 탐지 사건이 없습니다."
           @marker-select="selectItem(Number($event))"
-        />
+          @bounds-change="handleMapBoundsChange"
+        >
+          <MapRegionFilter
+            id="damage-map-region"
+            :model-value="mapRegion.selectedCode.value"
+            :assigned-region-name="mapRegion.assignedRegionName.value"
+            :options="mapRegion.options.value"
+            :loading="mapRegion.loading.value"
+            :error="mapRegion.error.value"
+            @update:model-value="mapRegion.select"
+            @retry="mapRegion.load"
+          />
+          <div v-if="mapMarkersError" class="map-query-error" role="alert">
+            <span>{{ mapMarkersError }}</span>
+            <button type="button" @click="retryMapMarkers">다시 시도</button>
+          </div>
+          <span v-if="mapMarkersLoading" class="map-query-loading" role="status">
+            파손 위치 갱신 중
+          </span>
+        </CommonMap>
       </div>
 
       <!-- 오른쪽: 상세 패널 (슬라이드 인) -->
@@ -888,6 +969,41 @@ onBeforeUnmount(stopDetailResize)
 .damage-map {
   min-height: 100%;
   border-radius: 0;
+}
+
+.map-query-error,
+.map-query-loading {
+  position: absolute;
+  right: 1.6rem;
+  bottom: 1.6rem;
+  z-index: 600;
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.6rem;
+  background: var(--roady-surface-default);
+  box-shadow: 0 0.4rem 1.2rem rgb(0 0 0 / 12%);
+  font-size: var(--krds-pc-font-size-label-small);
+}
+
+.map-query-error {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid var(--roady-status-danger);
+  color: var(--roady-status-danger);
+}
+
+.map-query-error button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: var(--krds-font-weight-bold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.map-query-loading {
+  color: var(--roady-text-secondary);
 }
 
 /* ── 상세 패널 (슬라이드) ── */

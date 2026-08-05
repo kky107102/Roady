@@ -1,19 +1,31 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
+import { damagesApi } from '@/api/damages'
 import CommonMap from '@/components/common/CommonMap.vue'
+import MapRegionFilter from '@/components/common/MapRegionFilter.vue'
 import DashboardToolbar from '@/components/dashboard/DashboardToolbar.vue'
 import StatCard from '@/components/dashboard/StatCard.vue'
 import TrendChart from '@/components/dashboard/TrendChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import RecentDamageList from '@/components/damages/RecentDamageList.vue'
 import UrgentDamageList from '@/components/damages/UrgentDamageList.vue'
-import { toDamageMapMarkers } from '@/utils/damageMap'
+import { mergeDamageMapMarkers, toDamageMapMarkers } from '@/utils/damageMap'
 import { reviewTabForDamage } from '@/utils/damageReview'
+import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
+import type { DamageMapMarkerResponse } from '@/types/damage'
+import type { MapBounds } from '@/types/map'
+import { toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
 
 const store = useDashboardStore()
 const router = useRouter()
+const mapRegion = useAssignedMapRegion()
+const boundaryMarkers = ref<DamageMapMarkerResponse[] | null>(null)
+const currentMapBounds = ref<MapBounds | null>(null)
+const mapMarkersLoading = ref(false)
+const mapMarkersError = ref<string | null>(null)
+let mapMarkerRequestSequence = 0
 
 const hasTrendData = computed(() => store.timeSeries.items.some((item) => item.totalCount > 0))
 
@@ -22,11 +34,15 @@ function damageDetailQuery(id: string | number) {
   return {
     review: damage ? reviewTabForDamage(damage) : 'pending',
     damageId: String(id),
+    ...(mapRegion.selectedCode.value ? { emd: mapRegion.selectedCode.value } : {}),
   }
 }
 
 const damageMarkers = computed(() =>
-  toDamageMapMarkers(store.damages).map((marker) => ({
+  (boundaryMarkers.value == null
+    ? toDamageMapMarkers(store.damages)
+    : mergeDamageMapMarkers(boundaryMarkers.value, store.damages)
+  ).map((marker) => ({
     ...marker,
     actionLabel: '상세보기',
     actionHref: router.resolve({
@@ -34,6 +50,45 @@ const damageMarkers = computed(() =>
       query: damageDetailQuery(marker.id),
     }).href,
   })),
+)
+
+async function fetchMapMarkers(bounds: MapBounds) {
+  const sequence = ++mapMarkerRequestSequence
+  mapMarkersLoading.value = true
+  mapMarkersError.value = null
+  try {
+    const markers = await damagesApi.mapMarkers({
+      ...bounds,
+      ...(store.filter.from ? { from: toApiFromDateTime(store.filter.from) } : {}),
+      ...(store.filter.to ? { to: toApiToDateTime(store.filter.to) } : {}),
+      ...(mapRegion.assignedRegionCode.value
+        ? { regionCode: mapRegion.assignedRegionCode.value }
+        : {}),
+    })
+    if (sequence === mapMarkerRequestSequence) boundaryMarkers.value = markers
+  } catch {
+    if (sequence === mapMarkerRequestSequence) {
+      mapMarkersError.value = '지도 마커를 불러오지 못했습니다.'
+    }
+  } finally {
+    if (sequence === mapMarkerRequestSequence) mapMarkersLoading.value = false
+  }
+}
+
+function handleMapBoundsChange(bounds: MapBounds) {
+  currentMapBounds.value = bounds
+  void fetchMapMarkers(bounds)
+}
+
+function retryMapMarkers() {
+  if (currentMapBounds.value) void fetchMapMarkers(currentMapBounds.value)
+}
+
+watch(
+  () => [store.filter.from, store.filter.to],
+  () => {
+    if (currentMapBounds.value) void fetchMapMarkers(currentMapBounds.value)
+  },
 )
 
 function openDamageDetail(id: string | number) {
@@ -216,11 +271,31 @@ onUnmounted(() => {
             <CommonMap
               class="dashboard-map"
               :markers="damageMarkers"
+              :viewport-bounds="mapRegion.selectedBounds.value"
               center-popup-on-select
               map-label="대시보드 실시간 탐지 현황 지도"
               empty-message="위치 정보가 있는 탐지 사건이 없습니다."
               @marker-select="openDamageDetail"
-            />
+              @bounds-change="handleMapBoundsChange"
+            >
+              <MapRegionFilter
+                id="dashboard-map-region"
+                :model-value="mapRegion.selectedCode.value"
+                :assigned-region-name="mapRegion.assignedRegionName.value"
+                :options="mapRegion.options.value"
+                :loading="mapRegion.loading.value"
+                :error="mapRegion.error.value"
+                @update:model-value="mapRegion.select"
+                @retry="mapRegion.load"
+              />
+              <div v-if="mapMarkersError" class="map-query-error" role="alert">
+                <span>{{ mapMarkersError }}</span>
+                <button type="button" @click="retryMapMarkers">다시 시도</button>
+              </div>
+              <span v-else-if="mapMarkersLoading" class="map-query-loading" role="status">
+                파손 위치 갱신 중
+              </span>
+            </CommonMap>
           </section>
 
           <!-- 신규 탐지 알림 -->
@@ -463,6 +538,40 @@ onUnmounted(() => {
   color: var(--roady-text-secondary);
   font-size: var(--krds-pc-font-size-body-small);
   font-weight: var(--krds-font-weight-bold);
+}
+
+.map-query-error,
+.map-query-loading {
+  position: absolute;
+  right: 1.6rem;
+  bottom: 1.6rem;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
+  border-radius: 0.6rem;
+  background: var(--roady-surface-default);
+  font-size: var(--krds-pc-font-size-label-small);
+}
+
+.map-query-loading {
+  color: var(--roady-text-secondary);
+}
+
+.map-query-error {
+  border: 1px solid var(--roady-status-danger);
+  color: var(--roady-status-danger);
+}
+
+.map-query-error button {
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: var(--krds-font-weight-bold);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* ── 임시 데이터 배지 ── */
