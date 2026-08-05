@@ -87,7 +87,7 @@ const detailCanceled: DamageDetail = { ...baseDetail, currentStatus: 'CANCELED' 
 
 // ── 마운트 헬퍼 ──────────────────────────────────────────────
 
-async function mountView(damageId = 6) {
+async function mountView(damageId = 6, query: Record<string, string> = {}) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -95,7 +95,7 @@ async function mountView(damageId = 6) {
       { path: '/repairs', name: 'repairs', component: { template: '<div />' } },
     ],
   })
-  await router.push(`/repairs/${damageId}`)
+  await router.push({ name: 'repair-detail', params: { damageId }, query })
 
   return mount(RepairDetailView, {
     global: {
@@ -120,7 +120,10 @@ async function mountView(damageId = 6) {
           template:
             '<div data-testid="request-modal">' +
             '<button data-testid="modal-close" @click="$emit(\'close\')">닫기</button>' +
-            "<button data-testid=\"modal-confirm\" @click=\"$emit('confirm', { note: null, processingPriority: 'URGENT', reviewDamageType: 'CRACK', repairerId: null })\">확인</button>" +
+            '<button v-if="editing" data-testid="modal-cancel-edit" @click="$emit(\'cancelEdit\')">취소</button>' +
+            "<button v-if=\"!readonly\" data-testid=\"modal-confirm\" @click=\"$emit('confirm', { note: null, processingPriority: 'URGENT', reviewDamageType: 'CRACK', repairerId: null })\">{{ editing ? '저장' : '보수 요청하기' }}</button>" +
+            "<button v-if=\"readonly\" data-testid=\"modal-copy\" @click=\"$emit('copy')\">{{ copyState === 'success' ? '복사 완료' : '요청 복사' }}</button>" +
+            '<button v-if="readonly && editable" data-testid="modal-edit" @click="$emit(\'edit\')">수정하기</button>' +
             '</div>',
           props: [
             'detail',
@@ -131,8 +134,10 @@ async function mountView(damageId = 6) {
             'submitting',
             'officialName',
             'repairers',
+            'copyState',
+            'editable',
           ],
-          emits: ['close', 'confirm'],
+          emits: ['close', 'cancelEdit', 'confirm', 'copy', 'edit'],
         },
         RepairCompletionModal: {
           template:
@@ -185,15 +190,16 @@ describe('RepairDetailView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('보수 요청')
+    expect(wrapper.findAll('.action-section .filled.primary')).toHaveLength(1)
   })
 
-  it('REQUESTED 상태에서 요청 정보 복사 버튼을 표시한다', async () => {
+  it('REQUESTED 상태에서는 최종 요청 정보 복사 버튼을 표시하지 않는다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
 
     const wrapper = await mountView()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('요청 정보 복사')
+    expect(wrapper.text()).not.toContain('요청 복사')
   })
 
   it('REQUESTED 상태에서 보수 불필요 처리 버튼을 표시하고 판정 API를 호출한다', async () => {
@@ -229,6 +235,15 @@ describe('RepairDetailView', () => {
 
     const requestBtn = wrapper.findAll('button').find((b) => b.text().includes('보수 요청'))
     await requestBtn!.trigger('click')
+
+    expect(wrapper.find('[data-testid="request-modal"]').exists()).toBe(true)
+  })
+
+  it('요청서 작성 바로가기 쿼리로 진입하면 해당 사건의 요청서 모달을 연다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+
+    const wrapper = await mountView(6, { action: 'create-request' })
+    await flushPromises()
 
     expect(wrapper.find('[data-testid="request-modal"]').exists()).toBe(true)
   })
@@ -290,7 +305,7 @@ describe('RepairDetailView', () => {
     await requestBtn!.trigger('click')
     await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
 
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '요청 전송')
     await confirmBtn!.trigger('click')
     await flushPromises()
 
@@ -300,6 +315,7 @@ describe('RepairDetailView', () => {
       reviewDamageType: 'CRACK',
       repairerId: null,
     })
+    expect(mockDamagesApi.updateReview).not.toHaveBeenCalled()
   })
 
   it('요청 성공 시 상태가 REPAIR_IN_PROGRESS로 갱신된다', async () => {
@@ -313,7 +329,7 @@ describe('RepairDetailView', () => {
     await requestBtn!.trigger('click')
     await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
 
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '요청 전송')
     await confirmBtn!.trigger('click')
     await flushPromises()
 
@@ -332,7 +348,7 @@ describe('RepairDetailView', () => {
     await requestBtn!.trigger('click')
     await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
 
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '요청 전송')
     await confirmBtn!.trigger('click')
     await flushPromises()
 
@@ -343,13 +359,14 @@ describe('RepairDetailView', () => {
   // ── 요청 정보 복사 ────────────────────────────────────────
 
   it('요청 정보 복사 버튼 클릭 시 navigator.clipboard.writeText를 호출한다', async () => {
-    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
 
     const wrapper = await mountView()
     await flushPromises()
 
-    const copyBtn = wrapper.findAll('button').find((b) => b.text().includes('요청 정보 복사'))
-    await copyBtn!.trigger('click')
+    const viewButton = wrapper.findAll('button').find((b) => b.text() === '요청서 확인')
+    await viewButton!.trigger('click')
+    await wrapper.get('[data-testid="modal-copy"]').trigger('click')
     await flushPromises()
 
     expect(mockClipboard.writeText).toHaveBeenCalledOnce()
@@ -360,32 +377,34 @@ describe('RepairDetailView', () => {
   })
 
   it('복사 성공 시 버튼 텍스트가 "복사 완료"로 바뀐다', async () => {
-    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
     mockClipboard.writeText.mockResolvedValue(undefined)
 
     const wrapper = await mountView()
     await flushPromises()
 
-    const copyBtn = wrapper.findAll('button').find((b) => b.text().includes('요청 정보 복사'))
-    await copyBtn!.trigger('click')
+    const viewButton = wrapper.findAll('button').find((b) => b.text() === '요청서 확인')
+    await viewButton!.trigger('click')
+    await wrapper.get('[data-testid="modal-copy"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).toContain('복사 완료')
   })
 
   it('복사 실패 시 버튼 텍스트가 변경되지 않는다', async () => {
-    mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
     mockClipboard.writeText.mockRejectedValue(new Error('permission denied'))
 
     const wrapper = await mountView()
     await flushPromises()
 
-    const copyBtn = wrapper.findAll('button').find((b) => b.text().includes('요청 정보 복사'))
-    await copyBtn!.trigger('click')
+    const viewButton = wrapper.findAll('button').find((b) => b.text() === '요청서 확인')
+    await viewButton!.trigger('click')
+    await wrapper.get('[data-testid="modal-copy"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.text()).not.toContain('복사 완료')
-    expect(wrapper.text()).toContain('요청 정보 복사')
+    expect(wrapper.text()).toContain('요청 복사')
   })
 
   // ── REPAIR_IN_PROGRESS 상태 ───────────────────────────────
@@ -398,9 +417,10 @@ describe('RepairDetailView', () => {
 
     expect(wrapper.text()).not.toContain('보수 요청외부')
     expect(wrapper.findAll('button').find((b) => b.text() === '보수 요청')).toBeUndefined()
+    expect(wrapper.findAll('.action-section .filled.primary')).toHaveLength(1)
   })
 
-  it('REPAIR_IN_PROGRESS 상태에서 요청서 확인, 요청서 내용 수정, 요청 취소, 보수 완료 버튼을 표시한다', async () => {
+  it('REPAIR_IN_PROGRESS 상태에서 요청서 확인, 요청 취소, 보수 완료 버튼을 표시한다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
 
     const wrapper = await mountView()
@@ -408,23 +428,22 @@ describe('RepairDetailView', () => {
 
     const text = wrapper.text()
     expect(text).toContain('요청서 확인')
-    expect(text).toContain('요청서 내용 수정')
+    expect(text).not.toContain('요청서 내용 수정')
     expect(text).toContain('요청 취소')
     expect(text).toContain('보수 완료')
   })
 
-  it('요청서 수정 확인 시 수정 API를 호출한다', async () => {
+  it('요청서 저장 시 수정 API를 호출하고 갱신된 확인 모달로 돌아온다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
     mockRepairsApi.updateRequest.mockResolvedValue(detailInProgress)
 
     const wrapper = await mountView()
     await flushPromises()
 
-    const editBtn = wrapper.findAll('button').find((b) => b.text() === '요청서 내용 수정')
-    await editBtn!.trigger('click')
+    const viewBtn = wrapper.findAll('button').find((b) => b.text() === '요청서 확인')
+    await viewBtn!.trigger('click')
+    await wrapper.find('[data-testid="modal-edit"]').trigger('click')
     await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
-    await confirmBtn!.trigger('click')
     await flushPromises()
 
     expect(mockRepairsApi.updateRequest).toHaveBeenCalledWith(6, {
@@ -433,6 +452,26 @@ describe('RepairDetailView', () => {
       reviewDamageType: 'CRACK',
       repairerId: null,
     })
+    expect(wrapper.find('[data-testid="modal-edit"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="modal-copy"]').exists()).toBe(true)
+  })
+
+  it('요청서 수정 취소 시 저장하지 않고 요청서 확인 모달로 돌아온다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === '요청서 확인')!
+      .trigger('click')
+    await wrapper.find('[data-testid="modal-edit"]').trigger('click')
+    await wrapper.find('[data-testid="modal-cancel-edit"]').trigger('click')
+
+    expect(mockRepairsApi.updateRequest).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="modal-edit"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="modal-copy"]').exists()).toBe(true)
   })
 
   it('보수 완료 버튼 클릭 시 완료 모달을 연다', async () => {

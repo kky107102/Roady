@@ -6,6 +6,7 @@ import DamageThumbnail from './DamageThumbnail.vue'
 import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import { isReviewConfirmed } from '@/utils/damageReview'
+import { formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
 
 const props = defineProps<{
   item: DamageListItem
@@ -13,22 +14,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ select: [id: number] }>()
-
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
 
 function formatCaseId(id: number, createdAt: string): string {
   const year = new Date(createdAt).getFullYear()
@@ -66,20 +51,13 @@ const displayedPriority = computed(() =>
   confirmed.value ? (props.item.processingPriority ?? null) : (props.item.repairPriority ?? null),
 )
 
-function formatPriorityLabel(priority: string | null): string {
-  if (!priority) return confirmed.value ? '미지정' : '보류'
-  return PRIORITY_LABELS[priority] ?? priority
-}
-
 const confirmedStatus = computed<{ label: string; type: BadgeType }>(() => {
   const status = props.item.currentStatus
   if (status === 'REQUESTED') {
     return { label: '요청 전', type: 'warning' }
   }
   if (status === 'REPAIR_COMPLETED') return { label: '보수 완료', type: 'success' }
-  if (
-    status === 'REPAIR_IN_PROGRESS'
-  ) {
+  if (status === 'REPAIR_IN_PROGRESS') {
     return { label: '요청 완료', type: 'info' }
   }
   return { label: '보수 불필요', type: 'neutral' }
@@ -101,17 +79,13 @@ const confirmedStatus = computed<{ label: string; type: BadgeType }>(() => {
         <span class="card-id">{{ formatCaseId(item.id, item.createdAt) }}</span>
         <AiResultBadge
           v-if="!confirmed"
-          :type="
-            displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'
-          "
-          :label="formatPriorityLabel(displayedPriority)"
+          :type="priorityBadgeType(displayedPriority)"
+          :label="formatPriorityLabel(displayedPriority, confirmed ? '미지정' : '보류')"
         />
         <StatusBadge
           v-else
-          :type="
-            displayedPriority ? (PRIORITY_BADGE_TYPES[displayedPriority] ?? 'neutral') : 'neutral'
-          "
-          :label="formatPriorityLabel(displayedPriority)"
+          :type="priorityBadgeType(displayedPriority)"
+          :label="formatPriorityLabel(displayedPriority, confirmed ? '미지정' : '보류')"
         />
       </div>
 

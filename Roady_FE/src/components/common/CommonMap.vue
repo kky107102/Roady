@@ -22,6 +22,7 @@ interface Props {
   focusedCenter?: [number, number] | null
   focusZoom?: number
   rightInset?: number
+  centerPopupOnSelect?: boolean
   emptyMessage?: string
   mapLabel?: string
 }
@@ -33,6 +34,7 @@ const props = withDefaults(defineProps<Props>(), {
   zoom: 12,
   focusZoom: 16,
   rightInset: 0,
+  centerPopupOnSelect: false,
   emptyMessage: '표시할 위치 정보가 없습니다.',
   mapLabel: '지도',
 })
@@ -60,9 +62,9 @@ function markerIcon(tone: MapMarkerItem['tone']) {
   return divIcon({
     className: 'roady-map-marker-wrapper',
     html: `<span class="roady-map-marker roady-map-marker--${normalizedTone}"><span class="roady-map-marker__symbol">${symbols[normalizedTone]}</span></span>`,
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -34],
+    iconSize: [44, 44],
+    iconAnchor: [22, 42],
+    popupAnchor: [0, -38],
   })
 }
 
@@ -70,10 +72,27 @@ function popupContent(item: MapMarkerItem): HTMLElement {
   const container = document.createElement('div')
   container.className = 'roady-map-popup'
 
+  const header = document.createElement('div')
+  header.className = 'roady-map-popup__header'
+
   const title = document.createElement('strong')
   title.className = 'roady-map-popup__title'
   title.textContent = item.title
-  container.append(title)
+  header.append(title)
+
+  if (item.actionHref) {
+    const action = document.createElement('a')
+    action.className = 'roady-map-popup__action'
+    action.href = item.actionHref
+    action.textContent = item.actionLabel ?? '상세보기'
+    action.addEventListener('click', (event) => {
+      event.preventDefault()
+      emit('markerSelect', item.id)
+    })
+    header.append(action)
+  }
+
+  container.append(header)
 
   if (item.details?.length) {
     const list = document.createElement('dl')
@@ -95,6 +114,17 @@ function popupContent(item: MapMarkerItem): HTMLElement {
 function clearMarkers() {
   markerInstances.forEach((marker) => marker.remove())
   markerInstances = []
+}
+
+function centerMarkerPopup(item: MapMarkerItem) {
+  if (!props.centerPopupOnSelect || !mapInstance) return
+  mapInstance.stop()
+  const zoom = mapInstance.getZoom()
+  const markerPx = mapInstance.project([item.latitude, item.longitude], zoom)
+  // Offset center upward so the marker appears ~80px below viewport center,
+  // leaving the popup (which opens above the marker) visible near the center.
+  const center = mapInstance.unproject(markerPx.subtract([0, 80]), zoom)
+  mapInstance.setView(center, zoom, { animate: false })
 }
 
 function insetAdjustedCenter(center: [number, number]): [number, number] {
@@ -160,11 +190,21 @@ function renderMarkers() {
       title: item.title,
       alt: `${item.title} 위치`,
       keyboard: true,
-    })
-      .bindPopup(popupContent(item), { minWidth: 190 })
-      .addTo(mapInstance as Map)
+    }).addTo(mapInstance as Map)
 
-    marker.on('click', () => emit('markerSelect', item.id))
+    marker.on('click', () => {
+      centerMarkerPopup(item)
+      if (!item.actionHref) emit('markerSelect', item.id)
+      queueMicrotask(() => {
+        if (mapInstance) marker.openPopup()
+      })
+    })
+
+    marker.bindPopup(popupContent(item), {
+      minWidth: 190,
+      autoPan: false,
+    })
+
     return marker
   })
 
@@ -183,7 +223,7 @@ function renderMarkers() {
       if (coordinate) mapInstance.setView(coordinate, 15)
     } else if (allCoordinates.length > 1) {
       const bounds = latLngBounds(allCoordinates)
-      mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 })
+      mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
     } else {
       mapInstance.setView(props.center, props.zoom)
     }
@@ -207,7 +247,9 @@ onMounted(() => {
   renderMarkers()
 
   if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(() => mapInstance?.invalidateSize())
+    resizeObserver = new ResizeObserver(() =>
+      mapInstance?.invalidateSize({ animate: false, pan: false }),
+    )
     resizeObserver.observe(mapElement.value)
   }
 })
@@ -219,12 +261,13 @@ watch(
 )
 
 watch(
-  () => [
-    props.focusedCenter?.[0] ?? null,
-    props.focusedCenter?.[1] ?? null,
-    props.focusZoom,
-    props.rightInset,
-  ] as const,
+  () =>
+    [
+      props.focusedCenter?.[0] ?? null,
+      props.focusedCenter?.[1] ?? null,
+      props.focusZoom,
+      props.rightInset,
+    ] as const,
   ([latitude, longitude], previous) => {
     if (latitude == null || longitude == null) return
 
@@ -319,13 +362,19 @@ onBeforeUnmount(() => {
 }
 
 :global(.roady-map-marker-wrapper) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 :global(.roady-map-marker) {
   position: relative;
   display: block;
+  box-sizing: border-box;
   width: 2.8rem;
   height: 2.8rem;
   border: 0.4rem solid var(--roady-surface-default);
@@ -333,6 +382,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 0.3rem 0.8rem color-mix(in srgb, var(--roady-text-primary) 28%, transparent);
   background: var(--roady-brand-secondary);
   transform: rotate(-45deg);
+  pointer-events: none;
 }
 
 :global(.roady-map-marker__symbol) {
@@ -344,6 +394,7 @@ onBeforeUnmount(() => {
   font-weight: var(--krds-font-weight-bold);
   line-height: 1;
   transform: translate(-50%, -50%) rotate(45deg);
+  pointer-events: none;
 }
 
 :global(.roady-map-marker--success) {
@@ -369,10 +420,36 @@ onBeforeUnmount(() => {
 }
 
 :global(.roady-map-popup__title) {
-  display: block;
+  min-width: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+:global(.roady-map-popup__header) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem;
   padding-bottom: 0.8rem;
   border-bottom: 1px solid var(--roady-border-default);
-  font-size: var(--krds-pc-font-size-body-small);
+}
+
+:global(.roady-map-popup__action) {
+  flex-shrink: 0;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+}
+
+:global(.roady-map-popup__action:hover) {
+  color: var(--roady-brand-primary);
+}
+
+:global(.roady-map-popup__action:focus-visible) {
+  border-radius: 0.2rem;
+  outline: 0.2rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
 }
 
 :global(.roady-map-popup__details) {

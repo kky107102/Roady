@@ -4,6 +4,7 @@ import {
   defaultDamageSort,
   isReviewConfirmed,
   isReviewVisible,
+  reviewTabForDamage,
   sortReviewDamages,
 } from '@/utils/damageReview'
 
@@ -37,9 +38,13 @@ describe('damageReview', () => {
   })
 
   it('AI 분석 완료 사건은 미확인, 관리자 판정 이후 사건은 확인으로 분류한다', () => {
+    expect(isReviewConfirmed(damage({ currentStatus: 'COLLECTED' }))).toBe(false)
+    expect(isReviewConfirmed(damage({ currentStatus: 'AI_ANALYZING' }))).toBe(false)
     expect(isReviewConfirmed(damage({ currentStatus: 'AI_ANALYZED' }))).toBe(false)
     expect(isReviewConfirmed(damage({ currentStatus: 'REQUESTED' }))).toBe(true)
     expect(isReviewConfirmed(damage({ currentStatus: 'CANCELED' }))).toBe(true)
+    expect(reviewTabForDamage(damage({ currentStatus: 'AI_ANALYZED' }))).toBe('pending')
+    expect(reviewTabForDamage(damage({ currentStatus: 'REPAIR_COMPLETED' }))).toBe('confirmed')
   })
 
   it('미확인은 최신순, 확인은 우선순위순을 기본값으로 사용한다', () => {

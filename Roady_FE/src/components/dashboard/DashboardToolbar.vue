@@ -16,7 +16,9 @@ const localPreset = ref<number | null>(null)
 
 watch(
   () => props.modelValue,
-  (val) => { local.value = { ...val } },
+  (val) => {
+    local.value = { ...val }
+  },
 )
 
 // 지역 코드 옵션 (API 미지원, UI 숨김 상태)
@@ -69,7 +71,6 @@ function handleReset() {
 
 <template>
   <PageFilterToolbar aria-label="대시보드 조회 조건">
-
     <DateRangeFilter
       :from="local.from"
       :to="local.to"
@@ -90,10 +91,11 @@ function handleReset() {
     </div>
 
     <template #actions>
-      <button type="button" class="krds-btn small outline" @click="handleReset">초기화</button>
-      <button type="button" class="krds-btn small filled primary apply-btn" @click="handleApply">조회</button>
+      <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
+      <button type="button" class="krds-btn small filled primary apply-btn" @click="handleApply">
+        조회
+      </button>
     </template>
-
   </PageFilterToolbar>
 </template>
 

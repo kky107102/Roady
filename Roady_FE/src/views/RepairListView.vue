@@ -150,9 +150,7 @@ function toggleStatus(filter: RepairStatusFilter, checked: boolean) {
   }
 }
 
-const isAllSelected = computed(
-  () => activeStatuses.value.length === REPAIR_STATUS_FILTERS.length,
-)
+const isAllSelected = computed(() => activeStatuses.value.length === REPAIR_STATUS_FILTERS.length)
 
 const allChecked = computed({
   get: () => isAllSelected.value,
@@ -226,7 +224,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
         @preset-apply="handlePresetApply"
       />
       <template #actions>
-        <button type="button" class="krds-btn small outline" @click="handleReset">초기화</button>
+        <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
         <button type="button" class="krds-btn small filled primary" @click="handleSearch">
           조회
         </button>
@@ -269,11 +267,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
           aria-label="보수 사건 정렬"
           @change="handleSortChange"
         >
-          <option
-            v-for="option in REPAIR_SORT_OPTIONS"
-            :key="option.value"
-            :value="option.value"
-          >
+          <option v-for="option in REPAIR_SORT_OPTIONS" :key="option.value" :value="option.value">
             {{ option.label }}
           </option>
         </select>
@@ -286,16 +280,14 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
           :loading="loading"
           :error="fetchError"
           :empty-title="
-            totalCount === 0
-              ? '보수 대상 사건이 없습니다'
-              : '선택한 상태의 사건이 없습니다'
+            totalCount === 0 ? '보수 대상 사건이 없습니다' : '선택한 상태의 사건이 없습니다'
           "
           :empty-description="
             totalCount === 0
               ? '탐지 검토에서 &quot;보수 필요&quot;로 판정한 사건이 여기에 표시됩니다.'
               : activeStatuses.length === 0
                 ? '선택된 보수 상태가 없습니다.'
-              : '다른 상태 필터를 선택해 보세요.'
+                : '다른 상태 필터를 선택해 보세요.'
           "
           @retry="fetchItems"
         />

@@ -23,6 +23,8 @@ const props = withDefaults(
     editing?: boolean
     officialName?: string | null
     repairers?: UserSummary[]
+    copyState?: 'idle' | 'success' | 'error'
+    editable?: boolean
   }>(),
   {
     imagesLoading: false,
@@ -31,12 +33,17 @@ const props = withDefaults(
     editing: false,
     officialName: null,
     repairers: () => [],
+    copyState: 'idle',
+    editable: false,
   },
 )
 
 const emit = defineEmits<{
   close: []
+  cancelEdit: []
   confirm: [payload: RepairRequestPayload]
+  copy: []
+  edit: []
 }>()
 
 const note = ref<string>(props.detail.repairRequestNote ?? '')
@@ -147,27 +154,51 @@ function handleConfirm() {
           <h2 class="modal-title">
             {{ readonly ? '요청서 확인' : editing ? '보수 요청서 수정' : '보수 요청서 작성' }}
           </h2>
-          <button
-            type="button"
-            class="modal-close-btn"
-            aria-label="닫기"
-            :disabled="submitting"
-            @click="emit('close')"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              aria-hidden="true"
+          <div class="modal-header-actions">
+            <button
+              v-if="readonly && editable"
+              type="button"
+              class="modal-edit-btn"
+              @click="emit('edit')"
             >
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+              <span>수정하기</span>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="modal-close-btn"
+              aria-label="닫기"
+              :disabled="submitting"
+              @click="emit('close')"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- 본문 -->
@@ -278,7 +309,7 @@ function handleConfirm() {
                   />
                   <button
                     type="button"
-                    class="img-download-btn krds-btn small outline"
+                    class="img-download-btn krds-btn small secondary"
                     :aria-label="`이미지 ${img.sortOrder} 다운로드`"
                     @click="downloadImage(img)"
                   >
@@ -334,11 +365,34 @@ function handleConfirm() {
         <div class="modal-footer">
           <button
             type="button"
-            class="krds-btn medium outline"
+            class="krds-btn medium secondary modal-dismiss-btn"
             :disabled="submitting"
-            @click="emit('close')"
+            @click="editing ? emit('cancelEdit') : emit('close')"
           >
-            취소
+            {{ readonly ? '닫기' : '취소' }}
+          </button>
+          <button
+            v-if="readonly"
+            type="button"
+            class="krds-btn medium filled primary"
+            :aria-label="copyState === 'success' ? '복사 완료' : '최종 요청 정보 클립보드에 복사'"
+            @click="emit('copy')"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            {{ copyState === 'success' ? '복사 완료' : '요청 복사' }}
           </button>
           <button
             v-if="!readonly"
@@ -347,7 +401,7 @@ function handleConfirm() {
             :disabled="submitting"
             @click="handleConfirm"
           >
-            확인
+            {{ editing ? '저장' : '보수 요청하기' }}
           </button>
         </div>
       </div>
@@ -394,6 +448,36 @@ function handleConfirm() {
   font-size: 1.8rem;
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.modal-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3.6rem;
+  padding: 0 1rem;
+  border: 1px solid var(--roady-border-default);
+  background: var(--roady-surface-default);
+  border-radius: 0.6rem;
+  color: var(--roady-text-primary);
+  font-size: 1.4rem;
+  font-weight: var(--krds-font-weight-medium);
+  cursor: pointer;
+}
+
+.modal-edit-btn:hover {
+  background: var(--roady-surface-background);
+}
+
+.modal-edit-btn:focus-visible {
+  outline: 2px solid var(--roady-focus-ring);
+  outline-offset: 2px;
 }
 
 .modal-close-btn {
@@ -596,6 +680,18 @@ function handleConfirm() {
   padding: 1.6rem 2.4rem;
   border-top: 1px solid var(--roady-border-default);
   flex-shrink: 0;
+}
+
+.modal-dismiss-btn {
+  background: var(--roady-surface-default);
+  border-color: var(--roady-border-default);
+  color: var(--roady-status-danger, #e74c3c);
+}
+
+.modal-dismiss-btn:hover:not(:disabled) {
+  background: rgba(231, 76, 60, 0.06);
+  border-color: var(--roady-status-danger, #e74c3c);
+  color: var(--roady-status-danger, #e74c3c);
 }
 
 /* ── 접근성 ── */

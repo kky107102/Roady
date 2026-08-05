@@ -1,6 +1,7 @@
 import type { DamageDetail } from '@/types/damage'
+import type { BadgeType } from '@/components/common/StatusBadge.vue'
 
-const PRIORITY_LABELS: Record<string, string> = {
+export const PRIORITY_LABELS: Readonly<Record<string, string>> = {
   URGENT: '긴급',
   HIGH: '높음',
   NORMAL: '보통',
@@ -8,7 +9,15 @@ const PRIORITY_LABELS: Record<string, string> = {
   LOW: '낮음',
 }
 
-const DAMAGE_TYPE_LABELS: Record<string, string> = {
+export const PRIORITY_BADGE_TYPES: Readonly<Record<string, BadgeType>> = {
+  URGENT: 'danger',
+  HIGH: 'warning',
+  NORMAL: 'info',
+  MEDIUM: 'info',
+  LOW: 'neutral',
+}
+
+export const DAMAGE_TYPE_LABELS: Readonly<Record<string, string>> = {
   LARGE_MISSING: '큰 결손',
   SMALL_MISSING: '작은 결손',
   MISSING: '큰 결손',
@@ -33,9 +42,13 @@ export function formatRepairLocation(
   return '-'
 }
 
-export function formatPriorityLabel(priority: string | null | undefined): string {
-  if (!priority) return '-'
+export function formatPriorityLabel(priority: string | null | undefined, emptyLabel = '-'): string {
+  if (!priority) return emptyLabel
   return PRIORITY_LABELS[priority] ?? priority
+}
+
+export function priorityBadgeType(priority: string | null | undefined): BadgeType {
+  return priority ? (PRIORITY_BADGE_TYPES[priority] ?? 'neutral') : 'neutral'
 }
 
 export function formatDamageTypeLabel(damageType: string | null | undefined): string {
@@ -48,6 +61,8 @@ export function buildRepairRequestText(detail: DamageDetail, detailUrl: string):
   const title = detail.description?.trim() || '미확인'
   const priority = formatPriorityLabel(detail.processingPriority)
   const damageType = formatDamageTypeLabel(detail.reviewDamageType)
+  const repairer = detail.repairerName?.trim() || '-'
+  const requestNote = detail.repairRequestNote?.trim() || '-'
   const location = formatRepairLocation(detail)
 
   return [
@@ -57,6 +72,8 @@ export function buildRepairRequestText(detail: DamageDetail, detailUrl: string):
     `사건명: ${title}`,
     `관리자 판정 우선순위: ${priority}`,
     `관리자 판정 파손 유형: ${damageType}`,
+    `보수 담당자: ${repairer}`,
+    `요청 비고: ${requestNote}`,
     `위치: ${location}`,
     `보수 관리 상세 URL: ${detailUrl}`,
   ].join('\n')

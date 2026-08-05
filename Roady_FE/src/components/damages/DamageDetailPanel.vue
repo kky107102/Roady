@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
+import { RouterLink } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import { robotsApi } from '@/api/robots'
 import type {
@@ -14,6 +15,11 @@ import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import {
+  formatDamageTypeLabel,
+  formatPriorityLabel,
+  priorityBadgeType,
+} from '@/utils/repairRequest'
 
 const props = withDefaults(
   defineProps<{
@@ -21,11 +27,13 @@ const props = withDefaults(
     verdictSubmitting?: boolean
     summary?: DamageListItem | null
     refreshKey?: number
+    backTo?: string
   }>(),
   {
     verdictSubmitting: false,
     summary: null,
     refreshKey: 0,
+    backTo: '/damages',
   },
 )
 const emit = defineEmits<{
@@ -53,6 +61,8 @@ const robotName = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const reviewModalOpen = ref(false)
+const noRepairModalOpen = ref(false)
+const resetVerdictModalOpen = ref(false)
 const reviewPriority = ref('')
 const reviewDamageType = ref('')
 const reviewNote = ref('')
@@ -205,6 +215,14 @@ watch(
 
 function handleKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape') return
+  if (noRepairModalOpen.value) {
+    noRepairModalOpen.value = false
+    return
+  }
+  if (resetVerdictModalOpen.value) {
+    resetVerdictModalOpen.value = false
+    return
+  }
   if (reviewModalOpen.value) {
     reviewModalOpen.value = false
     return
@@ -220,32 +238,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
-const DAMAGE_TYPE_LABELS: Record<string, string> = {
-  LARGE_MISSING: '큰 결손',
-  SMALL_MISSING: '작은 결손',
-  MISSING: '큰 결손',
-  WEAR: '마모',
-  BREAKAGE: '작은 결손',
-  CRACK: '균열',
-  OTHER: '기타',
-}
 
 const REVIEW_PRIORITY_OPTIONS = [
   { value: 'URGENT', label: '긴급' },
@@ -311,13 +303,11 @@ function formatConfidenceScore(score: number | null): string {
 }
 
 function getPriorityLabel(priority: string | null | undefined): string {
-  if (!priority) return '보류'
-  return PRIORITY_LABELS[priority] ?? priority
+  return formatPriorityLabel(priority, '보류')
 }
 
 function getDamageTypeLabel(type: string | null | undefined): string {
-  if (!type) return '-'
-  return DAMAGE_TYPE_LABELS[type] ?? type
+  return formatDamageTypeLabel(type)
 }
 
 function clampScore(score: number | null): number {
@@ -357,11 +347,7 @@ const displayedPriorityLabel = computed(() => {
   return getPriorityLabel(displayedPriority.value)
 })
 
-const displayedPriorityType = computed<BadgeType>(() =>
-  displayedPriority.value
-    ? (PRIORITY_BADGE_TYPES[displayedPriority.value] ?? 'neutral')
-    : 'neutral',
-)
+const displayedPriorityType = computed<BadgeType>(() => priorityBadgeType(displayedPriority.value))
 
 const analysisPriorityLabel = computed(() =>
   latestAnalysis.value ? getPriorityLabel(latestAnalysis.value.repairPriority) : '-',
@@ -369,19 +355,14 @@ const analysisPriorityLabel = computed(() =>
 
 const analysisPriorityType = computed<BadgeType>(() => {
   const priority = latestAnalysis.value?.repairPriority
-  return priority ? (PRIORITY_BADGE_TYPES[priority] ?? 'neutral') : 'neutral'
+  return priorityBadgeType(priority)
 })
 
-const analysisDamageTypeLabel = computed(() =>
-  getDamageTypeLabel(latestAnalysis.value?.damageType),
-)
+const analysisDamageTypeLabel = computed(() => getDamageTypeLabel(latestAnalysis.value?.damageType))
 
 const analysisDamageTypeType = computed<BadgeType>(() => 'neutral')
 
-const canSubmitVerdict = computed(
-  () =>
-    detail.value?.currentStatus === 'AI_ANALYZED',
-)
+const canSubmitVerdict = computed(() => detail.value?.currentStatus === 'AI_ANALYZED')
 
 const canResetVerdict = computed(() =>
   ['REQUESTED', 'CANCELED'].includes(detail.value?.currentStatus ?? ''),
@@ -401,9 +382,12 @@ const hasManagerReview = computed(
 )
 
 function confirmNoRepair() {
-  if (window.confirm('이 사건을 보수 불필요로 판정하시겠습니까?')) {
-    emit('verdict-no-repair')
-  }
+  noRepairModalOpen.value = true
+}
+
+function submitNoRepair() {
+  noRepairModalOpen.value = false
+  emit('verdict-no-repair')
 }
 
 function openReviewModal() {
@@ -412,7 +396,9 @@ function openReviewModal() {
     props.summary?.processingPriority ??
     latestAnalysis.value?.repairPriority
   const suggestedDamageType = managerReviewDamageType.value ?? latestAnalysis.value?.damageType
-  reviewPriority.value = REVIEW_PRIORITY_OPTIONS.some((option) => option.value === suggestedPriority)
+  reviewPriority.value = REVIEW_PRIORITY_OPTIONS.some(
+    (option) => option.value === suggestedPriority,
+  )
     ? (suggestedPriority ?? '')
     : ''
   reviewDamageType.value = REVIEW_DAMAGE_TYPE_OPTIONS.some(
@@ -439,9 +425,12 @@ function submitReviewDecision() {
 }
 
 function confirmResetVerdict() {
-  if (window.confirm('관리자 판정을 되돌리시겠습니까? 사건이 미확인 목록으로 이동합니다.')) {
-    emit('verdict-reset')
-  }
+  resetVerdictModalOpen.value = true
+}
+
+function submitResetVerdict() {
+  resetVerdictModalOpen.value = false
+  emit('verdict-reset')
 }
 
 const reviewActionMode = computed<'ready' | 'waiting' | 'completed'>(() => {
@@ -514,11 +503,7 @@ const loadedImages = computed(() =>
               :type="displayedPriorityType"
               :label="displayedPriorityLabel"
             />
-            <StatusBadge
-              v-else
-              :type="displayedPriorityType"
-              :label="displayedPriorityLabel"
-            />
+            <StatusBadge v-else :type="displayedPriorityType" :label="displayedPriorityLabel" />
           </div>
 
           <!-- 사건명 (큰 제목) -->
@@ -603,10 +588,7 @@ const loadedImages = computed(() =>
             </div>
             <div class="manager-review-item">
               <span class="manager-review-label">파손 유형</span>
-              <StatusBadge
-                type="neutral"
-                :label="getDamageTypeLabel(managerReviewDamageType)"
-              />
+              <StatusBadge type="neutral" :label="getDamageTypeLabel(managerReviewDamageType)" />
             </div>
             <div v-if="managerReviewNote" class="manager-review-item manager-review-note">
               <span class="manager-review-label">비고</span>
@@ -659,7 +641,7 @@ const loadedImages = computed(() =>
             <button
               type="button"
               data-testid="analysis-retry-btn"
-              class="krds-btn small outline analysis-retry-btn"
+              class="krds-btn small secondary analysis-retry-btn"
               @click="retryAnalysis"
             >
               다시 시도
@@ -667,10 +649,7 @@ const loadedImages = computed(() =>
           </div>
 
           <!-- 분석 재시도 로딩 -->
-          <div
-            v-if="analysisLoading && !latestAnalysis"
-            class="ai-card-state analysis-loading"
-          >
+          <div v-if="analysisLoading && !latestAnalysis" class="ai-card-state analysis-loading">
             <LoadingSpinner label="AI 분석 결과 조회 중" />
           </div>
 
@@ -776,17 +755,23 @@ const loadedImages = computed(() =>
           <button type="button" class="verdict-btn verdict-btn--secondary" @click="openReviewModal">
             판정 수정하기
           </button>
-          <button type="button" class="verdict-btn verdict-btn--secondary verdict-reset-btn" @click="confirmResetVerdict">
-            판정 되돌리기
-          </button>
           <button
             type="button"
-            class="request-create-btn"
-            disabled
-            title="보수 관리 요청서 작성 기능은 준비 중입니다."
+            class="verdict-btn verdict-btn--secondary verdict-reset-btn"
+            @click="confirmResetVerdict"
           >
-            요청 작성하기 · 준비 중
+            판정 되돌리기
           </button>
+          <RouterLink
+            class="request-create-btn"
+            :to="{
+              name: 'repair-detail',
+              params: { damageId: detail.id },
+              query: { action: 'create-request', backTo },
+            }"
+          >
+            요청서 작성 바로가기
+          </RouterLink>
         </div>
 
         <div v-else class="review-completed-controls">
@@ -822,17 +807,104 @@ const loadedImages = computed(() =>
 
   <Teleport to="body">
     <div
-      v-if="reviewModalOpen"
+      v-if="noRepairModalOpen"
       class="review-modal-backdrop"
-      @click.self="reviewModalOpen = false"
+      @click.self="noRepairModalOpen = false"
     >
-      <form class="review-modal" role="dialog" aria-modal="true" @submit.prevent="submitReviewDecision">
+      <section
+        class="review-modal review-modal--confirm"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="no-repair-title"
+        aria-describedby="no-repair-description"
+      >
+        <div class="confirm-modal-icon" aria-hidden="true">!</div>
+        <div class="confirm-modal-content">
+          <h2 id="no-repair-title">보수 불필요로 판정할까요?</h2>
+          <p id="no-repair-description">
+            판정 후 사건은 확인 목록으로 이동합니다. 필요한 경우 확인 목록에서 판정을 수정할 수
+            있습니다.
+          </p>
+        </div>
+        <div class="review-modal-actions confirm-modal-actions">
+          <button
+            type="button"
+            class="krds-btn medium secondary"
+            @click="noRepairModalOpen = false"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            class="krds-btn medium filled primary"
+            :disabled="verdictSubmitting"
+            @click="submitNoRepair"
+          >
+            {{ verdictSubmitting ? '처리 중' : '보수 불필요로 판정' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div
+      v-if="resetVerdictModalOpen"
+      class="review-modal-backdrop"
+      @click.self="resetVerdictModalOpen = false"
+    >
+      <section
+        class="review-modal review-modal--confirm"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="reset-verdict-title"
+        aria-describedby="reset-verdict-description"
+      >
+        <div class="confirm-modal-icon" aria-hidden="true">!</div>
+        <div class="confirm-modal-content">
+          <h2 id="reset-verdict-title">판정을 되돌릴까요?</h2>
+          <p id="reset-verdict-description">
+            저장된 관리자 판정이 취소되고 사건은 미확인 목록으로 이동합니다.
+          </p>
+        </div>
+        <div class="review-modal-actions confirm-modal-actions">
+          <button
+            type="button"
+            class="krds-btn medium secondary"
+            @click="resetVerdictModalOpen = false"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            class="krds-btn medium filled primary"
+            :disabled="verdictSubmitting"
+            @click="submitResetVerdict"
+          >
+            {{ verdictSubmitting ? '처리 중' : '판정 되돌리기' }}
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="reviewModalOpen" class="review-modal-backdrop" @click.self="reviewModalOpen = false">
+      <form
+        class="review-modal"
+        role="dialog"
+        aria-modal="true"
+        @submit.prevent="submitReviewDecision"
+      >
         <div class="review-modal-head">
           <div>
             <p class="review-modal-eyebrow">관리자 판정</p>
             <h2>보수 필요 판정</h2>
           </div>
-          <button type="button" class="review-modal-close" aria-label="판정 모달 닫기" @click="reviewModalOpen = false">×</button>
+          <button
+            type="button"
+            class="review-modal-close"
+            aria-label="판정 모달 닫기"
+            @click="reviewModalOpen = false"
+          >
+            ×
+          </button>
         </div>
 
         <p class="review-modal-description">AI 판독값을 참고해 최종 판정 내용을 입력해 주세요.</p>
@@ -841,7 +913,11 @@ const loadedImages = computed(() =>
           <span>우선순위 <strong aria-hidden="true">*</strong></span>
           <select v-model="reviewPriority" class="krds-input" required>
             <option value="" disabled>우선순위 선택</option>
-            <option v-for="option in REVIEW_PRIORITY_OPTIONS" :key="option.value" :value="option.value">
+            <option
+              v-for="option in REVIEW_PRIORITY_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+            >
               {{ option.label }}
             </option>
           </select>
@@ -851,7 +927,11 @@ const loadedImages = computed(() =>
           <span>파손 유형 <strong aria-hidden="true">*</strong></span>
           <select v-model="reviewDamageType" class="krds-input" required>
             <option value="" disabled>파손 유형 선택</option>
-            <option v-for="option in REVIEW_DAMAGE_TYPE_OPTIONS" :key="option.value" :value="option.value">
+            <option
+              v-for="option in REVIEW_DAMAGE_TYPE_OPTIONS"
+              :key="option.value"
+              :value="option.value"
+            >
               {{ option.label }}
             </option>
           </select>
@@ -872,8 +952,14 @@ const loadedImages = computed(() =>
         <p v-if="reviewFormError" class="review-form-error" role="alert">{{ reviewFormError }}</p>
 
         <div class="review-modal-actions">
-          <button type="button" class="krds-btn medium outline" @click="reviewModalOpen = false">취소</button>
-          <button type="submit" class="krds-btn medium filled primary" :disabled="verdictSubmitting">
+          <button type="button" class="krds-btn medium secondary" @click="reviewModalOpen = false">
+            취소
+          </button>
+          <button
+            type="submit"
+            class="krds-btn medium filled primary"
+            :disabled="verdictSubmitting"
+          >
             {{ verdictSubmitting ? '저장 중' : '판정 저장' }}
           </button>
         </div>
@@ -1399,13 +1485,26 @@ const loadedImages = computed(() =>
 .request-create-btn {
   grid-column: 1 / -1;
   height: 44px;
-  border: 1px dashed var(--roady-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--roady-brand-secondary);
   border-radius: 10px;
-  background: var(--roady-surface-background);
-  color: var(--roady-text-tertiary);
+  background: var(--roady-surface-default);
+  color: var(--roady-brand-secondary);
   font-size: 14px;
   font-weight: var(--krds-font-weight-bold);
-  cursor: not-allowed;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.request-create-btn:hover {
+  background: var(--roady-brand-primary-subtle);
+}
+
+.request-create-btn:focus-visible {
+  outline: 0.3rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
 }
 
 .verdict-reset-btn {
@@ -1497,7 +1596,7 @@ const loadedImages = computed(() =>
 }
 
 /* 패널 자체 너비를 줄였을 때 AI 판독 항목을 행 형태로 전환한다. */
-@container (max-width: 430px) {
+@container (max-width: 560px) {
   .ai-card-body {
     display: flex;
     flex-direction: column;
@@ -1557,6 +1656,43 @@ const loadedImages = computed(() =>
   border-radius: 16px;
   background: var(--roady-surface-default);
   box-shadow: 0 20px 50px rgb(15 23 42 / 24%);
+}
+
+.review-modal--confirm {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  width: min(480px, 100%);
+}
+
+.confirm-modal-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--roady-status-warning) 15%, #fff);
+  color: var(--roady-status-warning);
+  font-size: 22px;
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.confirm-modal-content h2 {
+  margin: 0;
+  color: var(--roady-text-primary);
+  font-size: var(--krds-pc-font-size-heading-xsmall);
+}
+
+.confirm-modal-content p {
+  margin: 8px 0 0;
+  color: var(--roady-text-secondary);
+  font-size: var(--krds-pc-font-size-body-small);
+  line-height: 1.6;
+}
+
+.confirm-modal-actions {
+  grid-column: 1 / -1;
 }
 
 .review-modal-head {

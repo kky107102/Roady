@@ -10,6 +10,8 @@ export interface MapMarkerItem {
   title: string
   details?: MapMarkerDetail[]
   tone?: 'primary' | 'success' | 'warning' | 'danger' | 'neutral'
+  actionLabel?: string
+  actionHref?: string
 }
 
 export interface MapCoordinate {

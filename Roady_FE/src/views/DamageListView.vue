@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { LocationQueryRaw } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import type { DamageListQuery } from '@/api/damages'
 import {
@@ -112,9 +113,7 @@ function setConfirmedStatus(status: ConfirmedStatusFilter, checked: boolean) {
 const allConfirmedStatusesChecked = computed({
   get: () => isAllConfirmedStatusesSelected.value,
   set: (checked: boolean) => {
-    selectedConfirmedStatuses.value = checked
-      ? [...CONFIRMED_STATUS_FILTERS]
-      : []
+    selectedConfirmedStatuses.value = checked ? [...CONFIRMED_STATUS_FILTERS] : []
   },
 })
 const requestedStatusChecked = computed({
@@ -146,9 +145,7 @@ function confirmedStatusCategory(item: DamageListItem): ConfirmedStatusFilter | 
   if (item.currentStatus === 'REQUESTED') {
     return 'requested'
   }
-  if (
-    item.currentStatus === 'REPAIR_IN_PROGRESS'
-  ) {
+  if (item.currentStatus === 'REPAIR_IN_PROGRESS') {
     return 'in_progress'
   }
   if (item.currentStatus === 'REPAIR_COMPLETED') return 'completed'
@@ -161,15 +158,13 @@ const confirmedItems = computed(() =>
 
 const confirmedStatusCounts = computed(() => ({
   all: confirmedItems.value.length,
-  requested: confirmedItems.value.filter(
-    (item) => confirmedStatusCategory(item) === 'requested',
-  ).length,
+  requested: confirmedItems.value.filter((item) => confirmedStatusCategory(item) === 'requested')
+    .length,
   in_progress: confirmedItems.value.filter(
     (item) => confirmedStatusCategory(item) === 'in_progress',
   ).length,
-  completed: confirmedItems.value.filter(
-    (item) => confirmedStatusCategory(item) === 'completed',
-  ).length,
+  completed: confirmedItems.value.filter((item) => confirmedStatusCategory(item) === 'completed')
+    .length,
 }))
 
 const visibleItems = computed(() => {
@@ -211,9 +206,6 @@ async function loadDamages() {
     if (requestSeq !== listRequestSeq) return
 
     items.value = [firstPage, ...remainingResults].flatMap((result) => result.content)
-    if (selectedId.value != null && !items.value.some((item) => item.id === selectedId.value)) {
-      selectedId.value = null
-    }
   } catch {
     if (requestSeq !== listRequestSeq) return
     listError.value = '목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
@@ -225,7 +217,7 @@ async function loadDamages() {
 // ── URL 변경 → 폼 동기화 + 목록 초기 로드 ───────────────
 
 watch(
-  () => route.query,
+  () => [route.query.from, route.query.to, route.query.review],
   () => {
     syncFormFromUrl()
     loadDamages()
@@ -261,7 +253,13 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 
 // ── 선택된 사건 (상세 패널) ─────────────────────────────
 
-const selectedId = ref<number | null>(null)
+function parseDamageId(value: unknown): number | null {
+  const raw = Array.isArray(value) ? value[0] : value
+  const id = Number(raw)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+const selectedId = ref<number | null>(parseDamageId(route.query.damageId))
 const selectedItem = computed(
   () => items.value.find((item) => item.id === selectedId.value) ?? null,
 )
@@ -269,20 +267,35 @@ const selectedMapCenter = computed(() => toDamageMapCenter(selectedItem.value))
 const verdictSubmitting = ref(false)
 const detailRefreshKey = ref(0)
 
+function updateSelectedDamage(id: number | null) {
+  const query = { ...route.query }
+  if (id == null) delete query.damageId
+  else query.damageId = String(id)
+  router.replace({ path: route.path, query })
+}
+
 function selectItem(id: number) {
-  selectedId.value = id === selectedId.value ? null : id
+  updateSelectedDamage(id === selectedId.value ? null : id)
 }
 
 function closeDetail() {
   if (verdictSubmitting.value) return
-  selectedId.value = null
+  updateSelectedDamage(null)
 }
+
+watch(
+  () => route.query.damageId,
+  (value) => {
+    selectedId.value = parseDamageId(value)
+  },
+)
 
 async function submitVerdict(
   status: 'AI_ANALYZED' | 'REQUESTED' | 'CANCELED',
   decision: ReviewDecisionPayload | null = null,
+  overrideDamageId?: number,
 ) {
-  const damageId = selectedId.value
+  const damageId = overrideDamageId ?? selectedId.value
   if (damageId == null || verdictSubmitting.value) return
   const wasConfirmed = selectedItem.value ? isReviewConfirmed(selectedItem.value) : false
 
@@ -296,26 +309,37 @@ async function submitVerdict(
       isRepairRequired ? decision?.reviewDamageType : null,
       isRepairRequired ? decision?.reviewNote : null,
     )
+    const toRepairDetailAction = {
+      label: '요청서 작성 바로가기',
+      to: {
+        name: 'repair-detail',
+        params: { damageId: String(damageId) },
+        query: {
+          action: 'create-request',
+          backTo: router.resolve({
+            name: 'damages',
+            query: { review: 'confirmed', damageId: String(damageId) },
+          }).fullPath,
+        },
+      },
+    }
+    const revertAction = {
+      label: '판정 되돌리기',
+      onClick: () => submitVerdict('AI_ANALYZED', null, damageId),
+    }
+
     if (isRepairRequired) {
       notification.success(
         wasConfirmed
           ? '판정이 수정되었습니다.'
           : '보수 필요로 판정했습니다. 요청 전 목록에서 확인할 수 있습니다.',
         7000,
-        {
-          label: '요청서 작성 바로가기',
-          to: {
-            name: 'repairs',
-            query: { damageId: String(damageId), action: 'create-request' },
-          },
-        },
+        wasConfirmed ? [toRepairDetailAction] : [toRepairDetailAction, revertAction],
       )
+    } else if (status === 'CANCELED') {
+      notification.success('보수 불필요로 판정했습니다.', 7000, [revertAction])
     } else {
-      notification.success(
-        status === 'AI_ANALYZED'
-          ? '관리자 판정을 되돌렸습니다. 미확인 목록에서 다시 검토할 수 있습니다.'
-          : '보수 불필요로 판정했습니다.',
-      )
+      notification.success('관리자 판정을 되돌렸습니다. 미확인 목록에서 다시 검토할 수 있습니다.')
     }
     await loadDamages()
     if (status === 'REQUESTED' && wasConfirmed) {
@@ -331,7 +355,7 @@ async function submitVerdict(
       )
       detailRefreshKey.value += 1
     } else {
-      selectedId.value = null
+      updateSelectedDamage(null)
     }
   } catch {
     notification.error('판정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -342,13 +366,11 @@ async function submitVerdict(
 
 function selectReviewTab(tab: ReviewTab) {
   if (tab === reviewTab.value) return
-  selectedId.value = null
+  const query: LocationQueryRaw = { ...route.query, review: tab }
+  delete query.damageId
   router.push({
     path: route.path,
-    query: {
-      ...route.query,
-      review: tab,
-    },
+    query,
   })
 }
 
@@ -422,7 +444,7 @@ onBeforeUnmount(stopDetailResize)
       </div>
 
       <template #actions>
-        <button type="button" class="krds-btn small outline" @click="handleReset">초기화</button>
+        <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
         <button type="button" class="krds-btn small filled primary" @click="handleApply">
           조회
         </button>
@@ -585,6 +607,7 @@ onBeforeUnmount(stopDetailResize)
             :damage-id="selectedId"
             :refresh-key="detailRefreshKey"
             :summary="selectedItem"
+            :back-to="route.fullPath"
             :verdict-submitting="verdictSubmitting"
             @close="closeDetail"
             @verdict-no-repair="submitVerdict('CANCELED')"

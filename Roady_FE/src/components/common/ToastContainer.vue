@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notification'
-import type { Toast, ToastType } from '@/stores/notification'
+import type { Toast, ToastAction, ToastType } from '@/stores/notification'
 
 const store = useNotificationStore()
 const router = useRouter()
 
-async function runAction(toast: Toast) {
-  if (!toast.action) return
+async function runAction(toast: Toast, action: ToastAction) {
   store.removeToast(toast.id)
-  await router.push(toast.action.to)
+  if (action.onClick) {
+    await action.onClick()
+  } else if (action.to) {
+    await router.push(action.to)
+  }
 }
 
 const icons: Record<ToastType, string> = {
@@ -49,14 +52,17 @@ const icons: Record<ToastType, string> = {
           </svg>
           <div class="toast-content">
             <span class="toast-message">{{ toast.message }}</span>
-            <button
-              v-if="toast.action"
-              type="button"
-              class="toast-action"
-              @click="runAction(toast)"
-            >
-              {{ toast.action.label }}
-            </button>
+            <div v-if="toast.actions?.length" class="toast-actions">
+              <button
+                v-for="action in toast.actions"
+                :key="action.label"
+                type="button"
+                class="toast-action"
+                @click="runAction(toast, action)"
+              >
+                {{ action.label }}
+              </button>
+            </div>
           </div>
           <button
             type="button"
@@ -168,8 +174,14 @@ const icons: Record<ToastType, string> = {
   min-width: 0;
 }
 
-.toast-action {
+.toast-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
   margin-top: 0.6rem;
+}
+
+.toast-action {
   padding: 0;
   border: 0;
   border-bottom: 1px solid currentColor;

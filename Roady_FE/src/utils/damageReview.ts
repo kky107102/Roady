@@ -1,9 +1,14 @@
-import type { DamageListItem } from '@/types/damage'
+import type { DamageListItem, DamageStatus } from '@/types/damage'
 
 export type ReviewTab = 'pending' | 'confirmed'
 export type DamageSort = 'latest' | 'oldest' | 'priority'
 
-const REVIEW_READY_STATUSES = new Set(['AI_ANALYZED'])
+const REVIEW_CONFIRMED_STATUSES = new Set<DamageStatus>([
+  'REQUESTED',
+  'REPAIR_IN_PROGRESS',
+  'REPAIR_COMPLETED',
+  'CANCELED',
+])
 
 const PRIORITY_ORDER: Record<string, number> = {
   URGENT: 0,
@@ -18,7 +23,11 @@ export function isReviewVisible(item: DamageListItem): boolean {
 }
 
 export function isReviewConfirmed(item: DamageListItem): boolean {
-  return !REVIEW_READY_STATUSES.has(item.currentStatus)
+  return REVIEW_CONFIRMED_STATUSES.has(item.currentStatus)
+}
+
+export function reviewTabForDamage(item: DamageListItem): ReviewTab {
+  return isReviewConfirmed(item) ? 'confirmed' : 'pending'
 }
 
 export function defaultDamageSort(tab: ReviewTab): DamageSort {

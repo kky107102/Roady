@@ -17,9 +17,9 @@ import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vu
 import {
   buildRepairRequestText,
   formatCaseId,
-  formatRepairLocation,
   formatPriorityLabel,
   formatDamageTypeLabel,
+  priorityBadgeType,
 } from '@/utils/repairRequest'
 
 // ── 라우터 ──────────────────────────────────────────────────
@@ -112,14 +112,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
 const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
   REQUESTED: { label: '요청 전', type: 'warning' },
   REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
@@ -165,8 +157,7 @@ const currentStatusInfo = computed(() => {
 const priorityLabel = computed(() => formatPriorityLabel(detail.value?.processingPriority))
 
 const priorityType = computed<BadgeType>(() => {
-  const p = detail.value?.processingPriority
-  return p ? (PRIORITY_BADGE_TYPES[p] ?? 'neutral') : 'neutral'
+  return priorityBadgeType(detail.value?.processingPriority)
 })
 
 const damageTypeLabel = computed(() => formatDamageTypeLabel(detail.value?.reviewDamageType))
@@ -194,6 +185,7 @@ const requestModalMode = ref<'create' | 'view' | 'edit'>('create')
 const requestConfirmOpen = ref(false)
 const pendingRequest = ref<RepairRequestPayload | null>(null)
 const requestSubmitting = ref(false)
+const requestActionHandledFor = ref<number | null>(null)
 
 function openRequestModal(mode: 'create' | 'view' | 'edit') {
   requestModalMode.value = mode
@@ -205,10 +197,60 @@ function closeRequestModal() {
   requestModalOpen.value = false
 }
 
-function onRequestModalConfirm(payload: RepairRequestPayload) {
+watch(
+  [damageId, () => detail.value?.currentStatus, () => route.query.action],
+  ([id, status, action]) => {
+    if (
+      id != null &&
+      status === 'REQUESTED' &&
+      action === 'create-request' &&
+      requestActionHandledFor.value !== id
+    ) {
+      requestActionHandledFor.value = id
+      openRequestModal('create')
+    }
+  },
+  { immediate: true },
+)
+
+async function onRequestModalConfirm(payload: RepairRequestPayload) {
+  if (requestModalMode.value === 'edit') {
+    await saveRepairRequestEdit(payload)
+    return
+  }
   requestModalOpen.value = false
   pendingRequest.value = payload
   requestConfirmOpen.value = true
+}
+
+function cancelRequestEdit() {
+  if (requestSubmitting.value) return
+  requestModalMode.value = 'view'
+}
+
+async function saveRepairRequestEdit(payload: RepairRequestPayload) {
+  if (!detail.value || requestSubmitting.value) return
+  requestSubmitting.value = true
+  try {
+    const updated = await repairsApi.updateRequest(detail.value.id, payload)
+    const repairerName =
+      repairers.value.find((user) => user.id === payload.repairerId)?.name ?? null
+    detail.value = {
+      ...detail.value,
+      ...updated,
+      processingPriority: payload.processingPriority,
+      reviewDamageType: payload.reviewDamageType,
+      repairerId: payload.repairerId,
+      repairerName,
+      repairRequestNote: payload.note,
+    }
+    requestModalMode.value = 'view'
+    notification.success('보수 요청서가 수정되었습니다.')
+  } catch {
+    notification.error('보수 요청서 수정 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.')
+  } finally {
+    requestSubmitting.value = false
+  }
 }
 
 async function confirmRepairRequest() {
@@ -217,19 +259,7 @@ async function confirmRepairRequest() {
   try {
     const payload = pendingRequest.value
     if (!payload?.processingPriority || !payload.reviewDamageType) return
-    let updated
-    if (requestModalMode.value === 'edit') {
-      updated = await repairsApi.updateRequest(detail.value.id, payload)
-    } else {
-      await damagesApi.updateReview(
-        detail.value.id,
-        'REQUESTED',
-        payload.processingPriority,
-        payload.reviewDamageType,
-        detail.value.reviewNote,
-      )
-      updated = await repairsApi.submitRequest(detail.value.id, payload)
-    }
+    const updated = await repairsApi.submitRequest(detail.value.id, payload)
     const repairerName =
       repairers.value.find((user) => user.id === payload.repairerId)?.name ?? null
     detail.value = {
@@ -541,47 +571,10 @@ onUnmounted(() => {
                   </button>
                   <button
                     type="button"
-                    class="krds-btn medium outline action-btn cancel-btn"
+                    class="krds-btn medium secondary action-btn cancel-btn"
                     @click="noRepairConfirmOpen = true"
                   >
                     보수 불필요 처리
-                  </button>
-                  <button
-                    type="button"
-                    class="krds-btn medium outline action-btn"
-                    :aria-label="
-                      copyState === 'success' ? '복사 완료' : '요청 정보 클립보드에 복사'
-                    "
-                    @click="copyRequestInfo"
-                  >
-                    <svg
-                      v-if="copyState !== 'success'"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      aria-hidden="true"
-                    >
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-                    <svg
-                      v-else
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      aria-hidden="true"
-                    >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    {{ copyState === 'success' ? '복사 완료' : '요청 정보 복사' }}
                   </button>
                 </div>
               </div>
@@ -603,7 +596,7 @@ onUnmounted(() => {
                 <div class="action-btn-group">
                   <button
                     type="button"
-                    class="krds-btn medium outline action-btn"
+                    class="krds-btn medium secondary action-btn"
                     @click="openRequestModal('view')"
                   >
                     요청서 확인
@@ -612,14 +605,7 @@ onUnmounted(() => {
                 <div class="action-btn-group action-btn-group--secondary">
                   <button
                     type="button"
-                    class="krds-btn small outline action-btn"
-                    @click="openRequestModal('edit')"
-                  >
-                    요청서 내용 수정
-                  </button>
-                  <button
-                    type="button"
-                    class="krds-btn small outline action-btn cancel-btn"
+                    class="krds-btn small secondary action-btn cancel-btn"
                     @click="cancelConfirmOpen = true"
                   >
                     요청 취소
@@ -668,14 +654,14 @@ onUnmounted(() => {
                 <div class="action-btn-group">
                   <button
                     type="button"
-                    class="krds-btn medium outline action-btn"
+                    class="krds-btn medium secondary action-btn"
                     @click="openRequestModal('view')"
                   >
                     요청서 확인
                   </button>
                   <button
                     type="button"
-                    class="krds-btn medium outline action-btn"
+                    class="krds-btn medium secondary action-btn"
                     @click="openCompletionModal(true)"
                   >
                     완료 보고서 확인
@@ -700,6 +686,7 @@ onUnmounted(() => {
     <!-- 요청서 상세 모달 -->
     <RepairRequestModal
       v-if="requestModalOpen && detail"
+      :key="requestModalMode"
       :detail="detail"
       :image-blob-urls="imageBlobUrls"
       :images-loading="imagesLoading"
@@ -708,8 +695,13 @@ onUnmounted(() => {
       :submitting="requestSubmitting"
       :official-name="officialName"
       :repairers="repairers"
+      :copy-state="copyState"
+      :editable="detail.currentStatus === 'REPAIR_IN_PROGRESS'"
       @close="closeRequestModal"
+      @cancel-edit="cancelRequestEdit"
       @confirm="onRequestModalConfirm"
+      @copy="copyRequestInfo"
+      @edit="openRequestModal('edit')"
     />
 
     <!-- 보수 요청 2차 확인 다이얼로그 -->
@@ -723,17 +715,11 @@ onUnmounted(() => {
         @click.self="!requestSubmitting && (requestConfirmOpen = false)"
       >
         <div class="confirm-panel">
-          <p class="confirm-message">
-            {{
-              requestModalMode === 'edit'
-                ? '보수 요청서를 수정하시겠습니까?'
-                : '해당 사건을 보수 요청 처리하시겠습니까?'
-            }}
-          </p>
+          <p class="confirm-message">해당 사건을 보수 요청 처리하시겠습니까?</p>
           <div class="confirm-actions">
             <button
               type="button"
-              class="krds-btn medium outline"
+              class="krds-btn medium secondary"
               :disabled="requestSubmitting"
               @click="requestConfirmOpen = false"
             >
@@ -746,7 +732,7 @@ onUnmounted(() => {
               :aria-busy="requestSubmitting"
               @click="confirmRepairRequest"
             >
-              {{ requestSubmitting ? '처리 중...' : '확인' }}
+              {{ requestSubmitting ? '처리 중...' : '요청 전송' }}
             </button>
           </div>
         </div>
@@ -768,7 +754,7 @@ onUnmounted(() => {
           <div class="confirm-actions">
             <button
               type="button"
-              class="krds-btn medium outline"
+              class="krds-btn medium secondary"
               :disabled="noRepairSubmitting"
               @click="noRepairConfirmOpen = false"
             >
@@ -803,7 +789,7 @@ onUnmounted(() => {
           <div class="confirm-actions">
             <button
               type="button"
-              class="krds-btn medium outline"
+              class="krds-btn medium secondary"
               :disabled="cancelSubmitting"
               @click="cancelConfirmOpen = false"
             >

@@ -205,7 +205,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           <template v-else-if="step === 'input'">
             <button
               type="button"
-              class="krds-btn medium outline"
+              class="krds-btn medium secondary"
               :disabled="submitting"
               @click="emit('close')"
             >
@@ -223,7 +223,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
           <template v-else>
             <button
               type="button"
-              class="krds-btn medium outline"
+              class="krds-btn medium secondary"
               :disabled="submitting"
               @click="handleBack"
             >
