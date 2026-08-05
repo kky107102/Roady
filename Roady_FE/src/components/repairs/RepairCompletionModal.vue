@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { RepairCompletePayload } from '@/types/repair'
 import type { DamageImage } from '@/types/damage'
 import { useDialogFocus } from '@/composables/useDialogFocus'
@@ -54,7 +54,11 @@ const completionNote = ref(props.note ?? '')
 const dateError = ref('')
 const modalRef = ref<HTMLElement | null>(null)
 
-useDialogFocus(modalRef)
+useDialogFocus(modalRef, true, {
+  onEscape: () => {
+    if (!props.submitting) emit('close')
+  },
+})
 
 const todayStr = computed(localToday)
 
@@ -100,12 +104,6 @@ function handleBack() {
   step.value = 'input'
 }
 
-// ── 키보드 닫기 ────────────────────────────────────────────────
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && !props.submitting) emit('close')
-}
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>

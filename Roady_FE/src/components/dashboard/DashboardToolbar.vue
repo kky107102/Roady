@@ -3,7 +3,7 @@ import { ref, watch } from 'vue'
 import type { DashboardFilter } from '@/stores/dashboard'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
-import { localDateOffset, todayLocalStr } from '@/utils/localDate'
+import { dateRangeForPreset, matchingDateRangePreset } from '@/utils/localDate'
 
 interface Props {
   modelValue: DashboardFilter
@@ -13,23 +13,14 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{ 'update:modelValue': [DashboardFilter]; apply: [DashboardFilter] }>()
 
-function matchingPreset(value: DashboardFilter): number | null {
-  const to = todayLocalStr()
-  if (value.to !== to) return null
-  if (value.from === localDateOffset(0)) return 0
-  if (value.from === localDateOffset(6)) return 1
-  if (value.from === localDateOffset(29)) return 2
-  return null
-}
-
 const local = ref<DashboardFilter>({ ...props.modelValue })
-const localPreset = ref<number | null>(matchingPreset(props.modelValue))
+const localPreset = ref<number | null>(matchingDateRangePreset(props.modelValue.from, props.modelValue.to))
 
 watch(
   () => props.modelValue,
   (val) => {
     local.value = { ...val }
-    localPreset.value = matchingPreset(val)
+    localPreset.value = matchingDateRangePreset(val.from, val.to)
   },
 )
 
@@ -74,7 +65,7 @@ function handleApply() {
 }
 
 function handleReset() {
-  local.value = { from: localDateOffset(6), to: todayLocalStr(), regionCode: '' }
+  local.value = { ...dateRangeForPreset(1), regionCode: '' }
   localPreset.value = 1
   emit('update:modelValue', { ...local.value })
   emit('apply', { ...local.value })
@@ -85,6 +76,7 @@ function handleReset() {
   <PageFilterToolbar
     aria-label="대시보드 조회 조건"
     :class="{ 'dashboard-toolbar--compact': compact }"
+    @submit="handleApply"
   >
     <DateRangeFilter
       :from="local.from"
@@ -107,7 +99,7 @@ function handleReset() {
 
     <template #actions>
       <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-      <button type="button" class="krds-btn small filled primary apply-btn" @click="handleApply">
+      <button type="submit" class="krds-btn small filled primary apply-btn">
         조회
       </button>
     </template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { DamageDetail, DamageImage } from '@/types/damage'
 import type { UserSummary } from '@/types/auth'
 import type { RepairRequestPayload } from '@/types/repair'
@@ -12,6 +12,7 @@ import {
   formatRepairLocation,
   formatPriorityLabel,
   formatDamageTypeLabel,
+  priorityBadgeType,
 } from '@/utils/repairRequest'
 
 const props = withDefaults(
@@ -56,7 +57,11 @@ const repairerId = ref<number | null>(props.detail.repairerId ?? null)
 const formError = ref('')
 const modalRef = ref<HTMLElement | null>(null)
 
-useDialogFocus(modalRef)
+useDialogFocus(modalRef, true, {
+  onEscape: () => {
+    if (!props.submitting) emit('close')
+  },
+})
 
 const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: '긴급' },
@@ -77,16 +82,7 @@ const DAMAGE_TYPE_OPTIONS = [
 const caseId = computed(() => formatCaseId(props.detail.id, props.detail.createdAt))
 const location = computed(() => formatRepairLocation(props.detail))
 const priorityLabel = computed(() => formatPriorityLabel(priority.value))
-const priorityType = computed<BadgeType>(() => {
-  const map: Record<string, BadgeType> = {
-    URGENT: 'danger',
-    HIGH: 'warning',
-    NORMAL: 'info',
-    MEDIUM: 'info',
-    LOW: 'neutral',
-  }
-  return priority.value ? (map[priority.value] ?? 'neutral') : 'neutral'
-})
+const priorityType = computed<BadgeType>(() => priorityBadgeType(priority.value))
 const damageTypeLabel = computed(() => formatDamageTypeLabel(damageType.value))
 const repairerName = computed(() => {
   if (props.detail.repairerName) return props.detail.repairerName
@@ -122,13 +118,6 @@ function downloadImage(img: DamageImage) {
   a.click()
   document.body.removeChild(a)
 }
-
-// ── 키보드 닫기 ────────────────────────────────────────────────
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
-}
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 // ── 제출 ──────────────────────────────────────────────────────
 function handleConfirm() {
@@ -371,46 +360,52 @@ function handleConfirm() {
 
         <!-- 푸터 -->
         <div class="modal-footer">
-          <button
-            type="button"
-            class="krds-btn medium secondary modal-dismiss-btn"
-            :disabled="submitting"
-            @click="editing ? emit('cancelEdit') : emit('close')"
-          >
-            {{ readonly ? '닫기' : '취소' }}
-          </button>
-          <button
-            v-if="readonly"
-            type="button"
-            class="krds-btn medium filled primary"
-            :aria-label="copyState === 'success' ? '복사 완료' : '최종 요청 정보 클립보드에 복사'"
-            @click="emit('copy')"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+          <template v-if="readonly">
+            <button
+              type="button"
+              class="krds-btn medium secondary"
+              :aria-label="copyState === 'success' ? '복사 완료' : '최종 요청 정보 클립보드에 복사'"
+              @click="emit('copy')"
             >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            {{ copyState === 'success' ? '복사 완료' : '요청 복사' }}
-          </button>
-          <button
-            v-if="!readonly"
-            type="button"
-            class="krds-btn medium filled primary"
-            :disabled="submitting"
-            @click="handleConfirm"
-          >
-            {{ editing ? '저장' : '보수 요청하기' }}
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {{ copyState === 'success' ? '복사 완료' : '요청 복사' }}
+            </button>
+            <button type="button" class="krds-btn medium filled primary" @click="emit('close')">
+              확인
+            </button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="krds-btn medium secondary"
+              :disabled="submitting"
+              @click="editing ? emit('cancelEdit') : emit('close')"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              class="krds-btn medium filled primary"
+              :disabled="submitting"
+              :aria-busy="submitting"
+              @click="handleConfirm"
+            >
+              {{ submitting ? '처리 중...' : editing ? '저장' : '보수 요청하기' }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -688,18 +683,6 @@ function handleConfirm() {
   padding: 1.6rem 2.4rem;
   border-top: 1px solid var(--roady-border-default);
   flex-shrink: 0;
-}
-
-.modal-dismiss-btn {
-  background: var(--roady-surface-default);
-  border-color: var(--roady-border-default);
-  color: var(--roady-status-danger, #e74c3c);
-}
-
-.modal-dismiss-btn:hover:not(:disabled) {
-  background: rgba(231, 76, 60, 0.06);
-  border-color: var(--roady-status-danger, #e74c3c);
-  color: var(--roady-status-danger, #e74c3c);
 }
 
 /* ── 접근성 ── */

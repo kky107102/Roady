@@ -8,7 +8,12 @@ import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 import KrdsCheckbox from '@/components/common/KrdsCheckbox.vue'
 import RepairTable from '@/components/repairs/RepairTable.vue'
-import { toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
+import {
+  dateRangeForPreset,
+  matchingDateRangePreset,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
 import {
   repairStatusCategory,
   sortRepairItems,
@@ -16,6 +21,7 @@ import {
   statusesToParam,
   parseSortParam,
   REPAIR_STATUS_FILTERS,
+  REPAIR_FILTER_LABELS,
   REPAIR_SORT_OPTIONS,
 } from '@/utils/repairManagement'
 import type { RepairStatusFilter, RepairSort } from '@/utils/repairManagement'
@@ -25,8 +31,9 @@ const route = useRoute()
 const router = useRouter()
 
 // ── URL → 적용 필터 (단일 진실 소스) ──────────────────────
-const appliedFrom = computed(() => String(route.query.from || ''))
-const appliedTo = computed(() => String(route.query.to || ''))
+const defaultDateRange = dateRangeForPreset(1)
+const appliedFrom = computed(() => String(route.query.from || defaultDateRange.from))
+const appliedTo = computed(() => String(route.query.to || defaultDateRange.to))
 
 function normalizeQueryValue(v: unknown): string | string[] | undefined {
   if (v == null) return undefined
@@ -42,12 +49,15 @@ const activeSort = computed(() => parseSortParam(normalizeQueryValue(route.query
 const formFrom = ref(appliedFrom.value)
 const formTo = ref(appliedTo.value)
 const formError = ref('')
-const activePreset = ref<number | null>(null)
+const activePreset = ref<number | null>(
+  matchingDateRangePreset(appliedFrom.value, appliedTo.value),
+)
 
 watch([appliedFrom, appliedTo], ([from, to]) => {
   formFrom.value = from
   formTo.value = to
   formError.value = ''
+  activePreset.value = matchingDateRangePreset(from, to)
 })
 
 // ── 데이터 ─────────────────────────────────────────────────
@@ -195,11 +205,12 @@ function handleSearch() {
 }
 
 function handleReset() {
-  formFrom.value = ''
-  formTo.value = ''
-  activePreset.value = null
+  const range = dateRangeForPreset(1)
+  formFrom.value = range.from
+  formTo.value = range.to
+  activePreset.value = 1
   formError.value = ''
-  router.push({ query: buildQuery({ from: undefined, to: undefined }) })
+  router.push({ query: buildQuery(range) })
 }
 
 function handlePresetApply({ from, to }: { from: string; to: string }) {
@@ -212,7 +223,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 <template>
   <div class="repair-view">
     <!-- 상단 날짜 필터 툴바 -->
-    <PageFilterToolbar aria-label="보수 사건 조회 조건">
+    <PageFilterToolbar aria-label="보수 사건 조회 조건" @submit="handleSearch">
       <DateRangeFilter
         :from="formFrom"
         :to="formTo"
@@ -225,7 +236,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
       />
       <template #actions>
         <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-        <button type="button" class="krds-btn small filled primary" @click="handleSearch">
+        <button type="submit" class="krds-btn small filled primary">
           조회
         </button>
       </template>
@@ -246,23 +257,23 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
           <KrdsCheckbox
             id="repair-filter-requested"
             v-model="requestedChecked"
-            :label="`요청 전 (${statusCounts.requested}건)`"
+            :label="`${REPAIR_FILTER_LABELS.requested} (${statusCounts.requested}건)`"
           />
           <KrdsCheckbox
             id="repair-filter-in-progress"
             v-model="inProgressChecked"
-            :label="`요청 완료 (${statusCounts.in_progress}건)`"
+            :label="`${REPAIR_FILTER_LABELS.in_progress} (${statusCounts.in_progress}건)`"
           />
           <KrdsCheckbox
             id="repair-filter-completed"
             v-model="completedChecked"
-            :label="`보수 완료 (${statusCounts.completed}건)`"
+            :label="`${REPAIR_FILTER_LABELS.completed} (${statusCounts.completed}건)`"
           />
         </fieldset>
 
         <!-- 정렬 드롭다운 -->
         <select
-          class="sort-select"
+          class="roady-compact-select sort-select"
           :value="activeSort"
           aria-label="보수 사건 정렬"
           @change="handleSortChange"
@@ -341,20 +352,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
 .sort-select {
   margin-left: auto;
   width: 14rem;
-  height: 3.6rem;
-  padding: 0 3.2rem 0 1.2rem;
-  border: 1px solid var(--roady-border-default);
-  border-radius: 0.6rem;
-  background-color: var(--roady-surface-default);
-  color: var(--roady-text-secondary);
-  font-size: 1.3rem;
-  cursor: pointer;
   flex-shrink: 0;
-}
-
-.sort-select:focus-visible {
-  outline: 2px solid var(--roady-focus-ring);
-  outline-offset: 2px;
 }
 
 /* ── 테이블 영역 ── */

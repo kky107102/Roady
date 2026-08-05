@@ -1,7 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { todayLocalStr, localDateOffset, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
+import {
+  dateRangeForPreset,
+  localDateOffset,
+  matchingDateRangePreset,
+  todayLocalStr,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
 
 describe('localDate', () => {
+  it('공통 기본 기간인 최근 7일을 같은 프리셋으로 판별한다', () => {
+    const range = dateRangeForPreset(1)
+    expect(matchingDateRangePreset(range.from, range.to)).toBe(1)
+  })
+
   describe('todayLocalStr', () => {
     it('YYYY-MM-DD 형식을 반환한다', () => {
       expect(todayLocalStr()).toMatch(/^\d{4}-\d{2}-\d{2}$/)

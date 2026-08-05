@@ -23,6 +23,25 @@ export function localDateOffset(offsetDays: number): string {
   return localYMD(d)
 }
 
+export const DATE_RANGE_PRESETS = [
+  { label: '오늘', offset: 0 },
+  { label: '7일', offset: 6 },
+  { label: '30일', offset: 29 },
+] as const
+
+export const DEFAULT_DATE_RANGE_PRESET = 1
+
+export function dateRangeForPreset(index: number): { from: string; to: string } {
+  const preset = DATE_RANGE_PRESETS[index] ?? DATE_RANGE_PRESETS[DEFAULT_DATE_RANGE_PRESET]
+  return { from: localDateOffset(preset.offset), to: todayLocalStr() }
+}
+
+export function matchingDateRangePreset(from: string, to: string): number | null {
+  if (!from || !to || to !== todayLocalStr()) return null
+  const index = DATE_RANGE_PRESETS.findIndex((preset) => from === localDateOffset(preset.offset))
+  return index >= 0 ? index : null
+}
+
 /**
  * UI 시작일(YYYY-MM-DD)을 백엔드 API 날짜시간 문자열로 변환.
  * 백엔드 조건이 from <= createdAt 이므로 해당 날 자정을 그대로 사용한다.

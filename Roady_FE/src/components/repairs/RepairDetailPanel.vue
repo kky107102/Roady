@@ -2,10 +2,16 @@
 import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { damagesApi } from '@/api/damages'
 import type { DamageDetail, DamageImage, DamageListItem } from '@/types/damage'
-import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import {
+  formatCaseId,
+  formatDamageTypeLabel,
+  formatPriorityLabel,
+  priorityBadgeType,
+} from '@/utils/repairRequest'
+import { repairStatusInfo } from '@/utils/repairManagement'
 
 const props = withDefaults(
   defineProps<{
@@ -101,43 +107,6 @@ onUnmounted(() => {
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
 
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
-const DAMAGE_TYPE_LABELS: Record<string, string> = {
-  LARGE_MISSING: '큰 결손',
-  SMALL_MISSING: '작은 결손',
-  MISSING: '큰 결손',
-  WEAR: '마모',
-  BREAKAGE: '작은 결손',
-  CRACK: '균열',
-  OTHER: '기타',
-}
-
-const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
-  REQUESTED: { label: '요청 전', type: 'warning' },
-  REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
-  REPAIR_COMPLETED: { label: '보수 완료', type: 'success' },
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
-}
-
 function formatDateTime(str: string | null): string {
   if (!str) return '-'
   const d = new Date(str)
@@ -166,33 +135,21 @@ function formatLocation(damage: DamageDetail): string {
 const currentStatusInfo = computed(() => {
   const status = detail.value?.currentStatus
   if (!status) return null
-  return REPAIR_STATUS_MAP[status] ?? { label: status, type: 'neutral' as BadgeType }
+  return repairStatusInfo(status)
 })
 
 const processingPriority = computed(
   () => detail.value?.processingPriority ?? props.summary?.processingPriority ?? null,
 )
 
-const priorityLabel = computed(() => {
-  const p = processingPriority.value
-  if (!p) return '미지정'
-  return PRIORITY_LABELS[p] ?? p
-})
-
-const priorityType = computed<BadgeType>(() => {
-  const p = processingPriority.value
-  return p ? (PRIORITY_BADGE_TYPES[p] ?? 'neutral') : 'neutral'
-})
+const priorityLabel = computed(() => formatPriorityLabel(processingPriority.value, '미지정'))
+const priorityType = computed(() => priorityBadgeType(processingPriority.value))
 
 const reviewDamageType = computed(
   () => detail.value?.reviewDamageType ?? props.summary?.reviewDamageType ?? null,
 )
 
-const damageTypeLabel = computed(() => {
-  const t = reviewDamageType.value
-  if (!t) return '-'
-  return DAMAGE_TYPE_LABELS[t] ?? t
-})
+const damageTypeLabel = computed(() => formatDamageTypeLabel(reviewDamageType.value))
 
 const reviewNote = computed(
   () => detail.value?.reviewNote ?? props.summary?.reviewNote ?? null,

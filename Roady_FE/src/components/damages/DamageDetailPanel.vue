@@ -26,6 +26,7 @@ import {
   formatPriorityLabel,
   priorityBadgeType,
 } from '@/utils/repairRequest'
+import { repairStatusInfo } from '@/utils/repairManagement'
 
 const props = withDefaults(
   defineProps<{
@@ -282,10 +283,10 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   COLLECTED: '수집완료',
   AI_ANALYZING: 'AI 분석중',
   AI_ANALYZED: 'AI 분석완료',
-  REQUESTED: '요청 전',
-  REPAIR_IN_PROGRESS: '요청 완료',
+  REQUESTED: repairStatusInfo('REQUESTED').label,
+  REPAIR_IN_PROGRESS: repairStatusInfo('REPAIR_IN_PROGRESS').label,
   CANCELED: '취소',
-  REPAIR_COMPLETED: '보수 완료',
+  REPAIR_COMPLETED: repairStatusInfo('REPAIR_COMPLETED').label,
 }
 
 function formatDateTime(str: string | null): string {

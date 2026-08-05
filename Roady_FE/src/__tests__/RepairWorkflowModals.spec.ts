@@ -128,7 +128,7 @@ describe('RepairRequestModal', () => {
     const copyButton = wrapper.findAll('button').find((button) => button.text() === '요청 복사')
     expect(copyButton).toBeDefined()
     expect(copyButton!.find('svg').exists()).toBe(true)
-    expect(copyButton!.classes()).toContain('primary')
+    expect(copyButton!.classes()).toContain('secondary')
     await copyButton!.trigger('click')
 
     expect(wrapper.emitted('copy')).toHaveLength(1)
@@ -153,9 +153,9 @@ describe('RepairRequestModal', () => {
     const headerButtons = wrapper.find('.modal-header-actions').findAll('button')
     expect(headerButtons[0]!.text()).toBe('수정하기')
     expect(headerButtons[1]!.attributes('aria-label')).toBe('닫기')
-    expect(wrapper.find('.modal-footer').text()).toContain('닫기')
+    expect(wrapper.find('.modal-footer').text()).toContain('확인')
     expect(wrapper.find('.modal-footer').text()).toContain('요청 복사')
-    expect(wrapper.find('.modal-footer .modal-dismiss-btn').text()).toBe('닫기')
+    expect(wrapper.find('.modal-footer .primary').text()).toBe('확인')
   })
 
   it('수정 모드의 하단 버튼을 취소와 저장으로 구성한다', async () => {
@@ -170,7 +170,7 @@ describe('RepairRequestModal', () => {
 
     const footerButtons = wrapper.find('.modal-footer').findAll('button')
     expect(footerButtons.map((button) => button.text())).toEqual(['취소', '저장'])
-    expect(footerButtons[0]!.classes()).toContain('modal-dismiss-btn')
+    expect(footerButtons[0]!.classes()).toContain('secondary')
     expect(footerButtons[1]!.classes()).toContain('primary')
     await footerButtons[0]!.trigger('click')
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { todayLocalStr, localDateOffset } from '@/utils/localDate'
+import { DATE_RANGE_PRESETS, dateRangeForPreset } from '@/utils/localDate'
 
-const props = defineProps<{
+defineProps<{
   from: string
   to: string
   error?: string
@@ -15,23 +15,8 @@ const emit = defineEmits<{
   'preset-apply': [{ from: string; to: string }]
 }>()
 
-const PRESETS = [
-  { label: '오늘', offset: 0 },
-  { label: '7일', offset: 6 },
-  { label: '30일', offset: 29 },
-]
-
-function setPreset(offset: number, idx: number) {
-  if (props.activePreset === idx) {
-    emit('update:activePreset', null)
-    emit('update:from', '')
-    emit('update:to', '')
-    emit('preset-apply', { from: '', to: '' })
-    return
-  }
-
-  const fromStr = localDateOffset(offset)
-  const toStr = todayLocalStr()
+function setPreset(idx: number) {
+  const { from: fromStr, to: toStr } = dateRangeForPreset(idx)
   emit('update:activePreset', idx)
   emit('update:from', fromStr)
   emit('update:to', toStr)
@@ -56,13 +41,13 @@ function onToInput(e: Event) {
 
       <div class="preset-group" role="group" aria-label="기간 프리셋">
         <button
-          v-for="(p, idx) in PRESETS"
+          v-for="(p, idx) in DATE_RANGE_PRESETS"
           :key="p.label"
           type="button"
           class="preset-btn"
           :class="{ 'is-active': activePreset === idx }"
           :aria-pressed="activePreset === idx"
-          @click="setPreset(p.offset, idx)"
+          @click="setPreset(idx)"
         >{{ p.label }}</button>
       </div>
 
@@ -173,5 +158,30 @@ function onToInput(e: Event) {
   margin: 0;
   font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-status-danger);
+}
+
+@media (max-width: 48rem) {
+  .date-range-filter,
+  .date-range-filter__row {
+    width: 100%;
+  }
+
+  .date-range-filter__row {
+    flex-wrap: wrap;
+  }
+
+  .toolbar-label {
+    flex-basis: 100%;
+  }
+
+  .date-range {
+    width: 100%;
+  }
+
+  .date-input {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
 }
 </style>

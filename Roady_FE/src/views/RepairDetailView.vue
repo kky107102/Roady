@@ -22,6 +22,7 @@ import {
   formatDamageTypeLabel,
   priorityBadgeType,
 } from '@/utils/repairRequest'
+import { repairStatusInfo } from '@/utils/repairManagement'
 
 // ── 라우터 ──────────────────────────────────────────────────
 const route = useRoute()
@@ -113,13 +114,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
-  REQUESTED: { label: '요청 전', type: 'warning' },
-  REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
-  REPAIR_COMPLETED: { label: '보수 완료', type: 'success' },
-  CANCELED: { label: '취소', type: 'neutral' },
-}
-
 function formatDateTime(str: string | null | undefined): string {
   if (!str) return '-'
   const d = new Date(str)
@@ -152,7 +146,7 @@ function formatLocation(d: DamageDetail): string {
 const currentStatusInfo = computed(() => {
   const status = detail.value?.currentStatus
   if (!status) return null
-  return REPAIR_STATUS_MAP[status] ?? { label: status, type: 'neutral' as BadgeType }
+  return repairStatusInfo(status)
 })
 
 const priorityLabel = computed(() => formatPriorityLabel(detail.value?.processingPriority))

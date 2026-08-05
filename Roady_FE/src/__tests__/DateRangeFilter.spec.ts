@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 
 describe('DateRangeFilter', () => {
-  it('선택된 기간 프리셋을 다시 누르면 선택과 날짜 범위를 해제한다', async () => {
+  it('선택된 기간 프리셋을 다시 눌러도 같은 기간을 유지한다', async () => {
     const wrapper = mount(DateRangeFilter, {
       props: {
         from: '2026-07-28',
@@ -15,10 +15,9 @@ describe('DateRangeFilter', () => {
     const presetButtons = wrapper.findAll('.preset-btn')
     await presetButtons[1]!.trigger('click')
 
-    expect(wrapper.emitted('update:activePreset')).toEqual([[null]])
-    expect(wrapper.emitted('update:from')).toEqual([['']])
-    expect(wrapper.emitted('update:to')).toEqual([['']])
-    expect(wrapper.emitted('preset-apply')).toEqual([[{ from: '', to: '' }]])
+    expect(wrapper.emitted('update:activePreset')).toEqual([[1]])
+    expect(wrapper.emitted('update:from')?.[0]?.[0]).not.toBe('')
+    expect(wrapper.emitted('update:to')?.[0]?.[0]).not.toBe('')
   })
 
   it('다른 기간 프리셋을 누르면 해당 기간으로 변경한다', async () => {

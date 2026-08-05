@@ -2,12 +2,12 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import type { DamageListItem } from '@/types/damage'
-import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import RepairStatusBadge from './RepairStatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { formatCaseId, formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
 
 const props = defineProps<{
   items: DamageListItem[]
@@ -21,27 +21,6 @@ const emit = defineEmits<{ retry: [] }>()
 
 const route = useRoute()
 
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
-}
-
 function formatDateTime(str: string | null | undefined): string {
   if (!str) return '-'
   const d = new Date(str)
@@ -54,16 +33,6 @@ function formatDateTime(str: string | null | undefined): string {
     minute: '2-digit',
     hour12: false,
   }).format(d)
-}
-
-function priorityLabel(priority: string | null | undefined): string {
-  if (!priority) return '미지정'
-  return PRIORITY_LABELS[priority] ?? priority
-}
-
-function priorityType(priority: string | null | undefined): BadgeType {
-  if (!priority) return 'neutral'
-  return PRIORITY_BADGE_TYPES[priority] ?? 'neutral'
 }
 
 function detailLinkTo(item: DamageListItem) {
@@ -124,8 +93,8 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
         <tr v-else v-for="item in items" :key="item.id" class="data-row">
           <td class="col-priority">
             <StatusBadge
-              :type="priorityType(item.processingPriority)"
-              :label="priorityLabel(item.processingPriority)"
+              :type="priorityBadgeType(item.processingPriority)"
+              :label="formatPriorityLabel(item.processingPriority, '미지정')"
             />
           </td>
           <td class="col-case-id">

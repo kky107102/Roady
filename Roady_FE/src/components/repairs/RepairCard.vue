@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { DamageListItem } from '@/types/damage'
-import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import DamageThumbnail from '@/components/damages/DamageThumbnail.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
+import {
+  formatCaseId,
+  formatPriorityLabel,
+  priorityBadgeType,
+} from '@/utils/repairRequest'
+import { repairStatusInfo } from '@/utils/repairManagement'
 
 const props = defineProps<{
   item: DamageListItem
@@ -12,50 +17,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{ select: [id: number] }>()
 
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
-}
-
-const priorityLabel = computed(() => {
-  const p = props.item.processingPriority
-  if (!p) return '미지정'
-  return PRIORITY_LABELS[p] ?? p
-})
-
-const priorityType = computed<BadgeType>(() => {
-  const p = props.item.processingPriority
-  return p ? (PRIORITY_BADGE_TYPES[p] ?? 'neutral') : 'neutral'
-})
-
-const repairStatus = computed<{ label: string; type: BadgeType }>(() => {
-  switch (props.item.currentStatus) {
-    case 'REQUESTED':
-      return { label: '요청 전', type: 'warning' }
-    case 'REPAIR_IN_PROGRESS':
-      return { label: '요청 완료', type: 'info' }
-    case 'REPAIR_COMPLETED':
-      return { label: '보수 완료', type: 'success' }
-    default:
-      return { label: props.item.currentStatus, type: 'neutral' }
-  }
-})
+const priorityLabel = computed(() => formatPriorityLabel(props.item.processingPriority, '미지정'))
+const priorityType = computed(() => priorityBadgeType(props.item.processingPriority))
+const repairStatus = computed(() => repairStatusInfo(props.item.currentStatus))
 </script>
 
 <template>

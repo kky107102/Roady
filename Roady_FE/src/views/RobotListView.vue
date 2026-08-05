@@ -272,10 +272,15 @@ onMounted(fetchRobots)
         autocomplete="off"
       />
       <div class="toolbar-actions">
-        <button type="submit" class="search-button">검색</button>
-        <button type="button" class="filter-reset" :disabled="!canReset" @click="resetFilters">
+        <button
+          type="button"
+          class="krds-btn medium secondary filter-reset"
+          :disabled="!canReset"
+          @click="resetFilters"
+        >
           필터 초기화
         </button>
+        <button type="submit" class="krds-btn medium filled primary search-button">검색</button>
       </div>
     </form>
 
@@ -539,41 +544,15 @@ onMounted(fetchRobots)
 
 .search-button,
 .filter-reset {
-  height: 4.8rem;
   min-width: 0;
-  padding: 0 1rem;
-  border-radius: 0.6rem;
-  font-size: var(--krds-pc-font-size-body-small);
-  font-weight: var(--krds-font-weight-bold);
-  cursor: pointer;
 }
 
 .search-button {
   flex: 0 0 6.4rem;
-  border: 1px solid var(--roady-brand-primary);
-  color: var(--roady-surface-default);
-  background: var(--roady-brand-primary);
-}
-
-.search-button:hover {
-  background: var(--roady-brand-primary-hover);
 }
 
 .filter-reset {
   flex: 1 1 9.6rem;
-  border: 1px solid var(--roady-border-default);
-  color: var(--roady-text-secondary);
-  background: var(--roady-surface-default);
-}
-
-.filter-reset:hover:not(:disabled) {
-  border-color: var(--roady-brand-secondary);
-  color: var(--roady-brand-secondary);
-}
-
-.filter-reset:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 
 .table-scroll {

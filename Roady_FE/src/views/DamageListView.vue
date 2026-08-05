@@ -5,8 +5,8 @@ import type { LocationQueryRaw } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import type { DamageListQuery } from '@/api/damages'
 import {
-  todayLocalStr,
-  localDateOffset,
+  dateRangeForPreset,
+  matchingDateRangePreset,
   toApiFromDateTime,
   toApiToDateTime,
 } from '@/utils/localDate'
@@ -34,6 +34,7 @@ import {
   sortReviewDamages,
 } from '@/utils/damageReview'
 import type { DamageSort, ReviewTab } from '@/utils/damageReview'
+import { REPAIR_FILTER_LABELS } from '@/utils/repairManagement'
 
 // ── 상수 ──────────────────────────────────────────────────
 
@@ -54,8 +55,9 @@ const mapRegion = useAssignedMapRegion()
 
 // ── 적용된 필터 (URL = 단일 진실 소스) ────────────────────
 
-const appliedFrom = computed(() => String(route.query.from || ''))
-const appliedTo = computed(() => String(route.query.to || ''))
+const defaultDateRange = dateRangeForPreset(1)
+const appliedFrom = computed(() => String(route.query.from || defaultDateRange.from))
+const appliedTo = computed(() => String(route.query.to || defaultDateRange.to))
 const reviewTab = computed<ReviewTab>(() =>
   route.query.review === 'confirmed' ? 'confirmed' : 'pending',
 )
@@ -74,24 +76,11 @@ const formTo = ref('')
 const formError = ref('')
 const activePreset = ref<number | null>(null)
 
-// 프리셋의 날짜 오프셋 (DateRangeFilter의 PRESETS와 동일한 순서)
-const PRESET_OFFSETS = [0, 6, 29]
-
-function computeActivePreset(from: string, to: string): number | null {
-  if (!from || !to) return null
-  if (to !== todayLocalStr()) return null
-  for (let i = 0; i < PRESET_OFFSETS.length; i++) {
-    const offset = PRESET_OFFSETS[i] ?? 0
-    if (from === localDateOffset(offset)) return i
-  }
-  return null
-}
-
 function syncFormFromUrl() {
   formFrom.value = appliedFrom.value
   formTo.value = appliedTo.value
   formError.value = ''
-  activePreset.value = computeActivePreset(appliedFrom.value, appliedTo.value)
+  activePreset.value = matchingDateRangePreset(appliedFrom.value, appliedTo.value)
 }
 
 // ── 목록 데이터 ─────────────────────────────────────────────
@@ -143,9 +132,9 @@ const confirmedFilterTags = computed(() => {
   if (isAllConfirmedStatusesSelected.value) return ['전체']
   if (selectedConfirmedStatuses.value.length === 0) return ['선택 없음']
   const labels: Record<ConfirmedStatusFilter, string> = {
-    requested: '요청 전',
-    in_progress: '요청 완료',
-    completed: '보수 완료',
+    requested: REPAIR_FILTER_LABELS.requested,
+    in_progress: REPAIR_FILTER_LABELS.in_progress,
+    completed: REPAIR_FILTER_LABELS.completed,
   }
   return CONFIRMED_STATUS_FILTERS.filter((status) =>
     selectedConfirmedStatuses.value.includes(status),
@@ -303,11 +292,17 @@ function handleApply() {
 }
 
 function handleReset() {
-  activePreset.value = null
+  const range = dateRangeForPreset(1)
+  formFrom.value = range.from
+  formTo.value = range.to
+  activePreset.value = 1
+  formError.value = ''
   router.push({
     name: 'damages',
     query: {
       review: reviewTab.value,
+      from: range.from,
+      to: range.to,
       ...(mapRegion.selectedCode.value ? { emd: mapRegion.selectedCode.value } : {}),
     },
   })
@@ -488,7 +483,7 @@ onBeforeUnmount(stopDetailResize)
 <template>
   <div class="damage-view">
     <!-- 상단 툴바 -->
-    <PageFilterToolbar aria-label="탐지 사건 조회 조건">
+    <PageFilterToolbar aria-label="탐지 사건 조회 조건" @submit="handleApply">
       <DateRangeFilter
         :from="formFrom"
         :to="formTo"
@@ -513,7 +508,7 @@ onBeforeUnmount(stopDetailResize)
 
       <template #actions>
         <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-        <button type="button" class="krds-btn small filled primary" @click="handleApply">
+        <button type="submit" class="krds-btn small filled primary">
           조회
         </button>
       </template>
@@ -531,7 +526,7 @@ onBeforeUnmount(stopDetailResize)
               >건
             </p>
           </div>
-          <select v-model="sortOrder" class="list-sort-select" aria-label="탐지 사건 정렬">
+          <select v-model="sortOrder" class="roady-compact-select list-sort-select" aria-label="탐지 사건 정렬">
             <option v-for="option in SORT_OPTIONS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
@@ -585,17 +580,17 @@ onBeforeUnmount(stopDetailResize)
             <KrdsCheckbox
               id="confirmed-filter-requested"
               v-model="requestedStatusChecked"
-              :label="`요청 전 (${confirmedStatusCounts.requested}건)`"
+              :label="`${REPAIR_FILTER_LABELS.requested} (${confirmedStatusCounts.requested}건)`"
             />
             <KrdsCheckbox
               id="confirmed-filter-in-progress"
               v-model="inProgressStatusChecked"
-              :label="`요청 완료 (${confirmedStatusCounts.in_progress}건)`"
+              :label="`${REPAIR_FILTER_LABELS.in_progress} (${confirmedStatusCounts.in_progress}건)`"
             />
             <KrdsCheckbox
               id="confirmed-filter-completed"
               v-model="completedStatusChecked"
-              :label="`보수 완료 (${confirmedStatusCounts.completed}건)`"
+              :label="`${REPAIR_FILTER_LABELS.completed} (${confirmedStatusCounts.completed}건)`"
             />
           </fieldset>
         </details>
@@ -746,19 +741,6 @@ onBeforeUnmount(stopDetailResize)
 
 .list-sort-select {
   width: 12rem;
-  height: 3.6rem;
-  padding: 0 3.2rem 0 1.2rem;
-  border: 1px solid var(--roady-border-default);
-  border-radius: 0.6rem;
-  background-color: var(--roady-surface-default);
-  color: var(--roady-text-secondary);
-  font-size: 1.3rem;
-  cursor: pointer;
-}
-
-.list-sort-select:focus-visible {
-  outline: 2px solid var(--roady-focus-ring);
-  outline-offset: 2px;
 }
 
 .review-tabs {
