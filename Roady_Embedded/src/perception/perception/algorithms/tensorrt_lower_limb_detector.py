@@ -154,7 +154,13 @@ class TensorRTLowerLimbDetector:
         self._output_name = outputs[0]
         self._input_shape = tuple(self._engine.get_tensor_shape(self._input_name))
         self._output_shape = tuple(self._engine.get_tensor_shape(self._output_name))
-        if self._input_shape != (1, 3, 640, 640):
+        if (
+            len(self._input_shape) != 4
+            or self._input_shape[0] != 1
+            or self._input_shape[1] != 3
+            or self._input_shape[2] <= 0
+            or self._input_shape[3] <= 0
+        ):
             raise RuntimeError(f"Unsupported engine input shape: {self._input_shape}")
 
         self._input_dtype = np.dtype(trt.nptype(self._engine.get_tensor_dtype(self._input_name)))
@@ -207,13 +213,13 @@ class TensorRTLowerLimbDetector:
 
     def _preprocess(self, image: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         height, width = image.shape[:2]
-        target = self._input_shape[-1]
-        scale = min(target / width, target / height)
+        target_height, target_width = self._input_shape[-2:]
+        scale = min(target_width / width, target_height / height)
         resized_width = round(width * scale)
         resized_height = round(height * scale)
         resized = cv2.resize(image, (resized_width, resized_height), interpolation=cv2.INTER_LINEAR)
-        pad_x = (target - resized_width) / 2.0
-        pad_y = (target - resized_height) / 2.0
+        pad_x = (target_width - resized_width) / 2.0
+        pad_y = (target_height - resized_height) / 2.0
         left = round(pad_x - 0.1)
         right = round(pad_x + 0.1)
         top = round(pad_y - 0.1)
@@ -235,7 +241,19 @@ class TensorRTLowerLimbDetector:
         pad_x: float,
         pad_y: float,
     ) -> list[TensorRTDetection]:
-        predictions = output[0].T
+        if output.ndim == 3 and output.shape[-1] == 6:
+            return self._postprocess_end_to_end(
+                output[0], image_width, image_height, scale, pad_x, pad_y
+            )
+
+        predictions = output[0]
+        expected_channels = 4 + len(self._class_names)
+        if predictions.ndim != 2:
+            raise RuntimeError(f"Unsupported detector output shape: {output.shape}")
+        if predictions.shape[0] == expected_channels:
+            predictions = predictions.T
+        elif predictions.shape[1] != expected_channels:
+            raise RuntimeError(f"Unsupported detector output shape: {output.shape}")
         class_scores = predictions[:, 4:]
         class_ids = np.argmax(class_scores, axis=1)
         confidences = class_scores[np.arange(len(predictions)), class_ids]
@@ -274,6 +292,40 @@ class TensorRTLowerLimbDetector:
                     class_id=class_id,
                     label=self._class_names[class_id],
                     confidence=float(confidences[index]),
+                    xyxy=xyxy,
+                )
+            )
+        return detections
+
+    def _postprocess_end_to_end(
+        self,
+        predictions: np.ndarray,
+        image_width: int,
+        image_height: int,
+        scale: float,
+        pad_x: float,
+        pad_y: float,
+    ) -> list[TensorRTDetection]:
+        """Decode YOLO26's default NMS-free ``xyxy, score, class`` output."""
+        selected = predictions[:, 4] >= self._confidence
+        predictions = predictions[selected]
+        detections: list[TensorRTDetection] = []
+        for prediction in predictions:
+            class_id = int(prediction[5])
+            if class_id < 0 or class_id >= len(self._class_names):
+                continue
+            x1, y1, x2, y2 = prediction[:4]
+            xyxy = (
+                float(np.clip((x1 - pad_x) / scale, 0, image_width - 1)),
+                float(np.clip((y1 - pad_y) / scale, 0, image_height - 1)),
+                float(np.clip((x2 - pad_x) / scale, 0, image_width - 1)),
+                float(np.clip((y2 - pad_y) / scale, 0, image_height - 1)),
+            )
+            detections.append(
+                TensorRTDetection(
+                    class_id=class_id,
+                    label=self._class_names[class_id],
+                    confidence=float(prediction[4]),
                     xyxy=xyxy,
                 )
             )
