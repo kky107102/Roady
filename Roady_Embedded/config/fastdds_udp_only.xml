@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <transport_descriptor>
+      <transport_id>roady_udp_v4</transport_id>
+      <type>UDPv4</type>
+    </transport_descriptor>
+  </transport_descriptors>
+
+  <!--
+    GPIO nodes run as root for Jetson PADCTL access while the other ROS nodes
+    run as the ssafy user. Disable shared-memory transport so both users use
+    the same UDPv4 DDS transport.
+  -->
+  <participant profile_name="roady_udp_only" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>roady_udp_v4</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+    </rtps>
+  </participant>
+</profiles>
