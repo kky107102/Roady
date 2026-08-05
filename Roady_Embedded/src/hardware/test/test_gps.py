@@ -1,7 +1,7 @@
 import pytest
 
 from hardware.devices.gps import parse_nmea
-from hardware.devices.location_estimator import LocationEstimator, offset_longitude
+from hardware.devices.location_estimator import LocationEstimator
 from hardware.devices.wheel_odometry import WheelOdometry
 
 
@@ -44,27 +44,27 @@ def test_location_uses_hall_distance_from_virtual_origin():
     assert location.longitude > 127.0
 
 
-def test_indoor_virtual_map_scales_physical_wheel_distance_only_for_display():
+def test_indoor_virtual_map_offsets_are_proportional_to_physical_distance():
     estimator = LocationEstimator(
-        37.5012748,
-        127.039625,
-        wheel_distance_scale=24.0368829327,
+        37.5013961,
+        127.0394712,
+        latitude_offset_per_meter=-0.00003 / 0.367,
+        longitude_offset_per_meter=-0.0001 / 0.367,
     )
     estimator.update_distance(0.367)
 
     location = estimator.location()
-    expected = offset_longitude(37.5012748, 127.039625, 8.821536036299)
-
-    assert location.latitude == expected[0]
-    assert location.longitude == pytest.approx(expected[1])
+    assert location.latitude == pytest.approx(37.5013661)
+    assert location.longitude == pytest.approx(127.0393712)
 
 
-def test_one_hall_pulse_becomes_one_demo_longitude_step():
+def test_one_hall_pulse_becomes_requested_latitude_and_longitude_steps():
     odometry = WheelOdometry(distance_per_pulse_m=0.367)
     estimator = LocationEstimator(
-        37.5012748,
-        127.039625,
-        wheel_distance_scale=24.0368829327,
+        37.5013961,
+        127.0394712,
+        latitude_offset_per_meter=-0.00003 / 0.367,
+        longitude_offset_per_meter=-0.0001 / 0.367,
     )
 
     wheel = odometry.record_pulse()
@@ -72,8 +72,28 @@ def test_one_hall_pulse_becomes_one_demo_longitude_step():
     location = estimator.location()
 
     assert wheel.distance_m == pytest.approx(0.367)
-    assert location.latitude == pytest.approx(37.5012748)
-    assert location.longitude == pytest.approx(127.039725, abs=1e-10)
+    assert location.latitude == pytest.approx(37.5013661, abs=1e-10)
+    assert location.longitude == pytest.approx(127.0393712, abs=1e-10)
+
+
+def test_hall_counter_reset_does_not_move_location_back_to_origin():
+    estimator = LocationEstimator(
+        37.5013961,
+        127.0394712,
+        latitude_offset_per_meter=-0.00003 / 0.367,
+        longitude_offset_per_meter=-0.0001 / 0.367,
+    )
+    estimator.update_distance(0.367)
+    after_first_pulse = estimator.location()
+
+    estimator.update_distance(0.0)
+    after_counter_reset = estimator.location()
+    estimator.update_distance(0.367)
+    after_next_pulse = estimator.location()
+
+    assert after_counter_reset == after_first_pulse
+    assert after_next_pulse.latitude == pytest.approx(37.5013361, abs=1e-10)
+    assert after_next_pulse.longitude == pytest.approx(127.0392712, abs=1e-10)
 
 
 class FakeClock:

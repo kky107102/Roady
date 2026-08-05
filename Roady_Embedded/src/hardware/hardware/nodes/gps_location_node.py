@@ -31,11 +31,12 @@ class GpsLocationNode(Node):
         self.declare_parameter("location_mode", "indoor")
         self.declare_parameter("port", "/dev/ttyTHS1")
         self.declare_parameter("baudrate", 115200)
-        self.declare_parameter("virtual_latitude", 37.5012748)
-        self.declare_parameter("virtual_longitude", 127.039625)
-        # 0.367 physical m/pulse * 24.03688 = 8.821536 virtual m/pulse,
-        # which keeps consecutive demo markers visible on the server map.
-        self.declare_parameter("virtual_map_scale", 24.0368829327)
+        self.declare_parameter("virtual_latitude", 37.5013961)
+        self.declare_parameter("virtual_longitude", 127.0394712)
+        # Preserve the measured 0.367 m/pulse and convert cumulative distance
+        # proportionally to the requested demo-map coordinate offsets.
+        self.declare_parameter("latitude_offset_per_meter", -0.00003 / 0.367)
+        self.declare_parameter("longitude_offset_per_meter", -0.0001 / 0.367)
         self.declare_parameter("gps_timeout_sec", 3.0)
         self.declare_parameter("publish_hz", 5.0)
 
@@ -43,7 +44,6 @@ class GpsLocationNode(Node):
         if self._location_mode not in {"indoor", "outdoor"}:
             raise ValueError("location_mode must be 'indoor' or 'outdoor'")
         use_gps = self._location_mode == "outdoor"
-        virtual_map_scale = float(self.get_parameter("virtual_map_scale").value)
         publish_hz = float(self.get_parameter("publish_hz").value)
         if publish_hz <= 0.0:
             raise ValueError("publish_hz must be positive")
@@ -53,7 +53,14 @@ class GpsLocationNode(Node):
             float(self.get_parameter("virtual_longitude").value),
             use_gps=use_gps,
             gps_timeout_sec=float(self.get_parameter("gps_timeout_sec").value),
-            wheel_distance_scale=virtual_map_scale if not use_gps else 1.0,
+            latitude_offset_per_meter=(
+                float(self.get_parameter("latitude_offset_per_meter").value)
+                if not use_gps else 0.0
+            ),
+            longitude_offset_per_meter=(
+                float(self.get_parameter("longitude_offset_per_meter").value)
+                if not use_gps else None
+            ),
         )
         self._receiver = None
         if use_gps:
@@ -83,7 +90,7 @@ class GpsLocationNode(Node):
         self.get_logger().info(
             f"Location ready: mode={self._location_mode}, "
             f"GPS={'enabled' if use_gps else 'disabled'}, "
-            f"map_scale={virtual_map_scale if not use_gps else 1.0:.3f}"
+            "wheel offset=distance-proportional"
         )
 
     def _read_gps(self) -> None:

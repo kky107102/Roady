@@ -27,6 +27,8 @@ class LocationEstimator:
         use_gps: bool = False,
         gps_timeout_sec: float = 3.0,
         wheel_distance_scale: float = 1.0,
+        latitude_offset_per_meter: float = 0.0,
+        longitude_offset_per_meter: Optional[float] = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not -90.0 < virtual_latitude < 90.0:
@@ -41,8 +43,11 @@ class LocationEstimator:
         self._use_gps = use_gps
         self._gps_timeout_sec = gps_timeout_sec
         self._wheel_distance_scale = wheel_distance_scale
+        self._latitude_offset_per_meter = latitude_offset_per_meter
+        self._longitude_offset_per_meter = longitude_offset_per_meter
         self._clock = clock
         self._distance_m = 0.0
+        self._last_raw_distance_m: Optional[float] = None
         self._gps_location: Optional[tuple[float, float]] = None
         self._gps_time: Optional[float] = None
         self._gps_distance_m = 0.0
@@ -50,7 +55,13 @@ class LocationEstimator:
     def update_distance(self, distance_m: float) -> None:
         if not math.isfinite(distance_m) or distance_m < 0.0:
             raise ValueError("distance_m must be a finite non-negative value")
-        self._distance_m = distance_m
+        if self._last_raw_distance_m is None:
+            self._distance_m += distance_m
+        elif distance_m >= self._last_raw_distance_m:
+            self._distance_m += distance_m - self._last_raw_distance_m
+        # A lower value means the Hall node restarted and reset its counter.
+        # Keep the accumulated travel so the reported location never jumps back.
+        self._last_raw_distance_m = distance_m
 
     def update_gps(self, latitude: float, longitude: float) -> None:
         if not self._use_gps:
@@ -77,11 +88,13 @@ class LocationEstimator:
             self._gps_distance_m if self._gps_location is not None else 0.0
         )
         distance_offset = physical_distance_offset * self._wheel_distance_scale
-        latitude, longitude = offset_longitude(
-            origin[0],
-            origin[1],
-            distance_offset,
-        )
+        if self._longitude_offset_per_meter is None:
+            latitude, longitude = offset_longitude(
+                origin[0], origin[1], distance_offset
+            )
+        else:
+            latitude = origin[0] + distance_offset * self._latitude_offset_per_meter
+            longitude = origin[1] + distance_offset * self._longitude_offset_per_meter
         return EstimatedLocation(latitude, longitude, source="wheel")
 
 
