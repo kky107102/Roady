@@ -1,3 +1,5 @@
+import os
+
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
@@ -26,6 +28,23 @@ def generate_launch_description():
                 name="gps_location",
                 output="screen",
                 parameters=[{"location_mode": location_mode}],
+            ),
+            Node(
+                package="communication",
+                executable="telemetry_node",
+                name="telemetry_node",
+                output="screen",
+                additional_env={
+                    "PYTHONPATH": os.pathsep.join(
+                        filter(
+                            None,
+                            [
+                                os.environ.get("PYTHONPATH", ""),
+                                "/home/ssafy/.local/lib/python3.10/site-packages",
+                            ],
+                        )
+                    )
+                },
             ),
         ]
     )

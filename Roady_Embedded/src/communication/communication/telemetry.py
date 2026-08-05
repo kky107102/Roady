@@ -10,27 +10,26 @@ class MockTelemetry:
 
     def __init__(
         self,
-        latitude: float,
-        longitude: float,
-        longitude_step: float = 0.0001,
-        battery_level: int = 80,
+        latitude: float = 37.5013961,
+        longitude: float = 127.0394712,
+        latitude_step: float = -0.00003,
+        longitude_step: float = -0.0001,
     ) -> None:
-        if not 0 <= battery_level <= 100:
-            raise ValueError("battery_level must be between 0 and 100")
         self._latitude = latitude
         self._longitude = longitude
+        self._latitude_step = latitude_step
         self._longitude_step = longitude_step
-        self._battery_level = battery_level
         self._sample_number = 0
 
     def next_payload(self) -> dict[str, Any]:
+        latitude = self._latitude + self._latitude_step * self._sample_number
         longitude = self._longitude + self._longitude_step * self._sample_number
         self._sample_number += 1
 
         return {
-            "latitude": self._latitude,
+            "latitude": round(latitude, 7),
             "longitude": round(longitude, 7),
-            "batteryLevel": self._battery_level,
+            "batteryLevel": 90,
             "operationStatus": "MOVING",
             "connectionStatus": "CONNECTED",
             "errorCode": None,
@@ -46,5 +45,6 @@ class MockTelemetry:
             raise ValueError("longitude must be between -180 and 180")
         self._latitude = latitude
         self._longitude = longitude
+        self._latitude_step = 0.0
         self._longitude_step = 0.0
         self._sample_number = 0
