@@ -65,7 +65,7 @@ class DamageEventPipeline:
     def __init__(
         self,
         detector: Detector,
-        classifier: Classifier | None = None,
+        classifier: Classifier,
         detection_threshold: float = 0.15,
         classification_threshold: float = 0.275,
         confirm_count: int = 3,
@@ -154,8 +154,6 @@ class DamageEventPipeline:
         frame: np.ndarray,
         detections: list[DamageDetection],
     ) -> list[DamageEvidence]:
-        if self.classifier is None:
-            return []
         items: list[DamageEvidence] = []
         for detection in detections:
             if detection.label != "tactile_block":

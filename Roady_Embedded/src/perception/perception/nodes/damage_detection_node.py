@@ -25,15 +25,13 @@ class DamageDetectionNode(Node):
         self.declare_parameter("storage_dir", "data/damage_events")
         self.declare_parameter(
             "detect_model_path",
-            "../ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt",
+            "../ROADY_AI/models/edge/tactile_damage_candidate_yolo11n_best.pt",
         )
         self.declare_parameter(
             "classify_model_path",
             "../ROADY_AI/models/edge/damage_presence_yolo11n_cls_best.pt",
         )
         self.declare_parameter("inference_device", "0")
-        self.declare_parameter("image_size", 768)
-        self.declare_parameter("use_damage_classifier", False)
         self.declare_parameter("detection_threshold", 0.15)
         self.declare_parameter("classification_threshold", 0.275)
         self.declare_parameter("confirm_count", 3)
@@ -53,17 +51,11 @@ class DamageDetectionNode(Node):
         self._detector = DamageDetector(
             model_path=str(self.get_parameter("detect_model_path").value),
             confidence=float(self.get_parameter("detection_threshold").value),
-            image_size=int(self.get_parameter("image_size").value),
             device=device,
         )
-        use_classifier = bool(self.get_parameter("use_damage_classifier").value)
-        self._classifier = (
-            DamageClassifier(
-                model_path=str(self.get_parameter("classify_model_path").value),
-                device=device,
-            )
-            if use_classifier
-            else None
+        self._classifier = DamageClassifier(
+            model_path=str(self.get_parameter("classify_model_path").value),
+            device=device,
         )
         self._pipeline = DamageEventPipeline(
             detector=self._detector,
@@ -95,9 +87,7 @@ class DamageDetectionNode(Node):
         )
         self._event_publisher = self.create_publisher(String, event_topic, 10)
         self.get_logger().info(
-            f"Damage detection subscribed to {image_topic}; events stored in {storage_dir}; "
-            f"mode={'detect+classifier' if use_classifier else 'YOLO26n detect only'}; "
-            f"image_size={int(self.get_parameter('image_size').value)}"
+            f"Damage detection subscribed to {image_topic}; events stored in {storage_dir}"
         )
 
     def _on_image(self, msg: Image) -> None:
@@ -165,8 +155,7 @@ class DamageDetectionNode(Node):
         )
 
     def destroy_node(self):
-        if self._classifier is not None:
-            self._classifier.close()
+        self._classifier.close()
         self._detector.close()
         return super().destroy_node()
 

@@ -17,24 +17,6 @@ def detection(label, confidence, xyxy):
     )
 
 
-def test_detector_only_mode_does_not_require_classifier():
-    frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    detector = MockDamageDetector(
-        [detection("damage_candidate", 0.8, (100, 100, 200, 200))]
-    )
-    pipeline = DamageEventPipeline(
-        detector=detector,
-        classifier=None,
-        confirm_count=1,
-    )
-
-    assert pipeline.process(frame, timestamp=0.0) == []
-    ready = pipeline.flush(timestamp=0.1)
-
-    assert len(ready) == 1
-    assert ready[0].best_score == 0.8
-
-
 def test_overlapping_tiles_cover_final_edges():
     roi = np.zeros((400, 700, 3), dtype=np.uint8)
 
