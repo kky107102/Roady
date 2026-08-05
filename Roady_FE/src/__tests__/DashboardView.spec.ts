@@ -4,17 +4,22 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 const dashboardStore = vi.hoisted(() => ({
   filter: {},
+  trendFilter: {},
   damages: [] as unknown[],
-  timeSeries: [],
+  timeSeries: { unit: 'DAY', items: [] },
   loading: false,
   error: null,
+  trendLoading: false,
+  trendError: null,
   totalCount: 0,
   highSeverityCount: 0,
   reviewRequiredCount: 0,
   repairingCount: 0,
   activeRobotCount: 0,
   fetchAll: vi.fn(),
+  fetchTrend: vi.fn(),
   applyFilter: vi.fn(),
+  applyTrendFilter: vi.fn(),
 }))
 
 vi.mock('@/stores/dashboard', () => ({ useDashboardStore: () => dashboardStore }))
@@ -56,6 +61,8 @@ describe('DashboardView', () => {
         },
       },
     })
+
+    expect(wrapper.text()).toContain('선택한 기간에 탐지된 사건이 없습니다.')
 
     await wrapper.get('[data-testid="map-marker"]').trigger('click')
     await flushPromises()

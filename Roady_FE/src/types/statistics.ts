@@ -10,8 +10,6 @@ export interface StatQuery {
 export interface TimeSeriesItem {
   period: string
   totalCount: number
-  /** 고위험 탐지 수 - API 확장 시 추가될 예정 */
-  highSeverityCount?: number
   repairCompletedCount: number
   repairCompletionRate: number
 }
@@ -21,20 +19,14 @@ export interface TimeSeriesResponse {
   items: TimeSeriesItem[]
 }
 
-export interface StatusStatItem {
-  status: string
-  count: number
-}
-
 export interface StatusStatResponse {
-  items: StatusStatItem[]
+  totalCount: number
+  counts: Record<string, number>
 }
 
-export interface SeverityStatItem {
-  severity: string
-  count: number
-}
-
-export interface SeverityStatResponse {
-  items: SeverityStatItem[]
+export interface RepairPriorityStatResponse {
+  totalCount: number
+  classifiedCount: number
+  unclassifiedCount: number
+  counts: Record<string, number>
 }

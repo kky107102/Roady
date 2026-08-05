@@ -14,6 +14,10 @@ import { reviewTabForDamage } from '@/utils/damageReview'
 const store = useDashboardStore()
 const router = useRouter()
 
+const hasTrendData = computed(() =>
+  store.timeSeries.items.some((item) => item.totalCount > 0),
+)
+
 function damageDetailQuery(id: string | number) {
   const damage = store.damages.find((item) => String(item.id) === String(id))
   return {
@@ -254,12 +258,46 @@ onUnmounted(() => {
               <div>
                 <h2 class="section-title">탐지 추이 분석</h2>
                 <p class="section-subtitle">
-                  지난 7일간 일별 탐지 건수
-                  <span class="mock-badge" aria-label="임시 데이터">임시 데이터</span>
+                  선택한 기간의 탐지 및 보수 완료 건수
                 </p>
               </div>
             </div>
-            <TrendChart :data="store.timeSeries" />
+            <DashboardToolbar
+              v-model="store.trendFilter"
+              compact
+              @apply="store.applyTrendFilter"
+            />
+            <div v-if="store.trendError" class="chart-error" role="alert">
+              <span>{{ store.trendError }}</span>
+              <button type="button" class="error-banner__retry" @click="store.fetchTrend">
+                다시 시도
+              </button>
+            </div>
+            <div
+              v-if="!store.trendError"
+              class="trend-chart-wrap"
+              :aria-busy="store.trendLoading"
+            >
+              <LoadingSpinner v-if="store.trendLoading" label="탐지 추이 데이터를 불러오는 중" />
+              <div v-else-if="!hasTrendData" class="trend-empty" role="status">
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 3v18h18" />
+                  <path d="m7 16 4-4 3 3 5-6" />
+                </svg>
+                <p>선택한 기간에 탐지된 사건이 없습니다.</p>
+              </div>
+              <TrendChart v-else :data="store.timeSeries" />
+            </div>
           </section>
 
           <!-- 긴급 확인 필요 사건 (별도 작업) -->
@@ -382,6 +420,44 @@ onUnmounted(() => {
   border-radius: 0.8rem;
   background: var(--roady-surface-default);
   min-width: 0;
+}
+
+.trend-chart-wrap {
+  min-height: 24rem;
+  display: grid;
+  place-items: center;
+}
+
+.trend-chart-wrap :deep(.trend-chart) {
+  width: 100%;
+}
+
+.trend-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+  color: var(--roady-text-tertiary);
+  text-align: center;
+}
+
+.trend-empty p {
+  margin: 0;
+  font-size: var(--krds-pc-font-size-body-small);
+}
+
+.chart-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 1.2rem;
+  border: 1px solid var(--roady-status-danger);
+  border-radius: 0.6rem;
+  color: var(--roady-status-danger);
+  background: color-mix(in srgb, var(--roady-status-danger) 8%, transparent);
+  font-size: var(--krds-pc-font-size-body-small);
 }
 
 .section-header {
