@@ -4,7 +4,7 @@ from communication.telemetry import MockTelemetry
 
 
 def test_mock_telemetry_matches_server_contract():
-    payload = MockTelemetry(37.5012748, 127.039625).next_payload()
+    payload = MockTelemetry().next_payload()
 
     assert set(payload) == {
         "latitude",
@@ -33,17 +33,17 @@ def test_mock_telemetry_matches_server_contract():
     datetime.fromisoformat(payload["recordedAt"])
 
 
-def test_longitude_increases_and_latitude_stays_fixed():
-    mock = MockTelemetry(37.5012748, 127.039625)
+def test_each_payload_changes_both_coordinates_and_keeps_battery_at_90():
+    mock = MockTelemetry()
 
     first = mock.next_payload()
     second = mock.next_payload()
 
-    assert first["latitude"] == second["latitude"] == 37.5012748
-    assert first["longitude"] == 127.039625
-    assert second["longitude"] == 127.039725
-    assert first["batteryLevel"] == 80
-    assert second["batteryLevel"] == 80
+    assert first["latitude"] == 37.5013961
+    assert first["longitude"] == 127.0394712
+    assert second["latitude"] == 37.5013661
+    assert second["longitude"] == 127.0393712
+    assert first["batteryLevel"] == second["batteryLevel"] == 90
 
 
 def test_live_location_replaces_mock_movement():

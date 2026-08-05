@@ -19,9 +19,8 @@ class TelemetryNode(Node):
         self.declare_parameter("mqtt_username", "")
         self.declare_parameter("mqtt_password", "")
         self.declare_parameter("publish_interval_sec", 5.0)
-        self.declare_parameter("battery_level", 80)
-        self.declare_parameter("mock_latitude", 37.5012748)
-        self.declare_parameter("mock_longitude", 127.039625)
+        self.declare_parameter("mock_latitude", 37.5013961)
+        self.declare_parameter("mock_longitude", 127.0394712)
 
         robot_id = int(self.get_parameter("robot_id").value)
         if robot_id <= 0:
@@ -38,10 +37,10 @@ class TelemetryNode(Node):
         self._mock = MockTelemetry(
             latitude=latitude,
             longitude=longitude,
-            # Location changes must come from /location/fix, whose wheel-based
-            # offset is updated only by Hall-sensor pulses.
+            # MQTT publishes the latest location as-is. Only Hall-distance
+            # updates received through /location/fix may move the coordinate.
+            latitude_step=0.0,
             longitude_step=0.0,
-            battery_level=int(self.get_parameter("battery_level").value),
         )
         username = str(self.get_parameter("mqtt_username").value)
         password = str(self.get_parameter("mqtt_password").value)
