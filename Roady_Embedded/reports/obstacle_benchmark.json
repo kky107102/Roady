@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "label": "unnamed",
+  "model": "/home/ssafy/dev_ec/S15P11A404/Roady_Embedded/artifacts/obstacle_lower_limb/best.engine",
+  "camera_topic": "/camera/obstacle/image_raw",
+  "started_unix_sec": 1785925696.7797155,
+  "started_at": "2026-08-05T19:28:16.779716+09:00",
+  "duration_sec": 197.19992079999997,
+  "frames": 5088,
+  "end_to_end_fps": 25.801227400898636,
+  "detections": {
+    "detected_frames": 561,
+    "detection_rate": 0.11025943396226415,
+    "mean_per_frame": 0.39937106918238996,
+    "max_per_frame": 5
+  },
+  "latency_ms": {
+    "mean": 21.40724051572402,
+    "p50": 21.163584000078117,
+    "p95": 24.977344000035373,
+    "max": 120.28144000009888
+  },
+  "temperature_c": {
+    "samples": 5088,
+    "mean": 51.06759532232583,
+    "max": 52.562
+  },
+  "configuration": {
+    "engine_sha256": "61c16094510f46be95e8afad2dc463701c91862beffafd85a008a8112aaed21e",
+    "confidence": 0.25,
+    "image_size": 640,
+    "publish_annotated": false,
+    "camera_width": 1280,
+    "camera_height": 720,
+    "camera_encoding": "bgr8"
+  }
+}

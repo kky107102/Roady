@@ -19,7 +19,7 @@ STOP_QOS = QoSProfile(
 
 
 class SafetyFusionNode(Node):
-    """Publish a latched camera safety decision; LiDAR fusion is added later."""
+    """Fuse filtered camera detections and LiDAR warnings into one stop topic."""
 
     def __init__(self) -> None:
         super().__init__("safety_fusion_node")
@@ -28,6 +28,7 @@ class SafetyFusionNode(Node):
         )
         self.declare_parameter("stop_topic", "/safety/stop_required")
         self.declare_parameter("status_topic", "/safety/status")
+        self.declare_parameter("lidar_detection_topic", "/obstacle/lidar_detected")
         self.declare_parameter("vote_window", 3)
         self.declare_parameter("vote_required", 2)
         self.declare_parameter("clear_frames", 10)
@@ -64,6 +65,13 @@ class SafetyFusionNode(Node):
             self._on_camera_detection,
             10,
         )
+        self.create_subscription(
+            Bool,
+            str(self.get_parameter("lidar_detection_topic").value),
+            self._on_lidar_detection,
+            10,
+        )
+        self._lidar_detected = False
 
         publish_rate_hz = float(self.get_parameter("publish_rate_hz").value)
         if publish_rate_hz <= 0:
@@ -81,16 +89,22 @@ class SafetyFusionNode(Node):
     def _on_camera_detection(self, msg: Bool) -> None:
         self._filter.update(bool(msg.data), time.monotonic())
 
+    def _on_lidar_detection(self, msg: Bool) -> None:
+        self._lidar_detected = bool(msg.data)
+
     def _publish_state(self) -> None:
         state = self._filter.check_timeout(
             time.monotonic(),
             self._camera_timeout_sec,
             self._stop_on_camera_timeout,
         )
-        self._stop_publisher.publish(Bool(data=state.stop_required))
+        stop_required = state.stop_required or self._lidar_detected
+        reason = "lidar_obstacle" if self._lidar_detected else state.reason
+        self._stop_publisher.publish(Bool(data=stop_required))
         status = {
-            "stop_required": state.stop_required,
-            "reason": state.reason,
+            "stop_required": stop_required,
+            "reason": reason,
+            "lidar_detected": self._lidar_detected,
             "recent_detections": list(state.recent_detections),
             "clear_count": state.clear_count,
             "camera_alive": state.camera_alive,
@@ -99,12 +113,12 @@ class SafetyFusionNode(Node):
             String(data=json.dumps(status, ensure_ascii=False))
         )
 
-        if state.stop_required != self._previous_stop:
-            if state.stop_required:
-                self.get_logger().warn(f"Safety stop engaged: {state.reason}")
+        if stop_required != self._previous_stop:
+            if stop_required:
+                self.get_logger().warn(f"Safety stop engaged: {reason}")
             elif self._previous_stop is not None:
                 self.get_logger().info("Safety stop released")
-            self._previous_stop = state.stop_required
+            self._previous_stop = stop_required
 
         if state.camera_alive != self._previous_camera_alive:
             if state.camera_alive:
