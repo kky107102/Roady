@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from hardware.nodes.wide_camera_capture_viewer import (
+from hardware.nodes.tactile_camera_capture_viewer import (
     CameraCaptureViewer,
     run_viewer,
 )

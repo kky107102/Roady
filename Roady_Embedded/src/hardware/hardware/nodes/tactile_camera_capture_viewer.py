@@ -132,14 +132,14 @@ class CameraCaptureViewer(Node):
         self.get_logger().info(f"Saved capture: {output_path}")
 
 
-class WideCameraCaptureViewer(CameraCaptureViewer):
+class TactileCameraCaptureViewer(CameraCaptureViewer):
     def __init__(self) -> None:
         super().__init__(
-            node_name="wide_camera_capture_viewer",
-            default_topic="/camera/wide/image_raw",
+            node_name="tactile_camera_capture_viewer",
+            default_topic="/camera/tactile/image_raw",
             default_output_dir="~/roady_dataset/wide_camera",
-            filename_prefix="wide",
-            window_name="ROADY wide-camera data capture",
+            filename_prefix="tactile",
+            window_name="ROADY tactile-camera data capture",
         )
 
 
@@ -156,7 +156,7 @@ def run_viewer(node_factory, args=None) -> None:
 
 
 def main(args=None) -> None:
-    run_viewer(WideCameraCaptureViewer, args=args)
+    run_viewer(TactileCameraCaptureViewer, args=args)
 
 
 if __name__ == "__main__":

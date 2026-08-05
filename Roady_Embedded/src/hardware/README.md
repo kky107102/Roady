@@ -2,13 +2,13 @@
 
 ## 와이드카메라 학습 데이터 캡처
 
-와이드카메라 노드가 `/camera/wide/image_raw` 토픽을 발행하는 상태에서 캡처 뷰어를 실행한다.
+촉각 검사 카메라 노드가 `/camera/tactile/image_raw` 토픽을 발행하는 상태에서 캡처 뷰어를 실행한다.
 
 ```bash
 cd Roady_Embedded
 PYTHONNOUSERSITE=1 colcon build --symlink-install --packages-select hardware
 source install/setup.bash
-ros2 run hardware wide_camera_capture_viewer
+ros2 run hardware tactile_camera_capture_viewer
 ```
 
 `PYTHONNOUSERSITE=1`은 사용자 경로에 별도로 설치된 `setuptools`가 ROS 2 Humble의 시스템 `packaging`과 충돌하는 것을 방지한다. 이 설정은 해당 빌드 명령에만 적용된다.
@@ -18,14 +18,14 @@ ros2 run hardware wide_camera_capture_viewer
 저장 경로를 바꾸려면 ROS 파라미터를 전달한다.
 
 ```bash
-ros2 run hardware wide_camera_capture_viewer --ros-args \
+ros2 run hardware tactile_camera_capture_viewer --ros-args \
   -p output_dir:=/home/ssafy/datasets/wide_camera
 ```
 
 다른 토픽을 볼 때는 `topic` 파라미터도 변경할 수 있다.
 
 ```bash
-ros2 run hardware wide_camera_capture_viewer --ros-args \
-  -p topic:=/camera/wide/image_raw \
+ros2 run hardware tactile_camera_capture_viewer --ros-args \
+  -p topic:=/camera/tactile/image_raw \
   -p output_dir:=/home/ssafy/datasets/wide_camera
 ```
