@@ -15,9 +15,9 @@ def main() -> None:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=WORKSPACE / "ROADY_AI/models/edge/tactile_damage_candidate_yolo11n_best.pt",
+        default=WORKSPACE / "ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt",
     )
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument("--imgsz", type=int, default=768)
     parser.add_argument("--workspace", type=float, default=2.0)
     parser.add_argument("--device", default=0)
     args = parser.parse_args()
