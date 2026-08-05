@@ -2,12 +2,12 @@
 import { computed } from 'vue'
 import { Bar } from 'vue-chartjs'
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
   BarElement,
-  Tooltip,
+  CategoryScale,
+  Chart as ChartJS,
   Legend,
+  LinearScale,
+  Tooltip,
   type ChartData,
   type ChartOptions,
 } from 'chart.js'
@@ -15,49 +15,36 @@ import type { TimeSeriesResponse } from '@/types/statistics'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
-interface Props {
-  data: TimeSeriesResponse
-}
-
-const props = defineProps<Props>()
+const props = defineProps<{ data: TimeSeriesResponse }>()
 
 const COLORS = {
-  other: '#C8D9E8',      // 그 외 (전체 - 고위험)
-  high: '#E05252',       // 고위험
-  otherHover: '#A8C3D8',
-  highHover: '#C83A3A',
+  total: '#5B7C9D',
+  completed: '#4F9D69',
+  totalHover: '#466987',
+  completedHover: '#3D8154',
   grid: '#E8EDF2',
   text: '#6B7A8D',
 }
 
-const chartData = computed<ChartData<'bar'>>(() => {
-  const items = props.data.items
-  const labels = items.map((i) => i.period)
-  const highCounts = items.map((i) => i.highSeverityCount ?? 0)
-  const otherCounts = items.map((i) => Math.max(0, i.totalCount - (i.highSeverityCount ?? 0)))
-
-  return {
-    labels,
-    datasets: [
-      {
-        label: '그 외',
-        data: otherCounts,
-        backgroundColor: COLORS.other,
-        hoverBackgroundColor: COLORS.otherHover,
-        borderRadius: 0,
-        stack: 'total',
-      },
-      {
-        label: '고위험',
-        data: highCounts,
-        backgroundColor: COLORS.high,
-        hoverBackgroundColor: COLORS.highHover,
-        borderRadius: 2,
-        stack: 'total',
-      },
-    ],
-  }
-})
+const chartData = computed<ChartData<'bar'>>(() => ({
+  labels: props.data.items.map((item) => item.period),
+  datasets: [
+    {
+      label: '전체 탐지',
+      data: props.data.items.map((item) => item.totalCount),
+      backgroundColor: COLORS.total,
+      hoverBackgroundColor: COLORS.totalHover,
+      borderRadius: 2,
+    },
+    {
+      label: '보수 완료',
+      data: props.data.items.map((item) => item.repairCompletedCount),
+      backgroundColor: COLORS.completed,
+      hoverBackgroundColor: COLORS.completedHover,
+      borderRadius: 2,
+    },
+  ],
+}))
 
 const chartOptions = computed<ChartOptions<'bar'>>(() => ({
   responsive: true,
@@ -74,55 +61,30 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
         color: COLORS.text,
         font: { size: 12 },
         padding: 16,
-        generateLabels(chart) {
-          return chart.data.datasets
-            .filter((ds) => ds.label !== '그 외')
-            .concat(
-              chart.data.datasets.filter((ds) => ds.label === '그 외').map((ds) => ({
-                ...ds,
-                label: '전체',
-              })),
-            )
-            .map((ds, i) => ({
-              text: ds.label === '그 외' ? '전체' : (ds.label ?? ''),
-              fillStyle: ds.backgroundColor as string,
-              strokeStyle: 'transparent',
-              lineWidth: 0,
-              hidden: false,
-              index: i,
-            }))
-        },
       },
     },
     tooltip: {
       callbacks: {
-        label(ctx) {
-          const label = ctx.dataset.label === '그 외' ? '전체(그 외)' : ctx.dataset.label
-          return ` ${label}: ${ctx.parsed.y}건`
-        },
-        footer(items) {
-          const total = items.reduce((s, i) => s + (i.parsed.y ?? 0), 0)
-          return `합계: ${total}건`
+        label(context) {
+          return ` ${context.dataset.label}: ${context.parsed.y}건`
         },
       },
     },
   },
   scales: {
     x: {
-      stacked: true,
       grid: { display: false },
       ticks: { color: COLORS.text, font: { size: 12 } },
       border: { display: false },
     },
     y: {
-      stacked: true,
       beginAtZero: true,
       grid: { color: COLORS.grid },
       ticks: {
         color: COLORS.text,
         font: { size: 12 },
-        stepSize: 5,
-        callback: (v) => `${v}건`,
+        precision: 0,
+        callback: (value) => `${value}건`,
       },
       border: { display: false },
     },
@@ -131,7 +93,7 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
 </script>
 
 <template>
-  <div class="trend-chart" role="img" aria-label="기간별 탐지 추이 막대 차트">
+  <div class="trend-chart" role="img" aria-label="기간별 탐지 및 보수 완료 건수 막대 차트">
     <Bar :data="chartData" :options="chartOptions" />
   </div>
 </template>

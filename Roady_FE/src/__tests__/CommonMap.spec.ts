@@ -9,6 +9,8 @@ const leaflet = vi.hoisted(() => {
     fitBounds: vi.fn(),
     getSize: vi.fn(() => ({ x: 800 })),
     getZoom: vi.fn(() => 15),
+    project: vi.fn(() => ({ subtract: vi.fn(() => ({ x: 100, y: 20 })) })),
+    unproject: vi.fn(() => [37.51, 127]),
     on: vi.fn(),
     stop: vi.fn(),
     invalidateSize: vi.fn(),
@@ -108,7 +110,7 @@ describe('CommonMap', () => {
     await wrapper.vm.$nextTick()
 
     expect(leaflet.mapInstance.stop).toHaveBeenCalledOnce()
-    expect(leaflet.mapInstance.setView).toHaveBeenCalledWith([37.5, 127], 15, {
+    expect(leaflet.mapInstance.setView).toHaveBeenCalledWith([37.51, 127], 15, {
       animate: false,
     })
     expect(marker?.openPopup).toHaveBeenCalledOnce()

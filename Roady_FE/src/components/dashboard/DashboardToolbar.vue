@@ -3,21 +3,33 @@ import { ref, watch } from 'vue'
 import type { DashboardFilter } from '@/stores/dashboard'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
+import { localDateOffset, todayLocalStr } from '@/utils/localDate'
 
 interface Props {
   modelValue: DashboardFilter
+  compact?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ 'update:modelValue': [DashboardFilter]; apply: [DashboardFilter] }>()
 
+function matchingPreset(value: DashboardFilter): number | null {
+  const to = todayLocalStr()
+  if (value.to !== to) return null
+  if (value.from === localDateOffset(0)) return 0
+  if (value.from === localDateOffset(6)) return 1
+  if (value.from === localDateOffset(29)) return 2
+  return null
+}
+
 const local = ref<DashboardFilter>({ ...props.modelValue })
-const localPreset = ref<number | null>(null)
+const localPreset = ref<number | null>(matchingPreset(props.modelValue))
 
 watch(
   () => props.modelValue,
   (val) => {
     local.value = { ...val }
+    localPreset.value = matchingPreset(val)
   },
 )
 
@@ -62,15 +74,18 @@ function handleApply() {
 }
 
 function handleReset() {
-  local.value = { from: '', to: '', regionCode: '' }
-  localPreset.value = null
+  local.value = { from: localDateOffset(6), to: todayLocalStr(), regionCode: '' }
+  localPreset.value = 1
   emit('update:modelValue', { ...local.value })
   emit('apply', { ...local.value })
 }
 </script>
 
 <template>
-  <PageFilterToolbar aria-label="대시보드 조회 조건">
+  <PageFilterToolbar
+    aria-label="대시보드 조회 조건"
+    :class="{ 'dashboard-toolbar--compact': compact }"
+  >
     <DateRangeFilter
       :from="local.from"
       :to="local.to"
@@ -102,5 +117,11 @@ function handleReset() {
 <style scoped>
 .apply-btn {
   min-width: 6.4rem;
+}
+
+.dashboard-toolbar--compact {
+  padding: 0.8rem 0 0;
+  border-bottom: 0;
+  background: transparent;
 }
 </style>

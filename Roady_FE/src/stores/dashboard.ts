@@ -1,13 +1,13 @@
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
 
 import { damagesApi } from '@/api/damages'
 import { robotsApi } from '@/api/robots'
-import { todayLocalStr, localDateOffset, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
-import { MOCK_TIME_SERIES, MOCK_HIGH_SEVERITY_COUNT, MOCK_STAT_COUNTS } from '@/mocks/dashboard'
+import { statisticsApi } from '@/api/statistics'
 import type { DamageListItem } from '@/types/damage'
 import type { Robot } from '@/types/robot'
-import type { TimeSeriesResponse } from '@/types/statistics'
+import type { StatUnit, TimeSeriesResponse } from '@/types/statistics'
+import { localDateOffset, todayLocalStr, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
 
 export interface DashboardFilter {
   from: string
@@ -19,52 +19,50 @@ function defaultFilter(): DashboardFilter {
   return { from: localDateOffset(6), to: todayLocalStr(), regionCode: '' }
 }
 
+function chartUnit(from: string, to: string): StatUnit {
+  const dayMilliseconds = 24 * 60 * 60 * 1000
+  const days = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / dayMilliseconds) + 1
+
+  if (days > 730) return 'YEAR'
+  if (days > 120) return 'MONTH'
+  if (days > 31) return 'WEEK'
+  return 'DAY'
+}
+
 export const useDashboardStore = defineStore('dashboard', () => {
   const filter = ref<DashboardFilter>(defaultFilter())
-
+  const trendFilter = ref<DashboardFilter>(defaultFilter())
   const damages = ref<DamageListItem[]>([])
   const damagesTotalElements = ref(0)
   const robots = ref<Robot[]>([])
-  const timeSeries = ref<TimeSeriesResponse>(MOCK_TIME_SERIES)
+  const timeSeries = ref<TimeSeriesResponse>({ unit: 'DAY', items: [] })
 
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const trendLoading = ref(false)
+  const trendError = ref<string | null>(null)
 
-  // ── 통계 요약 카드 ──────────────────────────────────────────
-  // dev 환경에서 API 오류 시 mock 값을 폴백으로 사용한다.
-  const useMock = computed(() => import.meta.env.DEV && !!error.value && !loading.value)
-
-  const totalCount = computed(() =>
-    useMock.value ? MOCK_STAT_COUNTS.total : damagesTotalElements.value,
+  const totalCount = computed(() => damagesTotalElements.value)
+  const reviewRequiredCount = computed(
+    () => damages.value.filter((damage) => damage.currentStatus === 'AI_ANALYZED').length,
+  )
+  const repairingCount = computed(
+    () => damages.value.filter((damage) => damage.currentStatus === 'REPAIR_IN_PROGRESS').length,
+  )
+  const highSeverityCount = computed(
+    () =>
+      damages.value.filter(
+        (damage) => damage.repairPriority === 'HIGH' || damage.repairPriority === 'URGENT',
+      ).length,
+  )
+  const activeRobotCount = computed(
+    () => robots.value.filter((robot) => robot.active && robot.status === 'MOVING').length,
   )
 
-  const reviewRequiredCount = computed(() =>
-    useMock.value
-      ? MOCK_STAT_COUNTS.reviewRequired
-      : damages.value.filter((d) => d.currentStatus === 'AI_ANALYZED').length,
-  )
-
-  const repairingCount = computed(() =>
-    useMock.value
-      ? MOCK_STAT_COUNTS.repairing
-      : damages.value.filter((d) => d.currentStatus === 'REPAIR_IN_PROGRESS').length,
-  )
-
-  // severity 필드는 현재 API 응답에 포함되지 않으므로 항상 mock 값 사용
-  const highSeverityCount = computed(() =>
-    useMock.value ? MOCK_STAT_COUNTS.highSeverity : MOCK_HIGH_SEVERITY_COUNT,
-  )
-
-  const activeRobotCount = computed(() =>
-    useMock.value
-      ? MOCK_STAT_COUNTS.activeRobots
-      : robots.value.filter((r) => r.active && r.status === 'MOVING').length,
-  )
-
-  // ── 데이터 조회 ─────────────────────────────────────────────
-  async function fetchAll() {
+  async function fetchOverview() {
     loading.value = true
     error.value = null
+
     try {
       const queryParams = {
         ...(filter.value.from ? { from: toApiFromDateTime(filter.value.from) } : {}),
@@ -77,35 +75,68 @@ export const useDashboardStore = defineStore('dashboard', () => {
       damages.value = damageResponse.content
       damagesTotalElements.value = damageResponse.totalElements
       robots.value = robotList
-      // 통계 API 구현 후 아래 주석을 풀어 교체한다.
-      // timeSeries.value = await statisticsApi.timeSeries({ ...queryParams, unit: 'DAY' })
-    } catch (e: unknown) {
-      if (import.meta.env.DEV) console.error('[Dashboard] fetchAll:', e)
+    } catch (fetchError: unknown) {
+      if (import.meta.env.DEV) console.error('[Dashboard] fetchOverview:', fetchError)
       error.value = '데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
     } finally {
       loading.value = false
     }
   }
 
-  function applyFilter(newFilter: DashboardFilter) {
+  async function fetchTrend() {
+    trendLoading.value = true
+    trendError.value = null
+
+    try {
+      const from = trendFilter.value.from || localDateOffset(6)
+      const to = trendFilter.value.to || todayLocalStr()
+      timeSeries.value = await statisticsApi.timeSeries({
+        from: toApiFromDateTime(from),
+        to: toApiToDateTime(to),
+        unit: chartUnit(from, to),
+      })
+    } catch (fetchError: unknown) {
+      if (import.meta.env.DEV) console.error('[Dashboard] fetchTrend:', fetchError)
+      trendError.value = '탐지 추이 데이터를 불러오지 못했습니다.'
+    } finally {
+      trendLoading.value = false
+    }
+  }
+
+  async function fetchAll() {
+    await Promise.all([fetchOverview(), fetchTrend()])
+  }
+
+  async function applyFilter(newFilter: DashboardFilter) {
     filter.value = { ...newFilter }
-    fetchAll()
+    await fetchOverview()
+  }
+
+  async function applyTrendFilter(newFilter: DashboardFilter) {
+    trendFilter.value = { ...newFilter }
+    await fetchTrend()
   }
 
   return {
     filter,
+    trendFilter,
     damages,
     damagesTotalElements,
     robots,
     timeSeries,
     loading,
     error,
+    trendLoading,
+    trendError,
     totalCount,
     reviewRequiredCount,
     repairingCount,
     highSeverityCount,
     activeRobotCount,
     fetchAll,
+    fetchOverview,
+    fetchTrend,
     applyFilter,
+    applyTrendFilter,
   }
 })
