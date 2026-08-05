@@ -30,15 +30,16 @@ class MainControlNode(Node):
         # Parameters
         self.declare_parameter('startup_delay', 5.0)
         self.declare_parameter('startup_crawl_duration', 1.0)
-        self.declare_parameter('startup_crawl_speed', 0.20)
-        self.declare_parameter('drive_speed', 0.2)
+        self.declare_parameter('startup_crawl_speed', 0.5)
+        self.declare_parameter('drive_speed', 0.65)
+        self.declare_parameter('reverse_speed', 0.5)
         self.declare_parameter('steering_speed_boost', 0.05)
         self.declare_parameter('kp', 0.004)
         self.declare_parameter('max_steer', 0.75)
         self.declare_parameter('left_steering_gain', 1.30)
         self.declare_parameter('steering_deadband_px', 8.0)
         self.declare_parameter('steering_filter_alpha', 0.35)
-        self.declare_parameter('offset_timeout', 0.30)
+        self.declare_parameter('offset_timeout', 1.0)
         self.declare_parameter('steering_sign', -1.0)
         self.declare_parameter('backup_duration', 1.5)
         self.declare_parameter('corner_turn_duration', 2.0)
@@ -46,6 +47,7 @@ class MainControlNode(Node):
         self.declare_parameter('corner_steering_sign', 1.0)
         self.declare_parameter('left_edge_stop_duration', 0.5)
         self.declare_parameter('left_edge_backup_duration', 1.0)
+        self.declare_parameter('left_edge_extreme_backup_multiplier', 2.0)
         self.declare_parameter('left_edge_turn_duration', 1.0)
         self.declare_parameter('left_edge_recovery_steer', 0.75)
 
@@ -60,7 +62,14 @@ class MainControlNode(Node):
         self.startup_crawl_speed = abs(
             float(self.get_parameter('startup_crawl_speed').value)
         )
-        self.drive_speed = abs(float(self.get_parameter('drive_speed').value))
+        self.drive_speed = min(
+            1.0,
+            abs(float(self.get_parameter('drive_speed').value)),
+        )
+        self.reverse_speed = min(
+            1.0,
+            abs(float(self.get_parameter('reverse_speed').value)),
+        )
         self.steering_speed_boost = max(
             0.0,
             float(self.get_parameter('steering_speed_boost').value),
@@ -95,6 +104,12 @@ class MainControlNode(Node):
             0.0,
             float(self.get_parameter('left_edge_backup_duration').value),
         )
+        self.left_edge_extreme_backup_multiplier = max(
+            1.0,
+            float(
+                self.get_parameter('left_edge_extreme_backup_multiplier').value
+            ),
+        )
         self.left_edge_turn_duration = max(
             0.0,
             float(self.get_parameter('left_edge_turn_duration').value),
@@ -119,6 +134,7 @@ class MainControlNode(Node):
         self.left_edge_recovery_start_time = 0.0
         self.left_edge_recovery_latched = False
         self.left_edge_active_steer = self.left_edge_recovery_steer
+        self.left_edge_active_backup_duration = self.left_edge_backup_duration
         self.startup_start_time = time.monotonic()
         self.startup_complete = False
         self.drive_start_time = 0.0
@@ -131,13 +147,27 @@ class MainControlNode(Node):
     def lidar_callback(self, msg: Bool):
         self.is_obstacle_detected = msg.data
 
+    def maneuver_is_active(self):
+        return self.current_state in (
+            'LEFT_EDGE_STOP',
+            'LEFT_EDGE_BACKUP',
+            'LEFT_EDGE_TURN',
+            'CORNER_BACKUP',
+            'CORNER_TURN',
+        )
+
     def tactile_callback(self, msg: String):
+        # 후진·조향 기동 중에는 새 비전 판단으로 현재 동작을 덮어쓰지 않는다.
+        if self.maneuver_is_active():
+            return
+
         self.current_block_type = msg.data
 
         startup_valid_block_types = (
             'STRAIGHT',
             'LEFT_EDGE_LIMIT',
             'LEFT_EDGE_CRITICAL',
+            'LEFT_EDGE_EXTREME',
         )
         if (
             not self.startup_complete
@@ -159,21 +189,32 @@ class MainControlNode(Node):
             and self.current_block_type in (
                 'LEFT_EDGE_LIMIT',
                 'LEFT_EDGE_CRITICAL',
+                'LEFT_EDGE_EXTREME',
             )
             and self.current_state == 'LINE_TRACE'
             and not self.is_obstacle_detected
             and not self.left_edge_recovery_latched
         ):
             self.left_edge_recovery_latched = True
-            critical_recovery = self.current_block_type == 'LEFT_EDGE_CRITICAL'
+            critical_recovery = self.current_block_type in (
+                'LEFT_EDGE_CRITICAL',
+                'LEFT_EDGE_EXTREME',
+            )
+            extreme_recovery = self.current_block_type == 'LEFT_EDGE_EXTREME'
             self.left_edge_active_steer = (
                 1.0 if critical_recovery else self.left_edge_recovery_steer
             )
+            self.left_edge_active_backup_duration = self.left_edge_backup_duration
+            if extreme_recovery:
+                self.left_edge_active_backup_duration *= (
+                    self.left_edge_extreme_backup_multiplier
+                )
             self.current_state = 'LEFT_EDGE_STOP'
             self.left_edge_recovery_start_time = time.monotonic()
             self.get_logger().warn(
                 '⚠️ Left Edge 한계 진입: 후진 후 좌측 복구 동작을 시작합니다. '
-                f'(steer={self.left_edge_active_steer:.2f})'
+                f'(backup={self.left_edge_active_backup_duration:.1f}s, '
+                f'steer={self.left_edge_active_steer:.2f})'
             )
 
     def try_start_corner_maneuver(self):
@@ -196,6 +237,10 @@ class MainControlNode(Node):
             self.backup_start_time = time.monotonic()
 
     def offset_callback(self, msg: Float32):
+        # 기동이 끝날 때까지 라인트레이싱 오프셋 갱신을 잠근다.
+        if self.maneuver_is_active():
+            return
+
         offset_is_valid = math.isfinite(msg.data) and msg.data != 999.0
         if (
             offset_is_valid
@@ -205,6 +250,7 @@ class MainControlNode(Node):
                     'STRAIGHT',
                     'LEFT_EDGE_LIMIT',
                     'LEFT_EDGE_CRITICAL',
+                    'LEFT_EDGE_EXTREME',
                 )
             )
         ):
@@ -256,6 +302,7 @@ class MainControlNode(Node):
                     'STRAIGHT',
                     'LEFT_EDGE_LIMIT',
                     'LEFT_EDGE_CRITICAL',
+                    'LEFT_EDGE_EXTREME',
                 )
                 and len(self.offset_history) == self.offset_history.maxlen
                 and offset_is_fresh
@@ -266,8 +313,16 @@ class MainControlNode(Node):
                     'Waiting for 5 consecutive valid offsets...',
                     throttle_duration_sec=1.0,
                 )
+                block_is_detected = self.current_block_type in (
+                    'STRAIGHT',
+                    'LEFT_EDGE_LIMIT',
+                    'LEFT_EDGE_CRITICAL',
+                    'LEFT_EDGE_EXTREME',
+                )
                 twist.linear.x = (
-                    self.startup_crawl_speed if minimum_delay_complete else 0.0
+                    self.startup_crawl_speed
+                    if minimum_delay_complete and block_is_detected
+                    else 0.0
                 )
                 twist.angular.z = 0.0
                 self.cmd_pub.publish(twist)
@@ -292,14 +347,14 @@ class MainControlNode(Node):
             else:
                 self.current_state = 'LEFT_EDGE_BACKUP'
                 self.left_edge_recovery_start_time = now
-                twist.linear.x = -self.drive_speed
+                twist.linear.x = -self.reverse_speed
                 twist.angular.z = 0.0
 
         # State 2: 직선 후진으로 좌측 조향 공간 확보
         elif self.current_state == 'LEFT_EDGE_BACKUP':
             elapsed = now - self.left_edge_recovery_start_time
-            if elapsed < self.left_edge_backup_duration:
-                twist.linear.x = -self.drive_speed
+            if elapsed < self.left_edge_active_backup_duration:
+                twist.linear.x = -self.reverse_speed
                 twist.angular.z = 0.0
             else:
                 self.current_state = 'LEFT_EDGE_TURN'
@@ -324,7 +379,7 @@ class MainControlNode(Node):
         elif self.current_state == 'CORNER_BACKUP':
             elapsed = time.monotonic() - self.backup_start_time
             if elapsed < self.backup_duration:
-                twist.linear.x = -self.drive_speed
+                twist.linear.x = -self.reverse_speed
                 twist.angular.z = 0.0
             else:
                 self.current_state = 'CORNER_TURN'
@@ -355,6 +410,7 @@ class MainControlNode(Node):
         # State 6: 라인트레이싱 (P-Control)
         elif self.current_state == 'LINE_TRACE':
             steering_required = False
+            line_tracking_available = False
             offset_is_fresh = (
                 math.isfinite(self.current_offset)
                 and self.current_offset != 999.0
@@ -365,6 +421,7 @@ class MainControlNode(Node):
                 self.current_block_type == 'STRAIGHT'
                 and offset_is_fresh
             ):
+                line_tracking_available = True
                 offset = self.current_offset
                 steering_required = abs(offset) > self.steering_deadband_px
                 requested_steering = self.calculate_requested_steering(offset)
@@ -379,24 +436,26 @@ class MainControlNode(Node):
             # Case B: 라인을 잠시 놓쳤거나 탐색 중일 때
             else:
                 self.get_logger().info(
-                    'Searching for tactile block... (creeping)',
+                    'Tactile block lost or offset invalid; stopping.',
                     throttle_duration_sec=2.0,
                 )
-                self.filtered_steering *= 0.7
-                twist.angular.z = self.filtered_steering
+                self.filtered_steering = 0.0
+                twist.angular.z = 0.0
 
-            # 유효 오프셋이 데드밴드를 벗어나 실제 조향이 필요할 때만
-            # 전진 속도를 소폭 높여 해당 방향으로 이동하는 거리를 확보한다.
-            startup_crawl_active = (
-                now - self.drive_start_time < self.startup_crawl_duration
-            )
-            if startup_crawl_active:
-                twist.linear.x = min(1.0, self.startup_crawl_speed)
+            if not line_tracking_available:
+                twist.linear.x = 0.0
             else:
-                speed_boost = (
-                    self.steering_speed_boost if steering_required else 0.0
+                # 유효 라인과 오프셋이 있을 때만 전진한다.
+                startup_crawl_active = (
+                    now - self.drive_start_time < self.startup_crawl_duration
                 )
-                twist.linear.x = min(1.0, self.drive_speed + speed_boost)
+                if startup_crawl_active:
+                    twist.linear.x = min(1.0, self.startup_crawl_speed)
+                else:
+                    speed_boost = (
+                        self.steering_speed_boost if steering_required else 0.0
+                    )
+                    twist.linear.x = min(1.0, self.drive_speed + speed_boost)
 
         self.cmd_pub.publish(twist)
 

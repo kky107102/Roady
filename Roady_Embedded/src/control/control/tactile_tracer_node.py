@@ -26,6 +26,7 @@ class TactileTracerNode(Node):
         self.declare_parameter('startup_full_roi_duration', 5.0)
         self.declare_parameter('left_edge_limit_ratio', 0.50)
         self.declare_parameter('left_edge_critical_ratio', 0.30)
+        self.declare_parameter('left_edge_extreme_ratio', 0.20)
         image_topic = str(self.get_parameter('image_topic').value)
         self.target_edge_x_px = int(
             self.get_parameter('target_edge_x_px').value
@@ -51,6 +52,13 @@ class TactileTracerNode(Node):
         self.left_edge_critical_ratio = max(
             0.0,
             min(self.left_edge_critical_ratio, self.left_edge_limit_ratio),
+        )
+        self.left_edge_extreme_ratio = float(
+            self.get_parameter('left_edge_extreme_ratio').value
+        )
+        self.left_edge_extreme_ratio = max(
+            0.0,
+            min(self.left_edge_extreme_ratio, self.left_edge_critical_ratio),
         )
 
         self.image_sub = self.create_subscription(
@@ -195,6 +203,7 @@ class TactileTracerNode(Node):
         target_x = max(0, min(self.target_edge_x_px, width - 1))
         left_edge_limit_x = int(width * self.left_edge_limit_ratio)
         left_edge_critical_x = int(width * self.left_edge_critical_ratio)
+        left_edge_extreme_x = int(width * self.left_edge_extreme_ratio)
 
         if contours:
             c = max(contours, key=cv2.contourArea)
@@ -268,7 +277,9 @@ class TactileTracerNode(Node):
                 if len(xs) > 0:
                     left_edge_x = int(xs.min())
                     offset = left_edge_x - target_x
-                    if left_edge_x < left_edge_critical_x:
+                    if left_edge_x < left_edge_extreme_x:
+                        block_type = 'LEFT_EDGE_EXTREME'
+                    elif left_edge_x < left_edge_critical_x:
                         block_type = 'LEFT_EDGE_CRITICAL'
                     elif left_edge_x < left_edge_limit_x:
                         block_type = 'LEFT_EDGE_LIMIT'
@@ -373,6 +384,15 @@ class TactileTracerNode(Node):
             (left_edge_critical_x, 0),
             (left_edge_critical_x, height),
             (255, 0, 255),
+            2,
+        )
+
+        # 좌측 장시간 후진 및 최대 조향 복구 진입 기준선
+        cv2.line(
+            debug_frame,
+            (left_edge_extreme_x, 0),
+            (left_edge_extreme_x, height),
+            (255, 255, 255),
             2,
         )
 

@@ -11,19 +11,32 @@ class LidarWarningNode(Node):
     def __init__(self):
         super().__init__('lidar_warning_node')
 
+        self.declare_parameter('scan_topic', '/scan')
+        self.declare_parameter('warning_topic', '/obstacle/lidar_detected')
+        self.declare_parameter('stop_threshold', 0.50)
+        self.declare_parameter('min_valid_distance', 0.08)
+
         # 라이다 구독 (QoS 호환성 적용)
         self.scan_sub = self.create_subscription(
-            LaserScan, '/scan', self.scan_callback, qos_profile_sensor_data
+            LaserScan,
+            str(self.get_parameter('scan_topic').value),
+            self.scan_callback,
+            qos_profile_sensor_data,
         )
 
         # 비상 정지 명령 발행자 (Bool)
-        self.stop_pub = self.create_publisher(Bool, '/emergency_stop', 10)
+        self.stop_pub = self.create_publisher(
+            Bool, str(self.get_parameter('warning_topic').value), 10
+        )
 
-        self.STOP_THRESHOLD = 0.50  # 0.5m (50cm) 이내 정지
-        self.MIN_VALID_DIST = 0.08  # 차체 반사 등 노이즈 제외
+        self.STOP_THRESHOLD = float(self.get_parameter('stop_threshold').value)
+        self.MIN_VALID_DIST = float(
+            self.get_parameter('min_valid_distance').value
+        )
 
         self.get_logger().info(
-            '✅ LiDAR 감지 & 비상정지 노드가 시작되었습니다. (기준: 0.5m)'
+            '✅ LiDAR 장애물 감지 노드가 시작되었습니다. '
+            f'(기준: {self.STOP_THRESHOLD:.2f}m)'
         )
 
     def scan_callback(self, msg: LaserScan):
@@ -48,7 +61,8 @@ class LidarWarningNode(Node):
         if min_dist <= self.STOP_THRESHOLD:
             stop_msg.data = True
             self.get_logger().warn(
-                f'🚨 [비상 정지] 0.5m 이내 장애물 감지! (현재: {min_dist*100:.1f}cm)',
+                '🚨 [LiDAR] 장애물 감지! '
+                f'(현재: {min_dist*100:.1f}cm)',
                 throttle_duration_sec=0.2,
             )
         else:
