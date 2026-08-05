@@ -22,8 +22,6 @@ setup(
             "tactile_camera_capture_viewer = hardware.nodes.tactile_camera_capture_viewer:main",
             "obstacle_camera_capture_viewer = hardware.nodes.obstacle_camera_capture_viewer:main",
             "obstacle_camera_node = hardware.nodes.obstacle_camera_node:main",
-            "dot_matrix_node = hardware.nodes.dot_matrix_node:main",
-            "push_lock_node = hardware.nodes.push_lock_node:main",
             "battery_led_node = hardware.nodes.battery_led_node:main",
             "gps_location_node = hardware.nodes.gps_location_node:main",
             "hall_distance_node = hardware.nodes.hall_distance_node:main",

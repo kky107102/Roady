@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+import cv2
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import String, Float32
+
+
+class TactileTracerNode(Node):
+
+    def __init__(self):
+        super().__init__('tactile_tracer_node')
+
+        # 토픽 Publisher
+        self.block_pub = self.create_publisher(String, '/tactile/block_type', 10)
+        self.edge_offset_pub = self.create_publisher(Float32, '/tactile/edge_offset', 10)
+
+        self.declare_parameter('camera_device', 0)
+        self.camera_id = self.get_parameter('camera_device').value
+
+        self.cap = cv2.VideoCapture(self.camera_id)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+
+        # 30 FPS 연산 루프
+        self.timer = self.create_timer(0.033, self.process_frame)
+        self.get_logger().info('🔍 [웹캠 모니터링 모드] 노드가 시작되었습니다.')
+
+    def process_frame(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            return
+
+        block_type, offset, top_yellow_count, debug_frame = self.analyze_tactile_block(frame)
+
+        # 1. 블록 타입 발행 (STRAIGHT / CORNER / UNKNOWN)
+        type_msg = String()
+        type_msg.data = block_type
+        self.block_pub.publish(type_msg)
+
+        # 2. 오차값 발행
+        offset_msg = Float32()
+        offset_msg.data = float(offset) if offset is not None else 999.0
+        self.edge_offset_pub.publish(offset_msg)
+
+        # 3. 실시간 디버그 모니터링 화면 출력
+        cv2.imshow('Tactile Line Tracer Monitor', debug_frame)
+        cv2.waitKey(1)
+
+    def analyze_tactile_block(self, frame):
+        height, width, _ = frame.shape
+        debug_frame = frame.copy()  # 모니터링용 프레임 복사
+
+        # ----------------------------------------------------
+        # 1. ROI 설정 (하단 40% 영역: height * 0.6 ~ height)
+        # ----------------------------------------------------
+        roi_y_start = int(height * 0.60)
+        roi = frame[roi_y_start:height, 0:width]
+        roi_h, roi_w, _ = roi.shape
+
+        # HSV 및 노란색 마스킹
+        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+        lower_yellow = np.array([15, 80, 80])
+        upper_yellow = np.array([35, 255, 255])
+        mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+        mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+
+        # ----------------------------------------------------
+        # 2. ㄱ자 판별용 상단 영역 (ROI 최상단 25%) 및 픽셀 카운트
+        # ----------------------------------------------------
+        zone_top_h = int(roi_h * 0.25)
+        mask_top_zone = mask_closed[0:zone_top_h, :]
+        top_yellow_pixel_count = cv2.countNonZero(mask_top_zone)
+
+        # ----------------------------------------------------
+        # 3. 윤곽선 및 좌측 모서리 스캔
+        # ----------------------------------------------------
+        contours, _ = cv2.findContours(
+            mask_closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        block_type = 'UNKNOWN'
+        left_edge_x = None
+        offset = None
+
+        scan_y_roi = int(roi_h * 0.5)  # ROI 내부 기준 스캔라인
+        scan_y_global = roi_y_start + scan_y_roi  # 원본 이미지 기준 스캔라인 Y
+        target_x = int(width * 0.20)   # 목표 Target X 위치 (256px)
+
+        if contours:
+            c = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(c) > 2000:
+                x, y, w, h = cv2.boundingRect(c)
+                aspect_ratio = float(w) / h if h > 0 else 0.0
+
+                # ㄱ자 vs 일자 판별
+                if (
+                    top_yellow_pixel_count > 60000
+                    and w > 600
+                    and aspect_ratio > 2.0
+                ):
+                    block_type = 'CORNER (ㄱ-Shape)'
+                else:
+                    block_type = 'STRAIGHT (일자-Shape)'
+
+                # 스캔라인 기반 좌측 모서리 X 좌표 추출
+                points_at_scany = [
+                    p[0][0] for p in c if abs(p[0][1] - scan_y_roi) <= 3
+                ]
+                if points_at_scany:
+                    left_edge_x = min(points_at_scany)
+                    offset = left_edge_x - target_x
+
+                # [시각화] 검출된 점자블록 윤곽선 (초록색)
+                c_offset = c + np.array([0, roi_y_start])
+                cv2.drawContours(debug_frame, [c_offset], -1, (0, 255, 0), 2)
+
+        # ----------------------------------------------------
+        # 4. 모니터링 시각화 요소 그리기
+        # ----------------------------------------------------
+        # A. ROI 바운딩 박스 (주황색)
+        cv2.rectangle(
+            debug_frame,
+            (0, roi_y_start),
+            (width - 1, height - 1),
+            (0, 165, 255),
+            2,
+        )
+        
+        # B. ㄱ자 판단 상단 Zone 영역 박스 (청록색 점선/박스)
+        cv2.rectangle(
+            debug_frame,
+            (0, roi_y_start),
+            (width - 1, roi_y_start + zone_top_h),
+            (255, 255, 0),
+            1,
+        )
+
+        # C. 스캔라인 (노란색 선)
+        cv2.line(
+            debug_frame,
+            (0, scan_y_global),
+            (width, scan_y_global),
+            (0, 255, 255),
+            1,
+            cv2.LINE_AA,
+        )
+
+        # D. Target X 지점 표시선 (파란색 세로선)
+        cv2.line(
+            debug_frame,
+            (target_x, roi_y_start),
+            (target_x, height),
+            (255, 0, 0),
+            2,
+        )
+
+        # E. 검출된 Edge X 및 Offset 표시
+        if left_edge_x is not None:
+            cv2.circle(
+                debug_frame,
+                (left_edge_x, scan_y_global),
+                7,
+                (0, 0, 255),
+                -1,
+            )
+            cv2.line(
+                debug_frame,
+                (target_x, scan_y_global),
+                (left_edge_x, scan_y_global),
+                (255, 0, 255),
+                3,
+            )
+
+        # F. OSD 텍스트 오버레이 (상단 정보 출력)
+        status_color = (0, 255, 0) if block_type.startswith('STRAIGHT') else (0, 0, 255)
+        
+        # 1) 블록 상태
+        cv2.putText(
+            debug_frame,
+            f'Block: {block_type}',
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            status_color,
+            2,
+        )
+        # 2) Offset 오차
+        offset_str = f'Offset: {offset:.1f} px' if offset is not None else 'Offset: N/A'
+        cv2.putText(
+            debug_frame,
+            offset_str,
+            (20, 80),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 255, 255),
+            2,
+        )
+        # 3) [추가] ROI 상단 노란색 픽셀 수 카운트 (Yellow Pixel Count)
+        cv2.putText(
+            debug_frame,
+            f'Yellow Pixels (Top Zone): {top_yellow_pixel_count}',
+            (20, 120),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 255),
+            2,
+        )
+
+        return block_type, offset, top_yellow_pixel_count, debug_frame
+
+    def destroy_node(self):
+        cv2.destroyAllWindows()
+        if self.cap.isOpened():
+            self.cap.release()
+        super().destroy_node()
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TactileTracerNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
