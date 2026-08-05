@@ -283,10 +283,18 @@ async function handleLogout() {
   font-weight: var(--krds-font-weight-bold);
 }
 
+.nav-link:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .nav-link:focus-visible {
-  outline: 0.2rem solid rgb(255 255 255 / 55%);
-  outline-offset: 0.1rem;
+  background: rgb(255 255 255 / 12%);
   color: var(--roady-surface-default);
+}
+
+.nav-link.is-active:focus-visible {
+  background: var(--roady-brand-secondary);
 }
 
 .nav-icon {

@@ -49,7 +49,6 @@ describe('RecentDamageList', () => {
         plugins: [router],
         stubs: {
           StatusBadge: { template: '<span>{{ label }}</span>', props: ['label'] },
-          AiResultBadge: { template: '<span>{{ label }}</span>', props: ['label'] },
           LoadingSpinner: { template: '<span>{{ label }}</span>', props: ['label'] },
           EmptyState: { template: '<span>{{ title }}</span>', props: ['title'] },
         },
@@ -57,10 +56,12 @@ describe('RecentDamageList', () => {
     })
     await flushPromises()
 
-    const detailLink = wrapper.get('a[aria-label="탐지 사건 #10 상세보기"]')
+    const detailLink = wrapper.get('a[aria-label="탐지 사건 10 상세보기"]')
     expect(detailLink.attributes('href')).toBe('/damages?review=pending&damageId=10')
     expect(mockDamagesApi.list).toHaveBeenCalledWith({ status: 'AI_ANALYZED', size: 5 })
     expect(wrapper.text()).toContain('높음')
+    expect(wrapper.text()).not.toContain('AI 판독')
     expect(wrapper.text()).not.toContain('AI 분석완료')
+    expect(wrapper.text()).not.toContain('#10')
   })
 })

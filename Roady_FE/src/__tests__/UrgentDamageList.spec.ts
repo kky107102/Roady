@@ -37,18 +37,20 @@ describe('UrgentDamageList', () => {
       global: {
         plugins: [router],
         stubs: {
-          AiResultBadge: { template: '<span>{{ label }}</span>', props: ['label'] },
+          StatusBadge: { template: '<span>{{ label }}</span>', props: ['label'] },
           EmptyState: { template: '<span>{{ title }}</span>', props: ['title'] },
         },
       },
     })
 
-    expect(wrapper.get('a[aria-label="긴급 사건 #15 상세보기"]').attributes('href')).toBe(
+    expect(wrapper.get('a[aria-label="긴급 사건 15 상세보기"]').attributes('href')).toBe(
       '/damages?review=pending&sort=priority&damageId=15',
     )
     expect(wrapper.get('.udl-view-all').attributes('href')).toBe(
       '/damages?review=pending&sort=priority',
     )
     expect(wrapper.text()).toContain('긴급')
+    expect(wrapper.text()).not.toContain('AI 판독')
+    expect(wrapper.text()).not.toContain('#15')
   })
 })

@@ -455,7 +455,7 @@ onUnmounted(() => {
 
 .dashboard-map {
   flex: 1;
-  min-height: 30rem;
+  min-height: 42rem;
 }
 
 .map-marker-count {

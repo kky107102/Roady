@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { DamageListItem } from '@/types/damage'
-import AiResultBadge from '@/components/common/AiResultBadge.vue'
+import StatusBadge from '@/components/common/StatusBadge.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const props = defineProps<{
@@ -41,16 +41,15 @@ function formatDateTime(value: string | null): string {
             query: { review: 'pending', sort: 'priority', damageId: String(item.id) },
           }"
           class="udl-item"
-          :aria-label="`긴급 사건 #${item.id} 상세보기`"
+          :aria-label="`긴급 사건 ${item.id} 상세보기`"
         >
-          <div class="udl-item-header">
-            <span class="udl-item-id">#{{ item.id }}</span>
-            <AiResultBadge type="danger" label="긴급" />
+          <div class="udl-item-content">
+            <p class="udl-item-desc">{{ item.description ?? '설명 없음' }}</p>
+            <time class="udl-item-time" :datetime="item.capturedAt ?? item.createdAt">
+              {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
+            </time>
           </div>
-          <p class="udl-item-desc">{{ item.description ?? '설명 없음' }}</p>
-          <time class="udl-item-time" :datetime="item.capturedAt ?? item.createdAt">
-            {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
-          </time>
+          <StatusBadge type="danger" label="긴급" />
         </RouterLink>
       </li>
     </ul>
@@ -82,18 +81,18 @@ function formatDateTime(value: string | null): string {
 }
 
 .udl-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--roady-border-default);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1.2rem;
+  padding: 1rem 1.2rem;
   color: inherit;
   text-decoration: none;
   transition: background-color 0.15s;
 }
 
-.udl-items > li:last-child .udl-item {
-  border-bottom: 0;
+.udl-items > li + li {
+  border-top: 1px solid var(--roady-border-default);
 }
 
 .udl-item:hover {
@@ -106,18 +105,11 @@ function formatDateTime(value: string | null): string {
   outline-offset: 0.2rem;
 }
 
-.udl-item-header {
+.udl-item-content {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.8rem;
-}
-
-.udl-item-id {
-  color: var(--roady-status-danger);
-  font-family: monospace;
-  font-size: var(--krds-pc-font-size-label-small);
-  font-weight: var(--krds-font-weight-bold);
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .udl-item-desc {

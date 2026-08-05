@@ -270,6 +270,24 @@ describe('RepairDetailView', () => {
     expect(wrapper.find('[data-testid="request-modal"]').exists()).toBe(true)
   })
 
+  it('요청서 확인 쿼리로 진입하면 요청서 조회 모달을 연다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(detailInProgress)
+
+    const wrapper = await mountView(6, { action: 'view-request' })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="request-modal"]').text()).toContain('요청 복사')
+  })
+
+  it('보고서 확인 쿼리로 진입하면 완료 보고서 모달을 연다', async () => {
+    mockDamagesApi.getDetail.mockResolvedValue(detailCompleted)
+
+    const wrapper = await mountView(6, { action: 'view-completion-report' })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="completion-modal"]').text()).toContain('내용 복사')
+  })
+
   it('요청서 모달에서 닫기 클릭 시 모달이 닫힌다', async () => {
     mockDamagesApi.getDetail.mockResolvedValue(baseDetail)
 

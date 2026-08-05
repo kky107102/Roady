@@ -185,7 +185,7 @@ const requestModalMode = ref<'create' | 'view' | 'edit'>('create')
 const requestConfirmOpen = ref(false)
 const pendingRequest = ref<RepairRequestPayload | null>(null)
 const requestSubmitting = ref(false)
-const requestActionHandledFor = ref<number | null>(null)
+const requestActionHandledFor = ref<string | null>(null)
 
 function openRequestModal(mode: 'create' | 'view' | 'edit') {
   requestModalMode.value = mode
@@ -200,14 +200,17 @@ function closeRequestModal() {
 watch(
   [damageId, () => detail.value?.currentStatus, () => route.query.action],
   ([id, status, action]) => {
+    const actionKey = id != null && typeof action === 'string' ? `${id}:${action}` : null
     if (
       id != null &&
-      status === 'REQUESTED' &&
-      action === 'create-request' &&
-      requestActionHandledFor.value !== id
+      actionKey != null &&
+      requestActionHandledFor.value !== actionKey &&
+      ((status === 'REQUESTED' && action === 'create-request') ||
+        (['REPAIR_IN_PROGRESS', 'REPAIR_COMPLETED'].includes(status ?? '') &&
+          action === 'view-request'))
     ) {
-      requestActionHandledFor.value = id
-      openRequestModal('create')
+      requestActionHandledFor.value = actionKey
+      openRequestModal(action === 'create-request' ? 'create' : 'view')
     }
   },
   { immediate: true },
@@ -305,12 +308,29 @@ const completionModalReadonly = ref(false)
 const completionSubmitting = ref(false)
 const completionCopyState = ref<'idle' | 'success' | 'error'>('idle')
 let completionCopyStateTimer: ReturnType<typeof setTimeout> | null = null
+const completionActionHandledFor = ref<number | null>(null)
 
 function openCompletionModal(readonly = false) {
   completionModalReadonly.value = readonly
   completionCopyState.value = 'idle'
   completionModalOpen.value = true
 }
+
+watch(
+  [damageId, () => detail.value?.currentStatus, () => route.query.action],
+  ([id, status, action]) => {
+    if (
+      id != null &&
+      status === 'REPAIR_COMPLETED' &&
+      action === 'view-completion-report' &&
+      completionActionHandledFor.value !== id
+    ) {
+      completionActionHandledFor.value = id
+      openCompletionModal(true)
+    }
+  },
+  { immediate: true },
+)
 
 async function onCompletionConfirm(payload: RepairCompletePayload) {
   if (!detail.value || completionSubmitting.value) return
