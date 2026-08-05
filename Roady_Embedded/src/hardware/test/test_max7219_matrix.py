@@ -50,10 +50,14 @@ def test_invalid_config_is_rejected():
 def test_eye_pixels_draw_round_eyes_only_in_first_and_fourth_blocks():
     points = set(eye_pixels())
 
+    assert len(EYE_ROWS) == 7
+    assert all(len(row) == 8 for row in EYE_ROWS)
     assert len(points) == 2 * sum(row.count("1") for row in EYE_ROWS)
     assert {x // 8 + 1 for x, _ in points} == {1, 4}
     assert min(x for x, _ in points) == 0
     assert max(x for x, _ in points) == 31
+    assert min(y for _, y in points) == 0
+    assert max(y for _, y in points) == 6
 
 
 def test_running_eyes_are_written_as_one_fixed_frame():
