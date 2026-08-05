@@ -5,11 +5,12 @@ from collections.abc import Iterable
 from hardware.hal.display import DotMatrixDisplay
 
 
-# An 8x8 outline that remains recognisable as a round eye at low resolution.
+# A 7-row by 8-column outline for matrices whose final row is obscured after
+# assembly.  Keeping an odd number of rows makes the circle vertically
+# symmetric within the seven visible rows.
 EYE_ROWS = (
     "00111100",
     "01000010",
-    "10000001",
     "10000001",
     "10000001",
     "10000001",
