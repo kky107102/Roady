@@ -1,4 +1,5 @@
 {
+  "schema_version": "1.0",
   "complete": true,
   "missed_damage": false,
   "note": "검수 메모",
