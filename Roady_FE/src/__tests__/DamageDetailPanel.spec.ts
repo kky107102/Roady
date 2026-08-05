@@ -93,9 +93,13 @@ const successAnalysis: DamageAnalysis = {
 
 // ── 마운트 헬퍼 ──────────────────────────────────────────────────────────────
 
-function mountPanel(damageId: number | null = 42, summary: DamageListItem | null = null) {
+function mountPanel(
+  damageId: number | null = 42,
+  summary: DamageListItem | null = null,
+  backTo = '/damages',
+) {
   return mount(DamageDetailPanel, {
-    props: { damageId, summary },
+    props: { damageId, summary, backTo },
     global: {
       plugins: [createPinia()],
       stubs: {
@@ -144,7 +148,8 @@ function mountPanel(damageId: number | null = 42, summary: DamageListItem | null
           ],
         },
         RouterLink: {
-          template: '<a data-testid="router-link"><slot /></a>',
+          template:
+            '<a data-testid="router-link" :data-route-name="to.name" :data-damage-id="to.params && to.params.damageId" :data-back-to="to.query && to.query.backTo"><slot /></a>',
           props: ['to'],
         },
       },
@@ -784,6 +789,7 @@ describe('DamageDetailPanel', () => {
     expect(actions.text()).not.toContain('수정하기')
     expect(actions.text()).toContain('판정 되돌리기')
     expect(actions.text()).toContain('요청서 작성하기')
+    expect(actions.text()).not.toContain('보수 관리 상세보기')
     expect(actions.find('.request-create-btn').attributes('disabled')).toBeUndefined()
     const managerReview = wrapper.get('.manager-review-card')
     expect(managerReview.text()).toContain('현장 확인 필요')
@@ -794,7 +800,7 @@ describe('DamageDetailPanel', () => {
     mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REPAIR_IN_PROGRESS' })
     mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
 
-    const wrapper = mountPanel(42)
+    const wrapper = mountPanel(42, null, '/damages?review=confirmed&damageId=42')
     await flushPromises()
 
     const actions = wrapper.get('.detail-actions')
@@ -803,6 +809,12 @@ describe('DamageDetailPanel', () => {
     expect(button.text()).toBe('요청서 확인')
     await button.trigger('click')
     expect(wrapper.get('[data-testid="request-view-modal"]').text()).toContain('요청서 조회 모달')
+
+    const repairLink = actions.get('a.repair-detail-link')
+    expect(repairLink.text()).toBe('보수 관리 상세보기')
+    expect(repairLink.attributes('data-route-name')).toBe('repair-detail')
+    expect(repairLink.attributes('data-damage-id')).toBe('42')
+    expect(repairLink.attributes('data-back-to')).toBe('/damages?review=confirmed&damageId=42')
   })
 
   it('보수 완료 사건은 보고서 확인 버튼을 표시한다', async () => {
@@ -818,6 +830,7 @@ describe('DamageDetailPanel', () => {
     expect(wrapper.get('[data-testid="completion-report-modal"]').text()).toContain(
       '완료 보고서 모달',
     )
+    expect(wrapper.get('a.repair-detail-link').text()).toBe('보수 관리 상세보기')
   })
 
   it('판정 되돌리기 전용 확인 모달에서 확인하면 미확인 상태 복귀 이벤트를 발생시킨다', async () => {

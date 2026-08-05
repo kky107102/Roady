@@ -381,6 +381,10 @@ const canResetVerdict = computed(() =>
 
 const canManagePendingRequest = computed(() => detail.value?.currentStatus === 'REQUESTED')
 
+const canOpenRepairDetail = computed(() =>
+  ['REPAIR_IN_PROGRESS', 'REPAIR_COMPLETED'].includes(detail.value?.currentStatus ?? ''),
+)
+
 const hasManagerReview = computed(
   () =>
     detailConfirmed.value &&
@@ -891,6 +895,17 @@ async function copyCompletionReport() {
           >
             보고서 확인
           </button>
+          <RouterLink
+            v-if="canOpenRepairDetail"
+            class="review-followup-btn repair-detail-link"
+            :to="{
+              name: 'repair-detail',
+              params: { damageId: detail.id },
+              query: { backTo },
+            }"
+          >
+            보수 관리 상세보기
+          </RouterLink>
         </div>
       </div>
     </template>
@@ -1649,6 +1664,18 @@ async function copyCompletionReport() {
 .review-followup-btn:focus-visible {
   outline: 0.3rem solid var(--roady-brand-secondary);
   outline-offset: 0.2rem;
+}
+
+.repair-detail-link {
+  grid-column: 1 / -1;
+  border-color: var(--roady-brand-primary);
+  background: var(--roady-brand-primary);
+  color: var(--roady-surface-default);
+}
+
+.repair-detail-link:hover {
+  border-color: var(--roady-brand-primary-hover);
+  background: var(--roady-brand-primary-hover);
 }
 
 .pending-request-controls {
