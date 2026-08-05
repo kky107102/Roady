@@ -12,6 +12,10 @@ const dashboardStore = vi.hoisted(() => ({
   trendLoading: false,
   trendError: null,
   totalCount: 0,
+  newDetectionCount: 0,
+  urgentDamages: [],
+  urgentReviewCount: 0,
+  requestedCount: 0,
   highSeverityCount: 0,
   reviewRequiredCount: 0,
   repairingCount: 0,
@@ -58,6 +62,7 @@ describe('DashboardView', () => {
           TrendChart: { template: '<div />' },
           LoadingSpinner: { template: '<div />' },
           RecentDamageList: { template: '<div />' },
+          UrgentDamageList: { template: '<div />' },
         },
       },
     })

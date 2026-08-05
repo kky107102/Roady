@@ -38,8 +38,10 @@ import ToastContainer from '@/components/common/ToastContainer.vue'
   background: var(--roady-surface-background);
 }
 
-.layout-main:focus {
+.layout-main:focus,
+.layout-main:focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 .skip-link {

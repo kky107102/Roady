@@ -15,7 +15,12 @@ import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import RepairRequestModal from '@/components/repairs/RepairRequestModal.vue'
+import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vue'
+import { useNotificationStore } from '@/stores/notification'
 import {
+  buildRepairRequestText,
+  formatCaseId,
   formatDamageTypeLabel,
   formatPriorityLabel,
   priorityBadgeType,
@@ -42,6 +47,7 @@ const emit = defineEmits<{
   'verdict-repair': [payload: ReviewDecisionPayload]
   'verdict-reset': []
 }>()
+const notification = useNotificationStore()
 
 export interface ReviewDecisionPayload {
   processingPriority: string
@@ -67,6 +73,12 @@ const reviewPriority = ref('')
 const reviewDamageType = ref('')
 const reviewNote = ref('')
 const reviewFormError = ref('')
+const requestViewOpen = ref(false)
+const completionReportOpen = ref(false)
+const requestCopyState = ref<'idle' | 'success' | 'error'>('idle')
+const completionCopyState = ref<'idle' | 'success' | 'error'>('idle')
+let requestCopyTimer: ReturnType<typeof setTimeout> | null = null
+let completionCopyTimer: ReturnType<typeof setTimeout> | null = null
 
 // 경쟁 조건 방지: 가장 최근 요청의 순번만 결과를 반영함
 let fetchSeq = 0
@@ -146,6 +158,8 @@ async function fetchDetail(id: number) {
   analysisLoading.value = false
   imagesLoading.value = false
   robotName.value = null
+  requestViewOpen.value = false
+  completionReportOpen.value = false
   for (const url of imageBlobUrls.value.values()) URL.revokeObjectURL(url)
   imageBlobUrls.value = new Map()
 
@@ -235,6 +249,8 @@ onUnmounted(() => {
   ++fetchSeq
   document.removeEventListener('keydown', handleKeydown)
   for (const url of imageBlobUrls.value.values()) URL.revokeObjectURL(url)
+  if (requestCopyTimer) clearTimeout(requestCopyTimer)
+  if (completionCopyTimer) clearTimeout(completionCopyTimer)
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
@@ -259,14 +275,9 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   AI_ANALYZING: 'AI 분석중',
   AI_ANALYZED: 'AI 분석완료',
   REQUESTED: '요청 전',
-  REPAIR_IN_PROGRESS: '보수 중',
+  REPAIR_IN_PROGRESS: '요청 완료',
   CANCELED: '취소',
   REPAIR_COMPLETED: '보수 완료',
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
 }
 
 function formatDateTime(str: string | null): string {
@@ -453,6 +464,53 @@ const reviewActionMessage = computed(() => {
 const loadedImages = computed(() =>
   (detail.value?.images ?? []).filter((image) => imageBlobUrls.value.has(image.id)),
 )
+
+async function copyRequestInfo() {
+  if (!detail.value) return
+  try {
+    await navigator.clipboard.writeText(buildRepairRequestText(detail.value, window.location.href))
+    requestCopyState.value = 'success'
+    notification.success('요청 정보가 클립보드에 복사되었습니다.')
+  } catch {
+    requestCopyState.value = 'error'
+    notification.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.')
+  } finally {
+    if (requestCopyTimer) clearTimeout(requestCopyTimer)
+    requestCopyTimer = setTimeout(() => {
+      requestCopyState.value = 'idle'
+    }, 3000)
+  }
+}
+
+async function copyCompletionReport() {
+  if (!detail.value) return
+  const report = [
+    '[Roady 보수 완료 보고서]',
+    '',
+    `사건번호: ${formatCaseId(detail.value.id, detail.value.createdAt)}`,
+    `담당 주무관: ${detail.value.assignedToName || '-'}`,
+    `보수 담당자: ${detail.value.repairerName || '-'}`,
+    `보수 요청 일자: ${formatDateTime(detail.value.repairRequestedAt ?? null)}`,
+    `보수 완료 일자: ${detail.value.repairCompletedAt || '-'}`,
+    `보수 전 사진: ${detail.value.images.length}장`,
+    '보수 완료 사진: 이미지 없음',
+    `완료 메모: ${detail.value.repairCompletionNote?.trim() || '-'}`,
+  ].join('\n')
+
+  try {
+    await navigator.clipboard.writeText(report)
+    completionCopyState.value = 'success'
+    notification.success('완료 보고서 내용이 클립보드에 복사되었습니다.')
+  } catch {
+    completionCopyState.value = 'error'
+    notification.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.')
+  } finally {
+    if (completionCopyTimer) clearTimeout(completionCopyTimer)
+    completionCopyTimer = setTimeout(() => {
+      completionCopyState.value = 'idle'
+    }, 3000)
+  }
+}
 </script>
 
 <template>
@@ -580,7 +638,31 @@ const loadedImages = computed(() =>
 
         <!-- 3. 관리자 판정 -->
         <section v-if="hasManagerReview" class="manager-review-card" aria-label="관리자 판정">
-          <h3 class="manager-review-title">관리자 판정</h3>
+          <div class="manager-review-head">
+            <h3 class="manager-review-title">관리자 판정</h3>
+            <button
+              v-if="canManagePendingRequest"
+              type="button"
+              class="manager-review-edit-btn"
+              @click="openReviewModal"
+            >
+              수정하기
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z" />
+              </svg>
+            </button>
+          </div>
           <div class="manager-review-grid">
             <div class="manager-review-item">
               <span class="manager-review-label">우선순위</span>
@@ -752,14 +834,7 @@ const loadedImages = computed(() =>
         </template>
 
         <div v-else-if="canManagePendingRequest" class="pending-request-controls">
-          <button type="button" class="verdict-btn verdict-btn--secondary" @click="openReviewModal">
-            판정 수정하기
-          </button>
-          <button
-            type="button"
-            class="verdict-btn verdict-btn--secondary verdict-reset-btn"
-            @click="confirmResetVerdict"
-          >
+          <button type="button" class="pending-reset-btn" @click="confirmResetVerdict">
             판정 되돌리기
           </button>
           <RouterLink
@@ -770,7 +845,7 @@ const loadedImages = computed(() =>
               query: { action: 'create-request', backTo },
             }"
           >
-            요청서 작성 바로가기
+            요청서 작성하기
           </RouterLink>
         </div>
 
@@ -800,10 +875,53 @@ const loadedImages = computed(() =>
           >
             판정 되돌리기
           </button>
+          <button
+            v-if="detail.currentStatus === 'REPAIR_IN_PROGRESS'"
+            type="button"
+            class="review-followup-btn"
+            @click="requestViewOpen = true"
+          >
+            요청서 확인
+          </button>
+          <button
+            v-else-if="detail.currentStatus === 'REPAIR_COMPLETED'"
+            type="button"
+            class="review-followup-btn"
+            @click="completionReportOpen = true"
+          >
+            보고서 확인
+          </button>
         </div>
       </div>
     </template>
   </aside>
+
+  <RepairRequestModal
+    v-if="requestViewOpen && detail"
+    :detail="detail"
+    :image-blob-urls="imageBlobUrls"
+    :images-loading="imagesLoading"
+    readonly
+    :official-name="detail.assignedToName || null"
+    :copy-state="requestCopyState"
+    @close="requestViewOpen = false"
+    @copy="copyRequestInfo"
+  />
+
+  <RepairCompletionModal
+    v-if="completionReportOpen && detail"
+    readonly
+    :completed-at="detail.repairCompletedAt || null"
+    :requested-at="detail.repairRequestedAt || null"
+    :note="detail.repairCompletionNote || null"
+    :official-name="detail.assignedToName || null"
+    :repairer-name="detail.repairerName || null"
+    :before-images="loadedImages"
+    :image-blob-urls="imageBlobUrls"
+    :copy-state="completionCopyState"
+    @close="completionReportOpen = false"
+    @copy="copyCompletionReport"
+  />
 
   <Teleport to="body">
     <div
@@ -1201,11 +1319,42 @@ const loadedImages = computed(() =>
   background: color-mix(in srgb, var(--roady-brand-primary-subtle) 55%, #fff);
 }
 
+.manager-review-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .manager-review-title {
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--roady-text-primary);
   font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
+}
+
+.manager-review-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-label-small);
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
+}
+
+.manager-review-edit-btn:hover {
+  text-decoration: underline;
+}
+
+.manager-review-edit-btn:focus-visible {
+  border-radius: 2px;
+  outline: 0.3rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
 }
 
 .manager-review-grid {
@@ -1475,6 +1624,33 @@ const loadedImages = computed(() =>
   gap: 12px;
 }
 
+.review-followup-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  border: 1px solid var(--roady-brand-secondary);
+  border-radius: 10px;
+  background: var(--roady-surface-default);
+  color: var(--roady-brand-secondary);
+  font-size: 15px;
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.review-followup-btn:hover {
+  background: var(--roady-brand-primary-subtle);
+}
+
+.review-followup-btn:focus-visible {
+  outline: 0.3rem solid var(--roady-brand-secondary);
+  outline-offset: 0.2rem;
+}
+
 .pending-request-controls {
   grid-column: 1 / -1;
   display: grid;
@@ -1483,23 +1659,46 @@ const loadedImages = computed(() =>
 }
 
 .request-create-btn {
-  grid-column: 1 / -1;
-  height: 44px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--roady-brand-secondary);
+  border: 1px solid var(--roady-brand-primary);
   border-radius: 10px;
-  background: var(--roady-surface-default);
-  color: var(--roady-brand-secondary);
-  font-size: 14px;
+  background: var(--roady-brand-primary);
+  color: #fff;
+  font-size: 15px;
   font-weight: var(--krds-font-weight-bold);
   cursor: pointer;
   text-decoration: none;
 }
 
 .request-create-btn:hover {
-  background: var(--roady-brand-primary-subtle);
+  border-color: var(--roady-brand-primary-hover);
+  background: var(--roady-brand-primary-hover);
+}
+
+.pending-reset-btn {
+  height: 52px;
+  border: 1.5px solid var(--roady-status-danger);
+  border-radius: 10px;
+  background: var(--roady-surface-default);
+  color: var(--roady-status-danger);
+  font-size: 15px;
+  font-weight: var(--krds-font-weight-bold);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.pending-reset-btn:hover {
+  background: color-mix(in srgb, var(--roady-status-danger) 7%, #fff);
+}
+
+.pending-reset-btn:focus-visible {
+  outline: 0.3rem solid var(--roady-status-danger);
+  outline-offset: 0.2rem;
 }
 
 .request-create-btn:focus-visible {

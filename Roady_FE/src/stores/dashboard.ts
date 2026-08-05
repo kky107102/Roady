@@ -7,7 +7,14 @@ import { statisticsApi } from '@/api/statistics'
 import type { DamageListItem } from '@/types/damage'
 import type { Robot } from '@/types/robot'
 import type { StatUnit, TimeSeriesResponse } from '@/types/statistics'
-import { localDateOffset, todayLocalStr, toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
+import {
+  localDateOffset,
+  todayLocalStr,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
+
+const DASHBOARD_PAGE_SIZE = 100
 
 export interface DashboardFilter {
   from: string
@@ -43,18 +50,29 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const trendError = ref<string | null>(null)
 
   const totalCount = computed(() => damagesTotalElements.value)
-  const reviewRequiredCount = computed(
+  const newDetectionCount = computed(
     () => damages.value.filter((damage) => damage.currentStatus === 'AI_ANALYZED').length,
+  )
+  const reviewRequiredCount = computed(() => newDetectionCount.value)
+  const urgentDamages = computed(() =>
+    damages.value
+      .filter(
+        (damage) => damage.currentStatus === 'AI_ANALYZED' && damage.repairPriority === 'URGENT',
+      )
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.capturedAt ?? left.createdAt)
+        const rightTime = Date.parse(right.capturedAt ?? right.createdAt)
+        return rightTime - leftTime || right.id - left.id
+      }),
+  )
+  const urgentReviewCount = computed(() => urgentDamages.value.length)
+  const requestedCount = computed(
+    () => damages.value.filter((damage) => damage.currentStatus === 'REQUESTED').length,
   )
   const repairingCount = computed(
     () => damages.value.filter((damage) => damage.currentStatus === 'REPAIR_IN_PROGRESS').length,
   )
-  const highSeverityCount = computed(
-    () =>
-      damages.value.filter(
-        (damage) => damage.repairPriority === 'HIGH' || damage.repairPriority === 'URGENT',
-      ).length,
-  )
+  const highSeverityCount = computed(() => urgentReviewCount.value)
   const activeRobotCount = computed(
     () => robots.value.filter((robot) => robot.active && robot.status === 'MOVING').length,
   )
@@ -68,12 +86,26 @@ export const useDashboardStore = defineStore('dashboard', () => {
         ...(filter.value.from ? { from: toApiFromDateTime(filter.value.from) } : {}),
         ...(filter.value.to ? { to: toApiToDateTime(filter.value.to) } : {}),
       }
-      const [damageResponse, robotList] = await Promise.all([
-        damagesApi.list(queryParams),
+      const firstDamagePagePromise = damagesApi.list({
+        ...queryParams,
+        page: 0,
+        size: DASHBOARD_PAGE_SIZE,
+      })
+      const [firstDamagePage, robotList] = await Promise.all([
+        firstDamagePagePromise,
         robotsApi.list(),
       ])
-      damages.value = damageResponse.content
-      damagesTotalElements.value = damageResponse.totalElements
+      const remainingPages = await Promise.all(
+        Array.from({ length: Math.max(0, firstDamagePage.totalPages - 1) }, (_, index) =>
+          damagesApi.list({
+            ...queryParams,
+            page: index + 1,
+            size: DASHBOARD_PAGE_SIZE,
+          }),
+        ),
+      )
+      damages.value = [firstDamagePage, ...remainingPages].flatMap((page) => page.content)
+      damagesTotalElements.value = firstDamagePage.totalElements
       robots.value = robotList
     } catch (fetchError: unknown) {
       if (import.meta.env.DEV) console.error('[Dashboard] fetchOverview:', fetchError)
@@ -129,7 +161,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     trendLoading,
     trendError,
     totalCount,
+    newDetectionCount,
     reviewRequiredCount,
+    urgentDamages,
+    urgentReviewCount,
+    requestedCount,
     repairingCount,
     highSeverityCount,
     activeRobotCount,

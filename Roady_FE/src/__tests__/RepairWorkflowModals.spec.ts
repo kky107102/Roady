@@ -45,6 +45,28 @@ const global = {
 }
 
 describe('RepairRequestModal', () => {
+  it('신규 작성에서는 과거 요청 비고를 비우고 수정에서는 유지한다', () => {
+    const detailWithPreviousNote = { ...detail, repairRequestNote: '이전 요청 비고' }
+    const createWrapper = mount(RepairRequestModal, {
+      props: {
+        detail: detailWithPreviousNote,
+        imageBlobUrls: new Map(),
+      },
+      global,
+    })
+    const editWrapper = mount(RepairRequestModal, {
+      props: {
+        detail: detailWithPreviousNote,
+        imageBlobUrls: new Map(),
+        editing: true,
+      },
+      global,
+    })
+
+    expect(createWrapper.get('textarea').element.value).toBe('')
+    expect(editWrapper.get('textarea').element.value).toBe('이전 요청 비고')
+  })
+
   it('작성·수정 모드에서 우선순위, 파손 유형, 보수 담당자를 선택한다', async () => {
     const wrapper = mount(RepairRequestModal, {
       props: {
@@ -157,6 +179,58 @@ describe('RepairRequestModal', () => {
 })
 
 describe('RepairCompletionModal', () => {
+  it('완료 보고서에 담당자, 일자, 보수 전 사진과 완료 사진 빈 상태를 표시한다', () => {
+    const beforeImage = {
+      id: 31,
+      damageId: detail.id,
+      sortOrder: 1,
+      originalFilename: 'before.jpg',
+      contentType: 'image/jpeg',
+      sizeBytes: 1024,
+      createdAt: '2026-08-01T10:00:00',
+    }
+    const wrapper = mount(RepairCompletionModal, {
+      props: {
+        readonly: true,
+        officialName: '박주무관',
+        repairerName: '김보수',
+        requestedAt: '2026-08-02T14:30:00',
+        completedAt: '2026-08-05',
+        note: '점자블록 교체 완료',
+        beforeImages: [beforeImage],
+        imageBlobUrls: new Map([[beforeImage.id, 'blob:before-image']]),
+      },
+      global,
+    })
+
+    expect(wrapper.text()).toContain('담당 주무관')
+    expect(wrapper.text()).toContain('박주무관')
+    expect(wrapper.text()).toContain('보수 담당자')
+    expect(wrapper.text()).toContain('김보수')
+    expect(wrapper.text()).toContain('보수 요청 일자')
+    expect(wrapper.text()).toContain('보수 완료 일자')
+    expect(wrapper.text()).toContain('보수 전 사진')
+    expect(wrapper.get('img[alt="보수 전 사진 1"]').attributes('src')).toBe('blob:before-image')
+    expect(wrapper.text()).toContain('보수 완료 사진')
+    expect(wrapper.text()).toContain('보수 완료 이미지가 없습니다.')
+    expect(wrapper.text()).toContain('점자블록 교체 완료')
+    expect(wrapper.text()).toContain('내용 복사')
+  })
+
+  it('완료 보고서 내용 복사 이벤트를 전달한다', async () => {
+    const wrapper = mount(RepairCompletionModal, {
+      props: { readonly: true },
+      global,
+    })
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === '내용 복사')!
+      .trigger('click')
+
+    expect(wrapper.emitted('copy')).toHaveLength(1)
+  })
+
   it('완료 일자를 필수로 검사하고 완료 일자와 메모를 제출한다', async () => {
     const wrapper = mount(RepairCompletionModal, { global })
 

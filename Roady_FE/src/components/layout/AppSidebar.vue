@@ -14,6 +14,13 @@ const user = computed(() => authStore.user)
 
 const userRoleLabel = computed(() => (user.value ? roleLabels[user.value.role] : ''))
 
+const userProfileLabel = computed(() => {
+  if (!user.value) return '프로필'
+  return `${user.value.username} · ${userRoleLabel.value}`
+})
+
+const canOpenSettings = computed(() => user.value?.role === 'ADMIN')
+
 const userInitials = computed(() => {
   if (!user.value) return ''
   return user.value.username.slice(0, 2).toUpperCase()
@@ -88,7 +95,9 @@ async function handleLogout() {
                   stroke-linecap="round"
                   stroke-linejoin="round"
                 >
-                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <path
+                    d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"
+                  />
                   <line x1="12" y1="9" x2="12" y2="13" />
                   <line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
@@ -122,21 +131,6 @@ async function handleLogout() {
                   <line x1="9" y1="13" x2="15" y2="13" />
                   <line x1="9" y1="17" x2="15" y2="17" />
                 </svg>
-                <!-- 설정 관리: settings cog -->
-                <svg
-                  v-else-if="item.key === 'admin'"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <circle cx="12" cy="12" r="3" />
-                  <path
-                    d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-                  />
-                </svg>
               </span>
               <span class="nav-label">{{ item.label }}</span>
             </RouterLink>
@@ -145,52 +139,57 @@ async function handleLogout() {
       </template>
     </nav>
 
-    <!-- User -->
-    <div class="sidebar-user">
-      <div class="user-profile">
-        <div class="user-avatar" aria-hidden="true">{{ userInitials }}</div>
-        <div class="user-meta">
-          <span class="user-name">{{ user?.username }}</span>
-          <span class="user-role-label">{{ userRoleLabel }}</span>
-        </div>
+    <!-- Sidebar footer actions -->
+    <div class="sidebar-footer" aria-label="사용자 메뉴">
+      <div class="profile-icon" role="img" :aria-label="userProfileLabel" :title="userProfileLabel">
+        {{ userInitials }}
       </div>
-      <div class="user-actions">
-        <button type="button" class="action-btn" aria-label="알림" title="알림" disabled>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="action-btn"
-          aria-label="로그아웃"
-          title="로그아웃"
-          @click="handleLogout"
+
+      <RouterLink
+        v-if="canOpenSettings"
+        :to="{ name: 'admin-users' }"
+        class="footer-action"
+        :class="{ 'is-active': isActive('admin-users') }"
+        aria-label="설정 관리"
+        title="설정 관리"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
-      </div>
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+          />
+        </svg>
+      </RouterLink>
+
+      <button
+        type="button"
+        class="footer-action"
+        aria-label="로그아웃"
+        title="로그아웃"
+        @click="handleLogout"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+      </button>
     </div>
   </aside>
 </template>
@@ -284,10 +283,18 @@ async function handleLogout() {
   font-weight: var(--krds-font-weight-bold);
 }
 
+.nav-link:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .nav-link:focus-visible {
-  outline: 0.2rem solid rgb(255 255 255 / 55%);
-  outline-offset: 0.1rem;
+  background: rgb(255 255 255 / 12%);
   color: var(--roady-surface-default);
+}
+
+.nav-link.is-active:focus-visible {
+  background: var(--roady-brand-secondary);
 }
 
 .nav-icon {
@@ -312,27 +319,19 @@ async function handleLogout() {
   text-overflow: ellipsis;
 }
 
-/* ── User ── */
-.sidebar-user {
+/* ── Footer actions ── */
+.sidebar-footer {
   display: flex;
-  flex-direction: column;
-  gap: 1.2rem;
+  align-items: center;
+  gap: 0.8rem;
   padding: 1.6rem;
   border-top: 0.1rem solid rgb(255 255 255 / 10%);
 }
 
-.user-profile {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-width: 0;
-}
-
-.user-avatar {
+.profile-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   width: 3.6rem;
   height: 3.6rem;
   border-radius: 50%;
@@ -343,65 +342,37 @@ async function handleLogout() {
   letter-spacing: 0;
 }
 
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.user-name {
-  font-size: var(--krds-pc-font-size-label-small);
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-surface-default);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-role-label {
-  font-size: var(--krds-pc-font-size-body-small);
-  color: rgb(255 255 255 / 50%);
-}
-
-.user-actions {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.action-btn {
+.footer-action {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 3.2rem;
-  height: 3.2rem;
+  width: 3.6rem;
+  height: 3.6rem;
   padding: 0;
   border: 0;
-  border-radius: 0.6rem;
+  border-radius: 50%;
   color: rgb(255 255 255 / 50%);
   background: transparent;
   cursor: pointer;
+  text-decoration: none;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
 }
 
-.action-btn:hover:not(:disabled) {
+.footer-action:hover,
+.footer-action.is-active {
   background: rgb(255 255 255 / 8%);
   color: var(--roady-surface-default);
 }
 
-.action-btn:focus-visible {
+.footer-action:focus-visible {
   outline: 0.2rem solid rgb(255 255 255 / 55%);
   outline-offset: 0.1rem;
   color: var(--roady-surface-default);
 }
 
-.action-btn:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-
-.action-btn svg {
+.footer-action svg {
   width: 1.8rem;
   height: 1.8rem;
 }

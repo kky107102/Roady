@@ -49,6 +49,8 @@ describe('dashboard store', () => {
     expect(damagesApiMock.list).toHaveBeenCalledWith({
       from: '2026-08-01T00:00:00',
       to: '2026-08-08T00:00:00',
+      page: 0,
+      size: 100,
     })
     expect(statisticsApiMock.timeSeries).toHaveBeenCalledWith({
       from: '2026-07-01T00:00:00',
@@ -81,5 +83,58 @@ describe('dashboard store', () => {
 
     expect(damagesApiMock.list).toHaveBeenCalledOnce()
     expect(statisticsApiMock.timeSeries).not.toHaveBeenCalled()
+  })
+
+  it('미확인·긴급·요청 전 사건과 운행 중 로디를 각각 집계한다', async () => {
+    damagesApiMock.list.mockResolvedValue({
+      ...damageResponse,
+      totalElements: 5,
+      content: [
+        {
+          id: 1,
+          currentStatus: 'AI_ANALYZED',
+          repairPriority: 'URGENT',
+          createdAt: '2026-08-05T01:00:00',
+        },
+        {
+          id: 2,
+          currentStatus: 'AI_ANALYZED',
+          repairPriority: 'HIGH',
+          createdAt: '2026-08-05T02:00:00',
+        },
+        {
+          id: 3,
+          currentStatus: 'REQUESTED',
+          repairPriority: 'URGENT',
+          createdAt: '2026-08-05T03:00:00',
+        },
+        {
+          id: 4,
+          currentStatus: 'REPAIR_IN_PROGRESS',
+          repairPriority: 'NORMAL',
+          createdAt: '2026-08-05T04:00:00',
+        },
+        {
+          id: 5,
+          currentStatus: 'CANCELED',
+          repairPriority: 'URGENT',
+          createdAt: '2026-08-05T05:00:00',
+        },
+      ],
+    })
+    robotsApiMock.list.mockResolvedValue([
+      { id: 1, active: true, status: 'MOVING' },
+      { id: 2, active: false, status: 'MOVING' },
+      { id: 3, active: true, status: 'STANDBY' },
+    ])
+    const store = useDashboardStore()
+
+    await store.fetchOverview()
+
+    expect(store.newDetectionCount).toBe(2)
+    expect(store.urgentReviewCount).toBe(1)
+    expect(store.urgentDamages.map((item) => item.id)).toEqual([1])
+    expect(store.requestedCount).toBe(1)
+    expect(store.activeRobotCount).toBe(1)
   })
 })

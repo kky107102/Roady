@@ -16,14 +16,11 @@ async function runAction(toast: Toast, action: ToastAction) {
 }
 
 const icons: Record<ToastType, string> = {
-  success:
-    'M20 6 9 17l-5-5',
-  error:
-    'M18 6 6 18M6 6l12 12',
+  success: 'M20 6 9 17l-5-5',
+  error: 'M18 6 6 18M6 6l12 12',
   warning:
     'M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z',
-  info:
-    'M12 16v-4M12 8h.01M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z',
+  info: 'M12 16v-4M12 8h.01M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z',
 }
 </script>
 
@@ -91,13 +88,25 @@ const icons: Record<ToastType, string> = {
 <style scoped>
 .toast-region {
   position: fixed;
+  top: 13.6rem;
   right: 2.4rem;
-  bottom: 2.4rem;
   z-index: 9000;
   display: flex;
   flex-direction: column;
   gap: 1rem;
   pointer-events: none;
+}
+
+@media (max-width: 768px) {
+  .toast-region {
+    top: 11.2rem;
+    right: 1.6rem;
+    left: 1.6rem;
+  }
+
+  .toast-item {
+    width: 100%;
+  }
 }
 
 .toast-list {
@@ -115,10 +124,13 @@ const icons: Record<ToastType, string> = {
   gap: 1.2rem;
   width: 36rem;
   padding: 1.4rem 1.6rem;
-  border-left: 0.4rem solid;
+  border: 0.1rem solid rgb(15 23 42 / 10%);
+  border-left-width: 0.4rem;
   border-radius: 0.6rem;
   background: var(--roady-surface-default);
-  box-shadow: 0 0.4rem 1.6rem rgb(0 0 0 / 14%);
+  box-shadow:
+    0 0.8rem 2.4rem rgb(15 23 42 / 18%),
+    0 0.2rem 0.6rem rgb(15 23 42 / 10%);
   pointer-events: auto;
 }
 
@@ -177,12 +189,13 @@ const icons: Record<ToastType, string> = {
 .toast-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.8rem;
-  margin-top: 0.6rem;
+  column-gap: 1.6rem;
+  row-gap: 0.8rem;
+  margin-top: 0.8rem;
 }
 
 .toast-action {
-  padding: 0;
+  padding: 0.2rem 0;
   border: 0;
   border-bottom: 1px solid currentColor;
   background: transparent;
@@ -205,7 +218,9 @@ const icons: Record<ToastType, string> = {
   color: var(--roady-text-tertiary);
   background: transparent;
   cursor: pointer;
-  transition: color 0.15s, background-color 0.15s;
+  transition:
+    color 0.15s,
+    background-color 0.15s;
 }
 
 .toast-close:hover {
@@ -225,11 +240,15 @@ const icons: Record<ToastType, string> = {
 
 /* TransitionGroup animations */
 .toast-enter-active {
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.2s ease;
 }
 
 .toast-leave-active {
-  transition: transform 0.2s ease, opacity 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
   position: absolute;
 }
 

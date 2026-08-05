@@ -185,7 +185,7 @@ const requestModalMode = ref<'create' | 'view' | 'edit'>('create')
 const requestConfirmOpen = ref(false)
 const pendingRequest = ref<RepairRequestPayload | null>(null)
 const requestSubmitting = ref(false)
-const requestActionHandledFor = ref<number | null>(null)
+const requestActionHandledFor = ref<string | null>(null)
 
 function openRequestModal(mode: 'create' | 'view' | 'edit') {
   requestModalMode.value = mode
@@ -200,14 +200,17 @@ function closeRequestModal() {
 watch(
   [damageId, () => detail.value?.currentStatus, () => route.query.action],
   ([id, status, action]) => {
+    const actionKey = id != null && typeof action === 'string' ? `${id}:${action}` : null
     if (
       id != null &&
-      status === 'REQUESTED' &&
-      action === 'create-request' &&
-      requestActionHandledFor.value !== id
+      actionKey != null &&
+      requestActionHandledFor.value !== actionKey &&
+      ((status === 'REQUESTED' && action === 'create-request') ||
+        (['REPAIR_IN_PROGRESS', 'REPAIR_COMPLETED'].includes(status ?? '') &&
+          action === 'view-request'))
     ) {
-      requestActionHandledFor.value = id
-      openRequestModal('create')
+      requestActionHandledFor.value = actionKey
+      openRequestModal(action === 'create-request' ? 'create' : 'view')
     }
   },
   { immediate: true },
@@ -303,11 +306,31 @@ async function confirmCancelRequest() {
 const completionModalOpen = ref(false)
 const completionModalReadonly = ref(false)
 const completionSubmitting = ref(false)
+const completionCopyState = ref<'idle' | 'success' | 'error'>('idle')
+let completionCopyStateTimer: ReturnType<typeof setTimeout> | null = null
+const completionActionHandledFor = ref<number | null>(null)
 
 function openCompletionModal(readonly = false) {
   completionModalReadonly.value = readonly
+  completionCopyState.value = 'idle'
   completionModalOpen.value = true
 }
+
+watch(
+  [damageId, () => detail.value?.currentStatus, () => route.query.action],
+  ([id, status, action]) => {
+    if (
+      id != null &&
+      status === 'REPAIR_COMPLETED' &&
+      action === 'view-completion-report' &&
+      completionActionHandledFor.value !== id
+    ) {
+      completionActionHandledFor.value = id
+      openCompletionModal(true)
+    }
+  },
+  { immediate: true },
+)
 
 async function onCompletionConfirm(payload: RepairCompletePayload) {
   if (!detail.value || completionSubmitting.value) return
@@ -347,6 +370,36 @@ async function confirmNoRepair() {
   }
 }
 
+async function copyCompletionReport() {
+  if (!detail.value) return
+  const report = [
+    '[Roady 보수 완료 보고서]',
+    '',
+    `사건번호: ${caseIdText.value}`,
+    `담당 주무관: ${officialName.value || '-'}`,
+    `보수 담당자: ${detail.value.repairerName || '-'}`,
+    `보수 요청 일자: ${formatDateTime(detail.value.repairRequestedAt)}`,
+    `보수 완료 일자: ${formatDate(detail.value.repairCompletedAt)}`,
+    `보수 전 사진: ${detail.value.images.length}장`,
+    '보수 완료 사진: 이미지 없음',
+    `완료 메모: ${detail.value.repairCompletionNote?.trim() || '-'}`,
+  ].join('\n')
+
+  try {
+    await navigator.clipboard.writeText(report)
+    completionCopyState.value = 'success'
+    notification.success('완료 보고서 내용이 클립보드에 복사되었습니다.')
+  } catch {
+    completionCopyState.value = 'error'
+    notification.error('클립보드 복사에 실패했습니다. 브라우저 권한을 확인해주세요.')
+  } finally {
+    if (completionCopyStateTimer) clearTimeout(completionCopyStateTimer)
+    completionCopyStateTimer = setTimeout(() => {
+      completionCopyState.value = 'idle'
+    }, 3000)
+  }
+}
+
 // ── 요청 정보 복사 ─────────────────────────────────────────
 const copyState = ref<'idle' | 'success' | 'error'>('idle')
 let copyStateTimer: ReturnType<typeof setTimeout> | null = null
@@ -372,32 +425,29 @@ async function copyRequestInfo() {
 
 onUnmounted(() => {
   if (copyStateTimer) clearTimeout(copyStateTimer)
+  if (completionCopyStateTimer) clearTimeout(completionCopyStateTimer)
 })
 </script>
 
 <template>
   <div class="repair-detail-view">
-    <!-- 페이지 헤더 -->
-    <div class="page-head">
-      <button type="button" class="back-btn" aria-label="목록으로 돌아가기" @click="handleBack">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <line x1="19" y1="12" x2="5" y2="12" />
-          <polyline points="12 19 5 12 12 5" />
-        </svg>
-        목록으로
-      </button>
-      <h1 class="page-title">보수 사건 상세</h1>
-    </div>
+    <button type="button" class="back-link" aria-label="사건 목록으로 돌아가기" @click="handleBack">
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="19" y1="12" x2="5" y2="12" />
+        <polyline points="12 19 5 12 12 5" />
+      </svg>
+      사건 목록
+    </button>
 
     <!-- 로딩 -->
     <div v-if="loading" class="page-state">
@@ -815,11 +865,16 @@ onUnmounted(() => {
       :submitting="completionSubmitting"
       :readonly="completionModalReadonly"
       :completed-at="detail?.repairCompletedAt || null"
+      :requested-at="detail?.repairRequestedAt || null"
       :note="detail?.repairCompletionNote || null"
       :official-name="officialName"
       :repairer-name="detail?.repairerName || null"
+      :before-images="loadedImages"
+      :image-blob-urls="imageBlobUrls"
+      :copy-state="completionCopyState"
       @close="completionModalOpen = false"
       @confirm="onCompletionConfirm"
+      @copy="copyCompletionReport"
     />
   </div>
 </template>
@@ -832,50 +887,30 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ── 페이지 헤더 ── */
-.page-head {
-  display: flex;
-  align-items: center;
-  gap: 1.2rem;
-  padding: 0 2rem;
-  min-height: 6.4rem;
-  border-bottom: 1px solid var(--roady-border-default);
-  background: var(--roady-surface-default);
-  flex-shrink: 0;
-}
-
-.back-btn {
+.back-link {
+  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.8rem 1.2rem;
-  border: 1px solid var(--roady-border-default);
-  border-radius: 0.6rem;
-  background: var(--roady-surface-default);
-  color: var(--roady-text-secondary);
-  font-size: 1.4rem;
+  margin: 2.4rem 2rem 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--roady-brand-secondary);
+  font-size: var(--krds-pc-font-size-body-small);
   font-weight: var(--krds-font-weight-bold);
   cursor: pointer;
-  transition: background-color 0.1s;
+  transition: color 0.15s ease;
   white-space: nowrap;
 }
 
-.back-btn:hover {
-  background: var(--roady-surface-background);
+.back-link:hover {
   color: var(--roady-text-primary);
 }
 
-.back-btn:focus-visible {
+.back-link:focus-visible {
   outline: 2px solid var(--roady-focus-ring);
   outline-offset: 2px;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-text-primary);
-  letter-spacing: -0.01em;
 }
 
 /* ── 상태 행 (로딩/에러) ── */
@@ -891,7 +926,7 @@ onUnmounted(() => {
 .page-body {
   flex: 1;
   overflow-y: auto;
-  padding: 2.4rem 2rem;
+  padding: 2rem 2rem 2.4rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;

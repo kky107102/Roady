@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import type { DamageDetail, DamageAnalysis, DamageListItem } from '@/types/damage'
 
 // ── API mock ─────────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ function mountPanel(damageId: number | null = 42, summary: DamageListItem | null
   return mount(DamageDetailPanel, {
     props: { damageId, summary },
     global: {
+      plugins: [createPinia()],
       stubs: {
         LoadingSpinner: {
           template: '<div role="status" data-testid="loading-spinner">{{ label }}</div>',
@@ -115,6 +117,31 @@ function mountPanel(damageId: number | null = 42, summary: DamageListItem | null
           template:
             '<span data-testid="ai-result-badge" :data-type="type" :data-size="size"><span>AI 판독</span><span>{{ label }}</span></span>',
           props: ['type', 'label', 'size'],
+        },
+        RepairRequestModal: {
+          template: '<div data-testid="request-view-modal">요청서 조회 모달</div>',
+          props: [
+            'detail',
+            'imageBlobUrls',
+            'imagesLoading',
+            'readonly',
+            'officialName',
+            'copyState',
+          ],
+        },
+        RepairCompletionModal: {
+          template: '<div data-testid="completion-report-modal">완료 보고서 모달</div>',
+          props: [
+            'readonly',
+            'completedAt',
+            'requestedAt',
+            'note',
+            'officialName',
+            'repairerName',
+            'beforeImages',
+            'imageBlobUrls',
+            'copyState',
+          ],
         },
         RouterLink: {
           template: '<a data-testid="router-link"><slot /></a>',
@@ -738,7 +765,7 @@ describe('DamageDetailPanel', () => {
     ).toBe(true)
   })
 
-  it('요청 전 사건은 판정 수정·되돌리기·요청 작성 버튼을 표시한다', async () => {
+  it('요청 전 사건은 관리자 판정 수정과 되돌리기·요청 작성 버튼을 표시한다', async () => {
     mockApi.getDetail.mockResolvedValue({
       ...baseDetail,
       currentStatus: 'REQUESTED',
@@ -754,11 +781,43 @@ describe('DamageDetailPanel', () => {
     const actions = wrapper.get('.detail-actions')
     expect(actions.attributes('data-action-mode')).toBe('completed')
     expect(actions.text()).toContain('요청 전 · 관리자 확인 완료')
-    expect(actions.text()).toContain('판정 수정하기')
+    expect(actions.text()).not.toContain('수정하기')
     expect(actions.text()).toContain('판정 되돌리기')
-    expect(actions.text()).toContain('요청서 작성 바로가기')
+    expect(actions.text()).toContain('요청서 작성하기')
     expect(actions.find('.request-create-btn').attributes('disabled')).toBeUndefined()
-    expect(wrapper.get('.manager-review-card').text()).toContain('현장 확인 필요')
+    const managerReview = wrapper.get('.manager-review-card')
+    expect(managerReview.text()).toContain('현장 확인 필요')
+    expect(managerReview.get('.manager-review-edit-btn').text()).toContain('수정하기')
+  })
+
+  it('요청 완료 사건은 요청서 확인 버튼을 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REPAIR_IN_PROGRESS' })
+    mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    const actions = wrapper.get('.detail-actions')
+    expect(actions.text()).toContain('요청 완료 · 관리자 확인 완료')
+    const button = actions.get('button.review-followup-btn')
+    expect(button.text()).toBe('요청서 확인')
+    await button.trigger('click')
+    expect(wrapper.get('[data-testid="request-view-modal"]').text()).toContain('요청서 조회 모달')
+  })
+
+  it('보수 완료 사건은 보고서 확인 버튼을 표시한다', async () => {
+    mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REPAIR_COMPLETED' })
+    mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
+
+    const wrapper = mountPanel(42)
+    await flushPromises()
+
+    const button = wrapper.get('button.review-followup-btn')
+    expect(button.text()).toBe('보고서 확인')
+    await button.trigger('click')
+    expect(wrapper.get('[data-testid="completion-report-modal"]').text()).toContain(
+      '완료 보고서 모달',
+    )
   })
 
   it('판정 되돌리기 전용 확인 모달에서 확인하면 미확인 상태 복귀 이벤트를 발생시킨다', async () => {
@@ -768,7 +827,7 @@ describe('DamageDetailPanel', () => {
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    await wrapper.get('.verdict-reset-btn').trigger('click')
+    await wrapper.get('.pending-reset-btn').trigger('click')
 
     const modal = document.body.querySelector('[aria-labelledby="reset-verdict-title"]')
     expect(modal).not.toBeNull()
@@ -791,7 +850,7 @@ describe('DamageDetailPanel', () => {
     const wrapper = mountPanel(42)
     await flushPromises()
 
-    expect(wrapper.get('.verdict-reset-btn').text()).toBe('판정 되돌리기')
+    expect(wrapper.get('.pending-reset-btn').text()).toBe('판정 되돌리기')
   })
 
   // ── 닫기 ───────────────────────────────────────────────────────────────────

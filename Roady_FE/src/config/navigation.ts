@@ -22,17 +22,6 @@ export const navGroups: NavGroup[] = [
       { key: 'robots', label: '로디 운행', routeName: 'robots' },
     ],
   },
-  {
-    label: '시스템 설정',
-    items: [
-      {
-        key: 'admin',
-        label: '설정 관리',
-        routeName: 'admin-users',
-        roles: ['ADMIN'],
-      },
-    ],
-  },
 ]
 
 export const roleLabels: Record<UserRole, string> = {
