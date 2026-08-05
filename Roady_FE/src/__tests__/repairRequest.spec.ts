@@ -181,6 +181,18 @@ describe('buildRepairRequestText', () => {
     expect(text).toContain('관리자 판정 파손 유형: 균열')
   })
 
+  it('최종 저장된 보수 담당자와 요청 비고를 포함한다', () => {
+    const detail = {
+      ...baseDetail,
+      repairerName: '김보수',
+      repairRequestNote: '균열 구간 우선 보수 요청',
+    }
+    const text = buildRepairRequestText(detail, detailUrl)
+
+    expect(text).toContain('보수 담당자: 김보수')
+    expect(text).toContain('요청 비고: 균열 구간 우선 보수 요청')
+  })
+
   it('위치(도로명 주소)를 포함한다', () => {
     const text = buildRepairRequestText(baseDetail, detailUrl)
     expect(text).toContain('위치: 서울특별시 강남구 개포로 123')

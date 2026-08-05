@@ -65,6 +65,10 @@
   --krds-light-color-button-primary-fill-pressed: var(--roady-brand-primary-pressed);
   --krds-light-color-button-primary-border: var(--roady-brand-primary);
   --krds-light-color-button-primary-text: var(--roady-surface-default);
+  --krds-light-color-button-secondary-fill: var(--roady-surface-default);
+  --krds-light-color-button-secondary-fill-hover: var(--roady-surface-subtle);
+  --krds-light-color-button-secondary-fill-pressed: var(--roady-brand-primary-subtle);
+  --krds-light-color-button-secondary-border: var(--roady-brand-primary);
   --krds-light-color-text-basic: var(--roady-text-primary);
   --krds-light-color-text-bolder: var(--roady-text-primary);
   --krds-light-color-text-subtle: var(--roady-text-secondary);

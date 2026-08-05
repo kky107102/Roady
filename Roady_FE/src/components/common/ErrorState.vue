@@ -29,11 +29,7 @@ const emit = defineEmits<{ retry: [] }>()
       <line x1="12" y1="16" x2="12.01" y2="16" />
     </svg>
     <p class="error-message">{{ message }}</p>
-    <button
-      type="button"
-      class="krds-btn medium outline error-retry"
-      @click="emit('retry')"
-    >
+    <button type="button" class="krds-btn medium secondary error-retry" @click="emit('retry')">
       {{ retryLabel }}
     </button>
   </div>

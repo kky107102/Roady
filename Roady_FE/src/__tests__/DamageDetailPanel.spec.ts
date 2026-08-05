@@ -116,6 +116,10 @@ function mountPanel(damageId: number | null = 42, summary: DamageListItem | null
             '<span data-testid="ai-result-badge" :data-type="type" :data-size="size"><span>AI 판독</span><span>{{ label }}</span></span>',
           props: ['type', 'label', 'size'],
         },
+        RouterLink: {
+          template: '<a data-testid="router-link"><slot /></a>',
+          props: ['to'],
+        },
       },
     },
   })
@@ -643,7 +647,7 @@ describe('DamageDetailPanel', () => {
     expect(labels).toContain('보수 필요')
   })
 
-  it('"보수 불필요" 확인 시 verdict-no-repair 이벤트를 발생시킨다', async () => {
+  it('"보수 불필요" 클릭 시 확인 모달을 열고 확인 후 이벤트를 발생시킨다', async () => {
     mockApi.getDetail.mockResolvedValue(baseDetail)
     mockApi.getAnalysisJobs.mockResolvedValue([])
 
@@ -653,7 +657,17 @@ describe('DamageDetailPanel', () => {
     const btn = wrapper.findAll('button').find((b) => b.text() === '보수 불필요')
     await btn!.trigger('click')
 
-    expect(window.confirm).toHaveBeenCalledWith('이 사건을 보수 불필요로 판정하시겠습니까?')
+    const modal = document.body.querySelector('[role="alertdialog"]') as HTMLElement
+    expect(modal).not.toBeNull()
+    expect(modal.textContent).toContain('보수 불필요로 판정할까요?')
+    expect(wrapper.emitted('verdict-no-repair')).toBeFalsy()
+
+    const confirmButton = Array.from(modal.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('보수 불필요로 판정'),
+    )
+    confirmButton?.click()
+    await wrapper.vm.$nextTick()
+
     expect(wrapper.emitted('verdict-no-repair')).toBeTruthy()
   })
 
@@ -742,12 +756,12 @@ describe('DamageDetailPanel', () => {
     expect(actions.text()).toContain('요청 전 · 관리자 확인 완료')
     expect(actions.text()).toContain('판정 수정하기')
     expect(actions.text()).toContain('판정 되돌리기')
-    expect(actions.text()).toContain('요청 작성하기 · 준비 중')
-    expect(actions.find('.request-create-btn').attributes('disabled')).toBeDefined()
+    expect(actions.text()).toContain('요청서 작성 바로가기')
+    expect(actions.find('.request-create-btn').attributes('disabled')).toBeUndefined()
     expect(wrapper.get('.manager-review-card').text()).toContain('현장 확인 필요')
   })
 
-  it('판정 되돌리기를 확인하면 미확인 상태 복귀 이벤트를 발생시킨다', async () => {
+  it('판정 되돌리기 전용 확인 모달에서 확인하면 미확인 상태 복귀 이벤트를 발생시킨다', async () => {
     mockApi.getDetail.mockResolvedValue({ ...baseDetail, currentStatus: 'REQUESTED' })
     mockApi.getAnalysisJobs.mockResolvedValue([successAnalysis])
 
@@ -756,7 +770,17 @@ describe('DamageDetailPanel', () => {
 
     await wrapper.get('.verdict-reset-btn').trigger('click')
 
-    expect(window.confirm).toHaveBeenCalled()
+    const modal = document.body.querySelector('[aria-labelledby="reset-verdict-title"]')
+    expect(modal).not.toBeNull()
+    expect(modal?.textContent).toContain('판정을 되돌릴까요?')
+    expect(wrapper.emitted('verdict-reset')).toBeFalsy()
+
+    const confirmButton = Array.from(modal?.querySelectorAll('button') ?? []).find((button) =>
+      button.textContent?.includes('판정 되돌리기'),
+    )
+    confirmButton?.click()
+    await wrapper.vm.$nextTick()
+
     expect(wrapper.emitted('verdict-reset')).toBeTruthy()
   })
 

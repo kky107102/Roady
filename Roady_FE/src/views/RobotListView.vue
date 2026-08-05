@@ -9,11 +9,7 @@ import KrdsTextInput from '@/components/common/KrdsTextInput.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
-import type {
-  Robot,
-  RobotConnectionStatus,
-  RobotOperationStatus,
-} from '@/types/robot'
+import type { Robot, RobotConnectionStatus, RobotOperationStatus } from '@/types/robot'
 import {
   connectionBadge,
   connectionLabels,
@@ -60,9 +56,7 @@ const hasActiveFilter = computed(
     connectionFilter.value !== 'ALL' ||
     appliedSearchQuery.value.length > 0,
 )
-const canReset = computed(
-  () => hasActiveFilter.value || searchInput.value.trim().length > 0,
-)
+const canReset = computed(() => hasActiveFilter.value || searchInput.value.trim().length > 0)
 const robotCountLabel = computed(() =>
   hasActiveFilter.value
     ? `${displayedRobots.value.length}대 / 총 ${robots.value.length}대`
@@ -78,12 +72,10 @@ const displayedRobots = computed(() => {
       robot.serialNumber.toLocaleLowerCase('ko-KR').includes(normalizedQuery)
     const operationMatches =
       operationFilter.value === 'ALL' ||
-      robot.latestStatus?.operationStatus ===
-        (operationFilter.value as RobotOperationStatus)
+      robot.latestStatus?.operationStatus === (operationFilter.value as RobotOperationStatus)
     const connectionMatches =
       connectionFilter.value === 'ALL' ||
-      robot.latestStatus?.connectionStatus ===
-        (connectionFilter.value as RobotConnectionStatus)
+      robot.latestStatus?.connectionStatus === (connectionFilter.value as RobotConnectionStatus)
 
     return searchMatches && operationMatches && connectionMatches
   })
@@ -100,17 +92,11 @@ const displayedRobots = computed(() => {
       if (aBattery == null && bBattery == null) return collator.compare(a.name, b.name)
       if (aBattery == null) return 1
       if (bBattery == null) return -1
-      return sortBy.value === 'battery-asc'
-        ? aBattery - bBattery
-        : bBattery - aBattery
+      return sortBy.value === 'battery-asc' ? aBattery - bBattery : bBattery - aBattery
     }
     if (sortBy.value === 'updated-desc') {
-      const aTime = a.latestStatus?.recordedAt
-        ? new Date(a.latestStatus.recordedAt).getTime()
-        : 0
-      const bTime = b.latestStatus?.recordedAt
-        ? new Date(b.latestStatus.recordedAt).getTime()
-        : 0
+      const aTime = a.latestStatus?.recordedAt ? new Date(a.latestStatus.recordedAt).getTime() : 0
+      const bTime = b.latestStatus?.recordedAt ? new Date(b.latestStatus.recordedAt).getTime() : 0
       return bTime - aTime
     }
     return collator.compare(a.name, b.name)
@@ -201,10 +187,7 @@ onMounted(fetchRobots)
           <span class="urgent-count">{{ urgentRobots.length }}대</span>
         </div>
 
-        <EmptyState
-          v-if="urgentRobots.length === 0"
-          title="긴급 확인이 필요한 로봇이 없습니다."
-        />
+        <EmptyState v-if="urgentRobots.length === 0" title="긴급 확인이 필요한 로봇이 없습니다." />
         <ul v-else class="urgent-list">
           <li v-for="robot in urgentRobots" :key="robot.id">
             <RouterLink
@@ -264,12 +247,7 @@ onMounted(fetchRobots)
       />
       <div class="toolbar-actions">
         <button type="submit" class="search-button">검색</button>
-        <button
-          type="button"
-          class="filter-reset"
-          :disabled="!canReset"
-          @click="resetFilters"
-        >
+        <button type="button" class="filter-reset" :disabled="!canReset" @click="resetFilters">
           필터 초기화
         </button>
       </div>
@@ -293,14 +271,16 @@ onMounted(fetchRobots)
         title="조건에 맞는 로봇이 없습니다."
         description="검색어나 상태 필터를 변경해 주세요."
       >
-        <button type="button" class="krds-btn medium outline" @click="resetFilters">
+        <button type="button" class="krds-btn medium secondary" @click="resetFilters">
           필터 초기화
         </button>
       </EmptyState>
 
       <div v-else class="table-scroll">
         <table>
-          <caption class="sr-only">로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각</caption>
+          <caption class="sr-only">
+            로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각
+          </caption>
           <colgroup>
             <col class="col-name" />
             <col class="col-serial" />

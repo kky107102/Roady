@@ -64,7 +64,7 @@ describe('RepairRequestModal', () => {
     await wrapper.find('textarea').setValue('교체 요청')
     await wrapper
       .findAll('button')
-      .find((button) => button.text() === '확인')!
+      .find((button) => button.text() === '보수 요청하기')!
       .trigger('click')
 
     expect(wrapper.emitted('confirm')?.[0]?.[0]).toEqual({
@@ -90,6 +90,69 @@ describe('RepairRequestModal', () => {
     expect(wrapper.findAll('select')).toHaveLength(0)
     expect(wrapper.text()).toContain('박주무관')
     expect(wrapper.text()).toContain('김보수')
+  })
+
+  it('확인 모드에서만 최종 요청 정보 복사 버튼을 제공한다', async () => {
+    const wrapper = mount(RepairRequestModal, {
+      props: {
+        detail: { ...detail, repairerId: 9, repairerName: '김보수' },
+        imageBlobUrls: new Map(),
+        readonly: true,
+        copyState: 'idle',
+      },
+      global,
+    })
+
+    const copyButton = wrapper.findAll('button').find((button) => button.text() === '요청 복사')
+    expect(copyButton).toBeDefined()
+    expect(copyButton!.find('svg').exists()).toBe(true)
+    expect(copyButton!.classes()).toContain('primary')
+    await copyButton!.trigger('click')
+
+    expect(wrapper.emitted('copy')).toHaveLength(1)
+  })
+
+  it('수정 가능한 확인 모드에서 수정하기 버튼을 제공한다', async () => {
+    const wrapper = mount(RepairRequestModal, {
+      props: {
+        detail: { ...detail, repairerId: 9, repairerName: '김보수' },
+        imageBlobUrls: new Map(),
+        readonly: true,
+        editable: true,
+      },
+      global,
+    })
+
+    const editButton = wrapper.findAll('button').find((button) => button.text() === '수정하기')
+    expect(editButton).toBeDefined()
+    await editButton!.trigger('click')
+
+    expect(wrapper.emitted('edit')).toHaveLength(1)
+    const headerButtons = wrapper.find('.modal-header-actions').findAll('button')
+    expect(headerButtons[0]!.text()).toBe('수정하기')
+    expect(headerButtons[1]!.attributes('aria-label')).toBe('닫기')
+    expect(wrapper.find('.modal-footer').text()).toContain('닫기')
+    expect(wrapper.find('.modal-footer').text()).toContain('요청 복사')
+    expect(wrapper.find('.modal-footer .modal-dismiss-btn').text()).toBe('닫기')
+  })
+
+  it('수정 모드의 하단 버튼을 취소와 저장으로 구성한다', async () => {
+    const wrapper = mount(RepairRequestModal, {
+      props: {
+        detail: { ...detail, repairerId: 9, repairerName: '김보수' },
+        imageBlobUrls: new Map(),
+        editing: true,
+      },
+      global,
+    })
+
+    const footerButtons = wrapper.find('.modal-footer').findAll('button')
+    expect(footerButtons.map((button) => button.text())).toEqual(['취소', '저장'])
+    expect(footerButtons[0]!.classes()).toContain('modal-dismiss-btn')
+    expect(footerButtons[1]!.classes()).toContain('primary')
+    await footerButtons[0]!.trigger('click')
+
+    expect(wrapper.emitted('cancelEdit')).toHaveLength(1)
   })
 })
 
