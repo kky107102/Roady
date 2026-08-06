@@ -38,6 +38,9 @@ class DamageAnalysisWorkerTest {
     private DamageMapper damageMapper;
 
     @Mock
+    private DamageAiAnalysisService aiAnalysisService;
+
+    @Mock
     private AiImageAnalysisClient aiClient;
 
     @Mock
@@ -53,6 +56,7 @@ class DamageAnalysisWorkerTest {
                 queue,
                 analysisResultMapper,
                 damageMapper,
+                aiAnalysisService,
                 aiClient,
                 resultParser,
                 properties
@@ -83,15 +87,11 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper).markProcessing(10L);
-        verify(analysisResultMapper).markSucceeded(
+        verify(aiAnalysisService).markProcessing(10L);
+        verify(aiAnalysisService).markSucceeded(
                 10L,
-                true,
-                82,
-                "CRACK",
-                true,
-                "HIGH",
-                BigDecimal.valueOf(0.91),
+                1L,
+                parsedResult,
                 rawResult
         );
         verify(queue, never()).deadLetter(any(DamageAnalysisQueueMessage.class));
@@ -109,8 +109,8 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper).markProcessing(10L);
-        verify(analysisResultMapper).markFailed(10L, "AI server unavailable");
+        verify(aiAnalysisService).markProcessing(10L);
+        verify(aiAnalysisService).markFailed(10L, 1L, "AI server unavailable");
         verify(queue).deadLetter(eq(message));
     }
 
@@ -122,7 +122,7 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper, never()).markProcessing(10L);
+        verify(aiAnalysisService, never()).markProcessing(10L);
         verify(aiClient, never()).analyze(any(), any());
     }
 

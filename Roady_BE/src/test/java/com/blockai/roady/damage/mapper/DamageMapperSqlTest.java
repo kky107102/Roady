@@ -138,6 +138,16 @@ class DamageMapperSqlTest {
     }
 
     @Test
+    void updateStatusChangesOnlyDamageStatus() {
+        BoundSql boundSql = configuration
+                .getMappedStatement(DamageMapper.class.getName() + ".updateStatus")
+                .getBoundSql(Map.of("damageId", 1L, "status", "AI_ANALYZING"));
+
+        assertThat(normalize(boundSql.getSql()))
+                .contains("UPDATE damages SET current_status = ? WHERE id = ?");
+    }
+
+    @Test
     void completeRepairStoresCompletionReportAndRequiresRepairInProgressStatus() {
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("damageId", 3L);
