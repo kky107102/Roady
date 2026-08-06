@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import type { DamageListItem } from '@/types/damage'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { formatShortKoreanDateTime as formatDateTime } from '@/utils/localDate'
 
 const props = defineProps<{
   items: DamageListItem[]
@@ -11,18 +12,6 @@ const props = defineProps<{
 
 const displayedItems = computed(() => props.items.slice(0, 5))
 
-function formatDateTime(value: string | null): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 </script>
 
 <template>

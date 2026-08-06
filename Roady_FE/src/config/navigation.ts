@@ -1,13 +1,13 @@
 import type { UserRole } from '@/types/auth'
 
-export interface NavItem {
+interface NavItem {
   key: string
   label: string
   routeName: string
   roles?: UserRole[]
 }
 
-export interface NavGroup {
+interface NavGroup {
   label: string
   items: NavItem[]
 }

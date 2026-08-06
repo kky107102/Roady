@@ -5,6 +5,7 @@ import { damagesApi } from '@/api/damages'
 import { repairsApi } from '@/api/repairs'
 import { usersApi } from '@/api/users'
 import { useNotificationStore } from '@/stores/notification'
+import { formatKoreanDateTime as formatDateTime } from '@/utils/localDate'
 import type { DamageDetail, DamageImage } from '@/types/damage'
 import type { UserSummary } from '@/types/auth'
 import type { RepairCompletePayload, RepairRequestPayload } from '@/types/repair'
@@ -114,20 +115,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-function formatDateTime(str: string | null | undefined): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
-
 function formatDate(str: string | null | undefined): string {
   if (!str) return '-'
   const d = new Date(str)

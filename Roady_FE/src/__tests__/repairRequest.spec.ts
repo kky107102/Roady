@@ -5,6 +5,8 @@ import {
   formatPriorityLabel,
   formatDamageTypeLabel,
   buildRepairRequestText,
+  REPAIR_DAMAGE_TYPE_OPTIONS,
+  REPAIR_PRIORITY_OPTIONS,
 } from '@/utils/repairRequest'
 import type { DamageDetail } from '@/types/damage'
 
@@ -30,6 +32,24 @@ const baseDetail: DamageDetail = {
   createdAt: '2026-01-01T00:00:00',
   updatedAt: '2026-08-03T12:00:00',
 }
+
+describe('보수 입력 공통 옵션', () => {
+  it('우선순위와 손상 유형의 기존 값 순서를 유지한다', () => {
+    expect(REPAIR_PRIORITY_OPTIONS.map(({ value }) => value)).toEqual([
+      'URGENT',
+      'HIGH',
+      'NORMAL',
+      'LOW',
+    ])
+    expect(REPAIR_DAMAGE_TYPE_OPTIONS.map(({ value }) => value)).toEqual([
+      'LARGE_MISSING',
+      'SMALL_MISSING',
+      'WEAR',
+      'CRACK',
+      'OTHER',
+    ])
+  })
+})
 
 // ── formatCaseId ──────────────────────────────────────────────
 

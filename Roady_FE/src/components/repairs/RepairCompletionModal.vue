@@ -4,6 +4,7 @@ import type { RepairCompletePayload } from '@/types/repair'
 import type { DamageImage } from '@/types/damage'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import DocumentSection from '@/components/common/DocumentSection.vue'
+import { formatKoreanDateTime as formatDateTime, todayLocalStr } from '@/utils/localDate'
 
 const props = withDefaults(
   defineProps<{
@@ -42,15 +43,7 @@ const emit = defineEmits<{
 type Step = 'input' | 'confirm'
 const step = ref<Step>('input')
 
-function localToday(): string {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const completionDate = ref(props.completedAt?.slice(0, 10) ?? localToday())
+const completionDate = ref(props.completedAt?.slice(0, 10) ?? todayLocalStr())
 const completionNote = ref(props.note ?? '')
 const dateError = ref('')
 const modalRef = ref<HTMLElement | null>(null)
@@ -61,25 +54,11 @@ useDialogFocus(modalRef, true, {
   },
 })
 
-const todayStr = computed(localToday)
+const todayStr = computed(todayLocalStr)
 
 const loadedBeforeImages = computed(() =>
   props.beforeImages.filter((image) => props.imageBlobUrls.has(image.id)),
 )
-
-function formatDateTime(value: string | null): string {
-  if (!value) return '-'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 
 function handleNext() {
   if (!completionDate.value) {

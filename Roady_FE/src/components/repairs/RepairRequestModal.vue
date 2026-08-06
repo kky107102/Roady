@@ -14,7 +14,10 @@ import {
   formatPriorityLabel,
   formatDamageTypeLabel,
   priorityBadgeType,
+  REPAIR_DAMAGE_TYPE_OPTIONS as DAMAGE_TYPE_OPTIONS,
+  REPAIR_PRIORITY_OPTIONS as PRIORITY_OPTIONS,
 } from '@/utils/repairRequest'
+import { formatKoreanDateTime as formatDateTime } from '@/utils/localDate'
 
 const props = withDefaults(
   defineProps<{
@@ -64,21 +67,6 @@ useDialogFocus(modalRef, true, {
   },
 })
 
-const PRIORITY_OPTIONS = [
-  { value: 'URGENT', label: '긴급' },
-  { value: 'HIGH', label: '높음' },
-  { value: 'NORMAL', label: '보통' },
-  { value: 'LOW', label: '낮음' },
-]
-
-const DAMAGE_TYPE_OPTIONS = [
-  { value: 'LARGE_MISSING', label: '큰 결손' },
-  { value: 'SMALL_MISSING', label: '작은 결손' },
-  { value: 'WEAR', label: '마모' },
-  { value: 'CRACK', label: '균열' },
-  { value: 'OTHER', label: '기타' },
-]
-
 // ── 표시 헬퍼 ─────────────────────────────────────────────────
 const caseId = computed(() => formatCaseId(props.detail.id, props.detail.createdAt))
 const location = computed(() => formatRepairLocation(props.detail))
@@ -93,20 +81,6 @@ const repairerName = computed(() => {
 const loadedImages = computed(() =>
   (props.detail.images ?? []).filter((img) => props.imageBlobUrls.has(img.id)),
 )
-
-function formatDateTime(str: string | null | undefined): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 
 // ── 이미지 다운로드 ────────────────────────────────────────────
 function downloadImage(img: DamageImage) {
