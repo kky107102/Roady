@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ROADY Server Damage Analysis Response",
+  "type": "object",
+  "required": ["schema_version", "model", "artifacts", "regions", "analysis", "quality"],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "model": { "type": "object" },
+    "artifacts": { "type": "object" },
+    "regions": { "type": "object", "required": ["tactile_block", "damage"] },
+    "analysis": {
+      "type": "object",
+      "required": ["damage_detected", "damage_ratio", "damage_ratio_percent", "estimated_severity", "repair_priority", "review_required", "review_reasons", "advisory_only"]
+    },
+    "quality": { "type": "object" }
+  }
+}
