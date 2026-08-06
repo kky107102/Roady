@@ -326,7 +326,13 @@ class ServerDamageAnalyzer:
 
         if self._model_quality_gate_failed():
             reasons.append("MODEL_QUALITY_GATE_NOT_MET")
-        ratios = [value["ratio_percent"] for value in damage_types.values() if value["ratio_percent"] is not None]
+        ratios = [
+            value["ratio_percent"]
+            for value in damage_types.values()
+            if value["detected"]
+            and value["ratio_status"] == "estimated"
+            and value["ratio_percent"] is not None
+        ]
         if any(self._ratio_near_threshold(float(value)) for value in ratios):
             reasons.append("RATIO_NEAR_THRESHOLD")
         decision = evaluate_unit_severity(damage_types, self.policy)
@@ -345,10 +351,19 @@ class ServerDamageAnalyzer:
                 "damage_detected": any(value["detected"] for value in damage_types.values()),
                 "total_damage_ratio_percent": None if total_ratio is None else round(total_ratio, 4),
                 "ratio_status": total_status,
-                "estimated_severity": decision.severity,
-                "repair_priority": decision.repair_priority,
-                "repair_priority_label": decision.repair_priority_label,
-                "severity_reason": decision.reason,
+                "estimated_severity": None if missing_unknown else decision.severity,
+                "repair_priority": "inspection_required" if missing_unknown else decision.repair_priority,
+                "repair_priority_label": "담당자 검토 필요" if missing_unknown else decision.repair_priority_label,
+                "severity_reason": (
+                    {
+                        "dominant_damage_type": "missing",
+                        "rule": "missing_ratio_not_estimable",
+                        "measured_ratio_percent": None,
+                        "policy_version": self.policy["policy"]["version"],
+                    }
+                    if missing_unknown
+                    else decision.reason
+                ),
                 "review_required": bool(reasons),
                 "review_reasons": review_reason_list(reasons),
                 "advisory_only": bool(self.policy["policy"]["advisory_only"]),
@@ -401,10 +416,15 @@ class ServerDamageAnalyzer:
                 "damage_detected": True,
                 "total_damage_ratio_percent": damage_types["missing"]["ratio_percent"],
                 "ratio_status": damage_types["missing"]["ratio_status"],
-                "estimated_severity": decision.severity,
-                "repair_priority": decision.repair_priority,
-                "repair_priority_label": decision.repair_priority_label,
-                "severity_reason": decision.reason,
+                "estimated_severity": None,
+                "repair_priority": "inspection_required",
+                "repair_priority_label": "담당자 검토 필요",
+                "severity_reason": {
+                    "dominant_damage_type": "missing",
+                    "rule": "missing_ratio_not_estimable",
+                    "measured_ratio_percent": None,
+                    "policy_version": self.policy["policy"]["version"],
+                },
                 "review_required": True,
                 "review_reasons": review_reason_list(reasons),
                 "advisory_only": True,
@@ -413,14 +433,27 @@ class ServerDamageAnalyzer:
 
     def _payload(self, units: list[dict[str, Any]], input_payload: dict[str, Any], total_mask: np.ndarray) -> dict[str, Any]:
         if units:
-            worst = max(units, key=lambda unit: SEVERITY_ORDER[unit["analysis"]["estimated_severity"]])
+            uncertain_units = [
+                unit
+                for unit in units
+                if unit["analysis"]["damage_detected"]
+                and unit["analysis"]["ratio_status"] == "not_estimable"
+            ]
+            worst = (
+                uncertain_units[0]
+                if uncertain_units
+                else max(
+                    units,
+                    key=lambda unit: SEVERITY_ORDER[unit["analysis"]["estimated_severity"]],
+                )
+            )
             estimable = [unit["analysis"]["total_damage_ratio_percent"] for unit in units if unit["analysis"]["total_damage_ratio_percent"] is not None]
             summary_reasons = _merge_review_reasons(units)
             summary = {
                 "damage_detected": any(unit["analysis"]["damage_detected"] for unit in units),
-                "estimated_severity": worst["analysis"]["estimated_severity"],
-                "repair_priority": worst["analysis"]["repair_priority"],
-                "repair_priority_label": worst["analysis"]["repair_priority_label"],
+                "estimated_severity": None if uncertain_units else worst["analysis"]["estimated_severity"],
+                "repair_priority": "inspection_required" if uncertain_units else worst["analysis"]["repair_priority"],
+                "repair_priority_label": "담당자 검토 필요" if uncertain_units else worst["analysis"]["repair_priority_label"],
                 "worst_unit_id": worst["local_unit_id"],
                 "dominant_damage_type": worst["analysis"]["severity_reason"]["dominant_damage_type"],
                 "max_damage_ratio_percent": max(estimable) if estimable else None,

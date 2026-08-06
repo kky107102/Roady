@@ -19,7 +19,7 @@ Jira: `S15P11A404-168`
 
 - 균열과 마모: `type_mask ∩ tactile_unit_mask`
 - 결손: tactile 교집합을 사용하지 않습니다. 주변 개별 블록의 크기와 간격이 안정적인 경우에만 `expected_block_region`을 사용합니다.
-- expected region을 신뢰할 수 없으면 결손 비율은 `null`, 상태는 `not_estimable`이며 0%로 바꾸지 않습니다.
+- expected region을 신뢰할 수 없으면 결손 비율과 심각도는 `null`, 상태는 `not_estimable`이며 0%나 임의 등급으로 바꾸지 않습니다. 보수 우선순위는 자동 판정이 아니라 `inspection_required`로 전환합니다.
 
 | 비율 상태 | 의미 |
 |---|---|
