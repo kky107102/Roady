@@ -19,7 +19,7 @@ def test_save_event_uses_server_payload_shape(tmp_path):
     event_files = repository.list_pending_events()
     assert len(event_files) == 1
     assert len(list((tmp_path / "images").glob("*.jpg"))) == 1
-    assert json.loads(event_files[0].read_text()) == repository.to_dict(event)
+    assert json.loads(event_files[0].read_text(encoding="utf-8")) == repository.to_dict(event)
     assert repository.to_dict(event) == {
         "eventId": event_files[0].stem,
         "robotId": 1,
@@ -29,6 +29,21 @@ def test_save_event_uses_server_payload_shape(tmp_path):
         "capturedAt": "2026-07-28T08:30:15",
         "images": [next((tmp_path / "images").glob("*.jpg")).name],
     }
+
+
+def test_save_event_adds_optional_ai_metadata_without_changing_existing_fields(tmp_path):
+    repository = DamageRepository(tmp_path)
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    event = repository.save_event(
+        images=[image, image],
+        location=DamageLocation(37.5, 127.0),
+        metadata={"ai": {"roi_source": "tactile_block"}},
+    )
+
+    payload = repository.to_dict(event)
+
+    assert payload["metadata"]["ai"]["roi_source"] == "tactile_block"
+    assert payload["images"] == list(event.image_paths)
 
 
 @pytest.mark.parametrize("robot_id", [0, -1])
