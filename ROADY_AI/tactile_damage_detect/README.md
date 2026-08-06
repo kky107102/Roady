@@ -17,17 +17,20 @@ Jira `S15P11A404-98`의 YOLO26n Detect 기반 점자블록 및 파손 후보 탐
 
 - 구조: YOLO26n Detect
 - 입력: 768
-- 학습: YOLO26n 기준 모델에서 시연환경 검수 데이터 Fine-tuning
+- 모델 버전: `edge_yolo26n_demo_latest_v4`
+- 학습: 시연환경 최신 검수·보정 데이터 기반 Fine-tuning
 - 클래스 수: 2
 
-고정 Test 15장 평가:
+시연환경과 분리한 고정 Test 37장 평가(`imgsz=768`, 2026-08-07 재검증):
 
 | 클래스 | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|
-| `tactile_block` | 92.4% | 94.8% | 96.2% | 90.7% |
-| `damage_candidate` | 84.6% | 76.9% | 85.4% | 61.5% |
+| `tactile_block` | 96.4% | 94.8% | 98.1% | 91.9% |
+| `damage_candidate` | 86.3% | 69.6% | 76.2% | 57.5% |
 
-기존 YOLO26n 기준 모델 대비 파손 후보 Recall은 73.1%에서 76.9%, F2-score는 0.760에서 0.783으로 개선됐다. Edge AI는 파손을 최종 확정하지 않고 서버 정밀 분석 대상으로 전달하므로 Recall과 F2-score를 우선한다.
+동일한 최신 Test에서 이전 v3 모델의 `damage_candidate` 성능은 Precision 53.4%, Recall 61.6%, mAP50 45.3%였으며, v4는 각각 86.3%, 69.6%, 76.2%로 개선됐다. v4의 파손 후보 F2-score는 약 0.724이다. Edge AI는 파손을 최종 확정하지 않고 서버 정밀 분석 대상으로 전달하므로 Recall과 F2-score를 우선한다.
+
+평가 중 일부 정답 파일에서 중복 라벨이 제거되었다. 다음 데이터셋 버전에서는 중복 Polygon을 정리한 뒤 같은 고정 Test로 재평가한다.
 
 모델 파일:
 
@@ -38,7 +41,7 @@ ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt
 SHA-256:
 
 ```text
-488e33c14e3d3fb2a764da05ce4cf7d8b38d783993f1bb1600018c73b80db388
+8b44411e50faaaa6543c4278dded8a1337f0e4b160418528f9b366be5b3d64e2
 ```
 
 기존 YOLO11n 모델과 별도 손상 분류기는 운영 대상에서 제외한다.
@@ -87,7 +90,7 @@ python ROADY_AI/tactile_damage_detect/validate_dataset.py `
 
 ```powershell
 python ROADY_AI/tactile_damage_detect/train.py `
-  --data ROADY_AI/datasets/edge_yolo26n_detect_review_ft_v3/dataset.yaml `
+  --data ROADY_AI/datasets/edge_real_demo_detect_v4_latest/dataset.yaml `
   --model ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt `
   --epochs 30 `
   --imgsz 768 `
