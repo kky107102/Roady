@@ -33,6 +33,46 @@ python -m ROADY_AI.server_damage_analysis.analyze_image \
 
 출력은 `analysis.json`, Overlay, 이진 Damage Mask이다. API 계약은 `response.schema.json`을 따른다.
 
+## FastAPI
+
+Spring의 Redis Queue Worker가 호출하는 동기식 분석 API를 제공한다. Redis Queue와
+분석 작업 상태는 Spring이 관리하며 AI 서버는 DB나 Redis에 직접 연결하지 않는다.
+
+```bash
+uvicorn ROADY_AI.server_damage_analysis.api:app \
+  --host 0.0.0.0 --port 8000 --workers 1
+```
+
+엔드포인트:
+
+- `POST /analyze`: Spring multipart 요청 분석
+- `GET /health/live`: 프로세스 생존 확인
+- `GET /health/ready`: 모델 로딩 완료 확인
+- `GET /model-info`: 모델 버전과 SHA-256 확인
+
+성공 응답은 ERD 컬럼과 같은 snake_case 요약값을 최상위에 두고, 분석 근거를
+`analysis_detail`에 저장한다. Spring은 최상위 필드를 구조화된 컬럼으로 파싱하고
+응답 전체를 `raw_result`에 보존한다. 외부 API 스키마는 `api_response.schema.json`이다.
+
+```json
+{
+  "damaged": true,
+  "damage_score": 45,
+  "damage_type": null,
+  "repair_required": true,
+  "repair_priority": "NORMAL",
+  "confidence_score": 0.8432,
+  "analysis_detail": {
+    "schema_version": "1.0",
+    "damage_ratio": 0.0859,
+    "damage_ratio_percent": 8.59,
+    "estimated_severity": "moderate",
+    "review_required": true,
+    "advisory_only": true
+  }
+}
+```
+
 ## 판정 정책
 
 | 파손 비율 | 추정 심각도 | 보수 우선순위 |
