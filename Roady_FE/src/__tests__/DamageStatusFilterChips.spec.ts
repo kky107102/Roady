@@ -6,6 +6,7 @@ const counts = {
   requested: 1,
   in_progress: 1,
   completed: 2,
+  not_required: 3,
 }
 
 describe('RepairStatusFilterChips', () => {
@@ -21,7 +22,26 @@ describe('RepairStatusFilterChips', () => {
     expect(wrapper.text()).toContain('요청 전 (1)')
     expect(wrapper.text()).toContain('요청 완료 (1)')
     expect(wrapper.text()).toContain('보수 완료 (2)')
+    expect(wrapper.text()).not.toContain('보수 불필요')
     expect(wrapper.find('details').exists()).toBe(false)
+  })
+
+  it('확인 탭에서는 보수 불필요 상태와 건수를 선택할 수 있다', async () => {
+    const wrapper = mount(RepairStatusFilterChips, {
+      props: {
+        selected: [],
+        counts,
+        includeNoRepair: true,
+      },
+    })
+
+    const noRepairChip = wrapper.findAll('button').find((button) =>
+      button.text().includes('보수 불필요'),
+    )
+    expect(noRepairChip?.text()).toBe('보수 불필요 (3)')
+
+    await noRepairChip!.trigger('click')
+    expect(wrapper.emitted('update:selected')).toEqual([[['not_required']]])
   })
 
   it('선택 상태를 aria-pressed로 전달한다', () => {

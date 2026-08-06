@@ -28,6 +28,7 @@ import {
   REPAIR_SORT_OPTIONS,
 } from '@/utils/repairManagement'
 import type { RepairStatusFilter, RepairSort } from '@/utils/repairManagement'
+import type { ConfirmedStatusFilter } from '@/utils/damageReview'
 
 // ── 라우터 ──────────────────────────────────────────────────
 const route = useRoute()
@@ -155,8 +156,11 @@ function buildQuery(overrides: Record<string, string | undefined> = {}): Record<
 }
 
 // ── 상태 필터 조작 ────────────────────────────────────────
-function setStatuses(next: RepairStatusFilter[]) {
-  const param = statusesToParam(next)
+function setStatuses(next: ConfirmedStatusFilter[]) {
+  const repairStatuses = next.filter(
+    (status): status is RepairStatusFilter => status !== 'not_required',
+  )
+  const param = statusesToParam(repairStatuses)
   router.replace({ query: buildQuery({ statuses: param }) })
 }
 

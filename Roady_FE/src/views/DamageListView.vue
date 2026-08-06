@@ -110,6 +110,7 @@ function confirmedStatusCategory(item: DamageListItem): ConfirmedStatusFilter | 
     return 'in_progress'
   }
   if (item.currentStatus === 'REPAIR_COMPLETED') return 'completed'
+  if (item.currentStatus === 'CANCELED') return 'not_required'
   return null
 }
 
@@ -125,6 +126,9 @@ const confirmedStatusCounts = computed(() => ({
   ).length,
   completed: confirmedItems.value.filter((item) => confirmedStatusCategory(item) === 'completed')
     .length,
+  not_required: confirmedItems.value.filter(
+    (item) => confirmedStatusCategory(item) === 'not_required',
+  ).length,
 }))
 
 const visibleItems = computed(() => {
@@ -494,6 +498,8 @@ onBeforeUnmount(stopDetailResize)
           v-if="reviewTab === 'confirmed'"
           :selected="selectedConfirmedStatuses"
           :counts="confirmedStatusCounts"
+          include-no-repair
+          aria-label="확인 사건 상태 필터"
           @update:selected="updateConfirmedStatuses"
         />
 

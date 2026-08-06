@@ -1,35 +1,44 @@
 <script setup lang="ts">
-import type { RepairStatusFilter } from '@/utils/repairManagement'
+import { computed } from 'vue'
+import type { ConfirmedStatusFilter } from '@/utils/damageReview'
 
 const props = withDefaults(
   defineProps<{
-    selected: RepairStatusFilter[]
-    counts: Record<RepairStatusFilter, number>
+    selected: ConfirmedStatusFilter[]
+    counts: Partial<Record<ConfirmedStatusFilter, number>>
     ariaLabel?: string
+    includeNoRepair?: boolean
   }>(),
   {
     ariaLabel: '처리 상태 필터',
+    includeNoRepair: false,
   },
 )
 
 const emit = defineEmits<{
-  'update:selected': [RepairStatusFilter[]]
+  'update:selected': [ConfirmedStatusFilter[]]
 }>()
 
-const statuses: Array<{ value: RepairStatusFilter; label: string }> = [
+const repairStatuses: Array<{ value: ConfirmedStatusFilter; label: string }> = [
   { value: 'requested', label: '요청 전' },
   { value: 'in_progress', label: '요청 완료' },
   { value: 'completed', label: '보수 완료' },
 ]
 
-function toggle(value: RepairStatusFilter) {
+const statuses = computed(() =>
+  props.includeNoRepair
+    ? [...repairStatuses, { value: 'not_required' as const, label: '보수 불필요' }]
+    : repairStatuses,
+)
+
+function toggle(value: ConfirmedStatusFilter) {
   const selected = props.selected.includes(value)
     ? props.selected.filter((status) => status !== value)
-    : statuses
+    : statuses.value
         .map((status) => status.value)
         .filter((status) => status === value || props.selected.includes(status))
 
-  emit('update:selected', selected.length === statuses.length ? [] : selected)
+  emit('update:selected', selected.length === statuses.value.length ? [] : selected)
 }
 </script>
 
@@ -45,7 +54,7 @@ function toggle(value: RepairStatusFilter) {
         :aria-pressed="selected.includes(status.value)"
         @click="toggle(status.value)"
       >
-        <span>{{ status.label }} ({{ counts[status.value] }})</span>
+        <span>{{ status.label }} ({{ counts[status.value] ?? 0 }})</span>
       </button>
     </div>
     <div v-if="$slots.actions" class="status-filter-actions">

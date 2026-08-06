@@ -2,7 +2,7 @@ import type { DamageListItem, DamageStatus } from '@/types/damage'
 
 export type ReviewTab = 'pending' | 'confirmed'
 export type DamageSort = 'latest' | 'oldest' | 'priority'
-export type ConfirmedStatusFilter = 'requested' | 'in_progress' | 'completed'
+export type ConfirmedStatusFilter = 'requested' | 'in_progress' | 'completed' | 'not_required'
 
 const REVIEW_CONFIRMED_STATUSES = new Set<DamageStatus>([
   'REQUESTED',
