@@ -14,6 +14,10 @@ import {
 import 'leaflet/dist/leaflet.css'
 import type { MapBounds, MapMarkerItem, MapPathItem } from '@/types/map'
 
+const POPUP_MARKER_VERTICAL_OFFSET_PX = 80
+const POPUP_CENTER_PAN_DURATION_SECONDS = 0.2
+const PROGRAMMATIC_MOVE_GUARD_MS = 500
+
 interface Props {
   markers?: MapMarkerItem[]
   paths?: MapPathItem[]
@@ -50,6 +54,11 @@ let markerInstances: Marker[] = []
 let pathInstances: Polyline[] = []
 let resizeObserver: ResizeObserver | null = null
 let focusSettleTimer: ReturnType<typeof setTimeout> | null = null
+let programmaticMoveTimer: ReturnType<typeof setTimeout> | null = null
+let hasAutoFittedContent = false
+let openPopupMarkerId: MapMarkerItem['id'] | null = null
+let renderedContentKey: string | null = null
+let suppressProgrammaticMoveEnd = false
 
 function markerIcon(tone: MapMarkerItem['tone']) {
   const normalizedTone = tone ?? 'primary'
@@ -123,10 +132,25 @@ function centerMarkerPopup(item: MapMarkerItem) {
   mapInstance.stop()
   const zoom = mapInstance.getZoom()
   const markerPx = mapInstance.project([item.latitude, item.longitude], zoom)
-  // Offset center upward so the marker appears ~80px below viewport center,
+  // Offset center upward so the marker appears below viewport center,
   // leaving the popup (which opens above the marker) visible near the center.
-  const center = mapInstance.unproject(markerPx.subtract([0, 80]), zoom)
-  mapInstance.setView(center, zoom, { animate: false })
+  const center = mapInstance.unproject(
+    markerPx.subtract([0, POPUP_MARKER_VERTICAL_OFFSET_PX]),
+    zoom,
+  )
+  suppressProgrammaticMoveEnd = true
+  if (programmaticMoveTimer) clearTimeout(programmaticMoveTimer)
+  programmaticMoveTimer = setTimeout(() => {
+    suppressProgrammaticMoveEnd = false
+    programmaticMoveTimer = null
+  }, PROGRAMMATIC_MOVE_GUARD_MS)
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+  mapInstance.panTo(
+    center,
+    reduceMotion
+      ? { animate: false }
+      : { animate: true, duration: POPUP_CENTER_PAN_DURATION_SECONDS },
+  )
 }
 
 function insetAdjustedCenter(center: [number, number]): [number, number] {
@@ -141,6 +165,7 @@ function insetAdjustedCenter(center: [number, number]): [number, number] {
 
 function focusSelectedLocation(animate: boolean) {
   if (!mapInstance || !props.focusedCenter) return
+  hasAutoFittedContent = true
   const center = insetAdjustedCenter(props.focusedCenter)
   if (animate) {
     mapInstance.flyTo(center, props.focusZoom, { duration: 0.4 })
@@ -151,6 +176,7 @@ function focusSelectedLocation(animate: boolean) {
 
 function fitViewportBounds(animate: boolean) {
   if (!mapInstance || !props.viewportBounds) return
+  hasAutoFittedContent = true
   const { south, north, west, east } = props.viewportBounds
   mapInstance.fitBounds(
     latLngBounds([
@@ -172,6 +198,23 @@ function emitCurrentBounds() {
   })
 }
 
+function handleMapMoveEnd() {
+  if (suppressProgrammaticMoveEnd) {
+    suppressProgrammaticMoveEnd = false
+    if (programmaticMoveTimer) clearTimeout(programmaticMoveTimer)
+    programmaticMoveTimer = null
+    return
+  }
+  emitCurrentBounds()
+}
+
+function handleUserMapMoveStart() {
+  hasAutoFittedContent = true
+  suppressProgrammaticMoveEnd = false
+  if (programmaticMoveTimer) clearTimeout(programmaticMoveTimer)
+  programmaticMoveTimer = null
+}
+
 function clearPaths() {
   pathInstances.forEach((path) => path.remove())
   pathInstances = []
@@ -189,8 +232,33 @@ function pathColor(tone: MapPathItem['tone']): string {
   return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || 'currentColor'
 }
 
+function mapContentKey(): string {
+  return JSON.stringify({
+    markers: props.markers.map((item) => ({
+      id: item.id,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      title: item.title,
+      tone: item.tone ?? 'primary',
+      actionHref: item.actionHref ?? null,
+      actionLabel: item.actionLabel ?? null,
+      details: item.details ?? [],
+    })),
+    paths: props.paths.map((path) => ({
+      id: path.id,
+      label: path.label ?? null,
+      tone: path.tone ?? 'primary',
+      points: path.points,
+    })),
+  })
+}
+
 function renderMarkers() {
   if (!mapInstance) return
+  const contentKey = mapContentKey()
+  if (contentKey === renderedContentKey) return
+
+  const popupToRestore = openPopupMarkerId
   clearMarkers()
   clearPaths()
 
@@ -218,11 +286,15 @@ function renderMarkers() {
     }).addTo(mapInstance as Map)
 
     marker.on('click', () => {
-      centerMarkerPopup(item)
+      openPopupMarkerId = item.id
       if (!item.actionHref) emit('markerSelect', item.id)
+      centerMarkerPopup(item)
       queueMicrotask(() => {
         if (mapInstance) marker.openPopup()
       })
+    })
+    marker.on('popupclose', () => {
+      if (openPopupMarkerId === item.id) openPopupMarkerId = null
     })
 
     marker.bindPopup(popupContent(item), {
@@ -230,12 +302,21 @@ function renderMarkers() {
       autoPan: false,
     })
 
+    if (popupToRestore === item.id) {
+      openPopupMarkerId = item.id
+      queueMicrotask(() => {
+        if (mapInstance) marker.openPopup()
+      })
+    }
+
     return marker
   })
 
+  renderedContentKey = contentKey
+
   if (props.focusedCenter) {
     focusSelectedLocation(false)
-  } else if (!props.viewportBounds) {
+  } else if (!props.viewportBounds && !hasAutoFittedContent) {
     const allCoordinates = [
       ...props.markers.map((item) => [item.latitude, item.longitude] as [number, number]),
       ...props.paths.flatMap((path) =>
@@ -245,10 +326,14 @@ function renderMarkers() {
 
     if (allCoordinates.length === 1) {
       const coordinate = allCoordinates[0]
-      if (coordinate) mapInstance.setView(coordinate, 15)
+      if (coordinate) {
+        mapInstance.setView(coordinate, 15)
+        hasAutoFittedContent = true
+      }
     } else if (allCoordinates.length > 1) {
       const bounds = latLngBounds(allCoordinates)
       mapInstance.fitBounds(bounds, { padding: [40, 40], maxZoom: 15, animate: false })
+      hasAutoFittedContent = true
     } else {
       mapInstance.setView(props.center, props.zoom)
     }
@@ -269,7 +354,8 @@ onMounted(() => {
     attribution: '&copy; OpenStreetMap contributors',
   }).addTo(mapInstance)
 
-  mapInstance.on('moveend', emitCurrentBounds)
+  mapInstance.on('moveend', handleMapMoveEnd)
+  mapInstance.on('dragstart zoomstart', handleUserMapMoveStart)
 
   renderMarkers()
   fitViewportBounds(false)
@@ -333,9 +419,11 @@ watch(
 
 onBeforeUnmount(() => {
   if (focusSettleTimer) clearTimeout(focusSettleTimer)
+  if (programmaticMoveTimer) clearTimeout(programmaticMoveTimer)
   resizeObserver?.disconnect()
   clearMarkers()
   clearPaths()
+  renderedContentKey = null
   mapInstance?.remove()
   mapInstance = null
 })
@@ -396,6 +484,7 @@ onBeforeUnmount(() => {
   max-width: calc(100% - 3.2rem);
   text-align: center;
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .common-map__summary {

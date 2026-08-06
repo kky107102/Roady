@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { RepairCompletePayload } from '@/types/repair'
 import type { DamageImage } from '@/types/damage'
+import { useDialogFocus } from '@/composables/useDialogFocus'
+import DocumentSection from '@/components/common/DocumentSection.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -51,6 +53,13 @@ function localToday(): string {
 const completionDate = ref(props.completedAt?.slice(0, 10) ?? localToday())
 const completionNote = ref(props.note ?? '')
 const dateError = ref('')
+const modalRef = ref<HTMLElement | null>(null)
+
+useDialogFocus(modalRef, true, {
+  onEscape: () => {
+    if (!props.submitting) emit('close')
+  },
+})
 
 const todayStr = computed(localToday)
 
@@ -95,21 +104,16 @@ function handleConfirm() {
 function handleBack() {
   step.value = 'input'
 }
-
-// ── 키보드 닫기 ────────────────────────────────────────────────
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && !props.submitting) emit('close')
-}
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
   <Teleport to="body">
     <div
+      ref="modalRef"
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       :aria-label="readonly ? '완료 보고서 확인' : '보수 완료 처리'"
       @click.self="!submitting && emit('close')"
     >
@@ -142,46 +146,47 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
         <!-- 입력 단계 -->
         <div v-if="readonly" class="modal-body">
-          <div class="assignment-grid">
-            <div>
-              <span class="field-label">담당 주무관</span>
-              <p class="readonly-value">{{ officialName || '-' }}</p>
+          <DocumentSection title="담당 정보">
+            <div class="assignment-grid">
+              <div>
+                <span class="field-label">담당 주무관</span>
+                <p class="readonly-value">{{ officialName || '-' }}</p>
+              </div>
+              <div>
+                <span class="field-label">보수 담당자</span>
+                <p class="readonly-value">{{ repairerName || '-' }}</p>
+              </div>
             </div>
-            <div>
-              <span class="field-label">보수 담당자</span>
-              <p class="readonly-value">{{ repairerName || '-' }}</p>
+          </DocumentSection>
+          <DocumentSection title="처리 일정">
+            <div class="date-grid">
+              <div>
+                <span class="field-label">보수 요청 일자</span>
+                <p class="readonly-value">{{ formatDateTime(requestedAt) }}</p>
+              </div>
+              <div>
+                <span class="field-label">보수 완료 일자</span>
+                <p class="readonly-value">{{ completionDate || '-' }}</p>
+              </div>
             </div>
-          </div>
-          <div class="date-grid">
-            <div>
-              <span class="field-label">보수 요청 일자</span>
-              <p class="readonly-value">{{ formatDateTime(requestedAt) }}</p>
-            </div>
-            <div>
-              <span class="field-label">보수 완료 일자</span>
-              <p class="readonly-value">{{ completionDate || '-' }}</p>
-            </div>
-          </div>
+          </DocumentSection>
 
-          <section class="report-section" aria-labelledby="before-photo-title">
-            <h3 id="before-photo-title" class="field-label">보수 전 사진</h3>
+          <DocumentSection title="보수 전 사진">
             <div v-if="loadedBeforeImages.length" class="report-image-grid">
               <figure v-for="(image, index) in loadedBeforeImages" :key="image.id">
                 <img :src="imageBlobUrls.get(image.id)" :alt="`보수 전 사진 ${index + 1}`" />
               </figure>
             </div>
             <div v-else class="report-image-empty" role="status">보수 전 이미지가 없습니다.</div>
-          </section>
+          </DocumentSection>
 
-          <section class="report-section" aria-labelledby="after-photo-title">
-            <h3 id="after-photo-title" class="field-label">보수 완료 사진</h3>
+          <DocumentSection title="보수 완료 사진">
             <div class="report-image-empty" role="status">보수 완료 이미지가 없습니다.</div>
-          </section>
+          </DocumentSection>
 
-          <div class="field-group">
-            <span class="field-label">완료 메모</span>
+          <DocumentSection title="완료 메모">
             <p class="readonly-value readonly-value--note">{{ completionNote || '-' }}</p>
-          </div>
+          </DocumentSection>
         </div>
 
         <div v-else-if="step === 'input'" class="modal-body">
@@ -321,11 +326,11 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--roady-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: var(--roady-z-modal);
   padding: 2rem;
 }
 
@@ -336,8 +341,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   max-width: 64rem;
   max-height: 90dvh;
   background: var(--roady-surface-default);
-  border-radius: 1.2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  border-radius: var(--roady-radius-dialog);
+  box-shadow: var(--roady-shadow-dialog);
   overflow: hidden;
 }
 
@@ -355,7 +360,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 .modal-title {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: var(--krds-pc-font-size-heading-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -368,10 +373,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   height: 3.6rem;
   border: none;
   background: none;
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   cursor: pointer;
   color: var(--roady-text-secondary);
-  transition: background-color 0.1s;
+  transition: background-color var(--roady-transition-fast);
 }
 
 .modal-close-btn:hover {
@@ -412,14 +417,14 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 .confirm-text {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: var(--krds-pc-font-size-body-medium);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
 
 .confirm-note {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -428,7 +433,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 .confirm-date,
 .readonly-value {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
 }
 
@@ -448,15 +453,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
   gap: 1.6rem;
 }
 
-.date-grid > div,
-.report-section {
+.date-grid > div {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-}
-
-.report-section h3 {
-  margin: 0;
 }
 
 .report-image-grid {
@@ -514,7 +514,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 }
 
 .field-label {
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -535,12 +535,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
 .field-error {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
 }
 
 .field-hint {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-text-tertiary);
 }
 

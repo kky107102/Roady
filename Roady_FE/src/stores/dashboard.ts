@@ -6,6 +6,7 @@ import { robotsApi } from '@/api/robots'
 import { statisticsApi } from '@/api/statistics'
 import type { DamageListItem } from '@/types/damage'
 import type { Robot } from '@/types/robot'
+import { isMovingAndConnected } from '@/utils/robotDisplay'
 import type { StatUnit, TimeSeriesResponse } from '@/types/statistics'
 import {
   localDateOffset,
@@ -74,8 +75,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   )
   const highSeverityCount = computed(() => urgentReviewCount.value)
   const activeRobotCount = computed(
-    () => robots.value.filter((robot) => robot.active && robot.status === 'MOVING').length,
+    () => robots.value.filter(isMovingAndConnected).length,
   )
+
+  async function refreshRobots() {
+    robots.value = await robotsApi.list()
+  }
 
   async function fetchOverview() {
     loading.value = true
@@ -172,6 +177,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     fetchAll,
     fetchOverview,
     fetchTrend,
+    refreshRobots,
     applyFilter,
     applyTrendFilter,
   }

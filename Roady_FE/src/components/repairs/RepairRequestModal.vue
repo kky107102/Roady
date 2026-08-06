@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import type { DamageDetail, DamageImage } from '@/types/damage'
 import type { UserSummary } from '@/types/auth'
 import type { RepairRequestPayload } from '@/types/repair'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import DocumentSection from '@/components/common/DocumentSection.vue'
+import { useDialogFocus } from '@/composables/useDialogFocus'
 import {
   formatCaseId,
   formatRepairLocation,
   formatPriorityLabel,
   formatDamageTypeLabel,
+  priorityBadgeType,
 } from '@/utils/repairRequest'
 
 const props = withDefaults(
@@ -53,6 +56,13 @@ const priority = ref(props.detail.processingPriority ?? '')
 const damageType = ref(props.detail.reviewDamageType ?? '')
 const repairerId = ref<number | null>(props.detail.repairerId ?? null)
 const formError = ref('')
+const modalRef = ref<HTMLElement | null>(null)
+
+useDialogFocus(modalRef, true, {
+  onEscape: () => {
+    if (!props.submitting) emit('close')
+  },
+})
 
 const PRIORITY_OPTIONS = [
   { value: 'URGENT', label: '긴급' },
@@ -73,16 +83,7 @@ const DAMAGE_TYPE_OPTIONS = [
 const caseId = computed(() => formatCaseId(props.detail.id, props.detail.createdAt))
 const location = computed(() => formatRepairLocation(props.detail))
 const priorityLabel = computed(() => formatPriorityLabel(priority.value))
-const priorityType = computed<BadgeType>(() => {
-  const map: Record<string, BadgeType> = {
-    URGENT: 'danger',
-    HIGH: 'warning',
-    NORMAL: 'info',
-    MEDIUM: 'info',
-    LOW: 'neutral',
-  }
-  return priority.value ? (map[priority.value] ?? 'neutral') : 'neutral'
-})
+const priorityType = computed<BadgeType>(() => priorityBadgeType(priority.value))
 const damageTypeLabel = computed(() => formatDamageTypeLabel(damageType.value))
 const repairerName = computed(() => {
   if (props.detail.repairerName) return props.detail.repairerName
@@ -119,13 +120,6 @@ function downloadImage(img: DamageImage) {
   document.body.removeChild(a)
 }
 
-// ── 키보드 닫기 ────────────────────────────────────────────────
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
-}
-onMounted(() => document.addEventListener('keydown', onKeydown))
-onUnmounted(() => document.removeEventListener('keydown', onKeydown))
-
 // ── 제출 ──────────────────────────────────────────────────────
 function handleConfirm() {
   if (!priority.value || !damageType.value) {
@@ -144,9 +138,11 @@ function handleConfirm() {
 <template>
   <Teleport to="body">
     <div
+      ref="modalRef"
       class="modal-backdrop"
       role="dialog"
       aria-modal="true"
+      tabindex="-1"
       :aria-label="readonly ? '요청서 확인' : editing ? '보수 요청서 수정' : '보수 요청서 작성'"
       @click.self="emit('close')"
     >
@@ -206,8 +202,7 @@ function handleConfirm() {
         <!-- 본문 -->
         <div class="modal-body">
           <!-- 사건 기본 정보 -->
-          <section class="info-section" aria-label="사건 기본 정보">
-            <h3 class="section-title">사건 정보</h3>
+          <DocumentSection title="사건 정보">
             <dl class="info-grid">
               <div class="info-row">
                 <dt class="info-label">사건번호</dt>
@@ -250,11 +245,10 @@ function handleConfirm() {
                 </dd>
               </div>
             </dl>
-          </section>
+          </DocumentSection>
 
           <!-- 관리자 판정 -->
-          <section class="info-section" aria-label="관리자 판정">
-            <h3 class="section-title">관리자 판정</h3>
+          <DocumentSection title="관리자 판정">
             <dl class="info-grid">
               <div class="info-row">
                 <dt class="info-label">우선순위</dt>
@@ -293,11 +287,10 @@ function handleConfirm() {
                 </dd>
               </div>
             </dl>
-          </section>
+          </DocumentSection>
 
           <!-- 탐지 이미지 -->
-          <section class="info-section" aria-label="탐지 이미지">
-            <h3 class="section-title">탐지 이미지</h3>
+          <DocumentSection title="탐지 이미지">
             <div class="image-section">
               <div v-if="detail.imageCount > 0 && imagesLoading" class="image-loading">
                 <LoadingSpinner label="이미지 불러오는 중" />
@@ -338,11 +331,10 @@ function handleConfirm() {
               </div>
               <div v-else class="image-empty">등록된 탐지 이미지가 없습니다.</div>
             </div>
-          </section>
+          </DocumentSection>
 
           <!-- 비고 -->
-          <section class="info-section" aria-label="비고">
-            <h3 class="section-title">비고</h3>
+          <DocumentSection title="비고">
             <p v-if="readonly" class="note-text">{{ note || '-' }}</p>
             <div v-else class="note-field">
               <label for="repair-request-note" class="sr-only">
@@ -359,52 +351,58 @@ function handleConfirm() {
               />
               <p id="repair-note-hint" class="note-hint">{{ note.length }}/1000자</p>
             </div>
-          </section>
+          </DocumentSection>
           <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         </div>
 
         <!-- 푸터 -->
         <div class="modal-footer">
-          <button
-            type="button"
-            class="krds-btn medium secondary modal-dismiss-btn"
-            :disabled="submitting"
-            @click="editing ? emit('cancelEdit') : emit('close')"
-          >
-            {{ readonly ? '닫기' : '취소' }}
-          </button>
-          <button
-            v-if="readonly"
-            type="button"
-            class="krds-btn medium filled primary"
-            :aria-label="copyState === 'success' ? '복사 완료' : '최종 요청 정보 클립보드에 복사'"
-            @click="emit('copy')"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
+          <template v-if="readonly">
+            <button
+              type="button"
+              class="krds-btn medium secondary"
+              :aria-label="copyState === 'success' ? '복사 완료' : '최종 요청 정보 클립보드에 복사'"
+              @click="emit('copy')"
             >
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-            {{ copyState === 'success' ? '복사 완료' : '요청 복사' }}
-          </button>
-          <button
-            v-if="!readonly"
-            type="button"
-            class="krds-btn medium filled primary"
-            :disabled="submitting"
-            @click="handleConfirm"
-          >
-            {{ editing ? '저장' : '보수 요청하기' }}
-          </button>
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+              {{ copyState === 'success' ? '복사 완료' : '요청 복사' }}
+            </button>
+            <button type="button" class="krds-btn medium filled primary" @click="emit('close')">
+              확인
+            </button>
+          </template>
+          <template v-else>
+            <button
+              type="button"
+              class="krds-btn medium secondary"
+              :disabled="submitting"
+              @click="editing ? emit('cancelEdit') : emit('close')"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              class="krds-btn medium filled primary"
+              :disabled="submitting"
+              :aria-busy="submitting"
+              @click="handleConfirm"
+            >
+              {{ submitting ? '처리 중...' : editing ? '저장' : '보수 요청하기' }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
@@ -415,11 +413,11 @@ function handleConfirm() {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--roady-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: var(--roady-z-modal);
   padding: 2rem;
 }
 
@@ -430,8 +428,8 @@ function handleConfirm() {
   max-width: 64rem;
   max-height: 90dvh;
   background: var(--roady-surface-default);
-  border-radius: 1.2rem;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
+  border-radius: var(--roady-radius-dialog);
+  box-shadow: var(--roady-shadow-dialog);
   overflow: hidden;
 }
 
@@ -447,7 +445,7 @@ function handleConfirm() {
 
 .modal-title {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: var(--krds-pc-font-size-heading-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -466,9 +464,9 @@ function handleConfirm() {
   padding: 0 1rem;
   border: 1px solid var(--roady-border-default);
   background: var(--roady-surface-default);
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   color: var(--roady-text-primary);
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-medium);
   cursor: pointer;
 }
@@ -490,10 +488,10 @@ function handleConfirm() {
   height: 3.6rem;
   border: none;
   background: none;
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   cursor: pointer;
   color: var(--roady-text-secondary);
-  transition: background-color 0.1s;
+  transition: background-color var(--roady-transition-fast);
 }
 
 .modal-close-btn:hover {
@@ -521,21 +519,6 @@ function handleConfirm() {
   gap: 2rem;
 }
 
-.info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.section-title {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .info-grid {
   display: flex;
   flex-direction: column;
@@ -552,13 +535,13 @@ function handleConfirm() {
 .info-label {
   flex-shrink: 0;
   min-width: 8rem;
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-tertiary);
 }
 
 .info-value {
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-primary);
   line-height: 1.5;
   word-break: break-word;
@@ -579,7 +562,7 @@ function handleConfirm() {
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--roady-border-default);
   border-radius: 4px;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   font-family: monospace;
   color: var(--roady-text-secondary);
   background: var(--roady-surface-background);
@@ -629,7 +612,7 @@ function handleConfirm() {
 .image-empty {
   padding: 2rem;
   text-align: center;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-tertiary);
   border: 1px dashed var(--roady-border-default);
   border-radius: 0.8rem;
@@ -639,7 +622,7 @@ function handleConfirm() {
 /* ── 비고 ── */
 .note-text {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
@@ -655,14 +638,14 @@ function handleConfirm() {
 .note-textarea {
   width: 100%;
   resize: vertical;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   line-height: 1.6;
   min-height: 9.6rem;
 }
 
 .note-hint {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-text-tertiary);
   text-align: right;
 }
@@ -670,7 +653,7 @@ function handleConfirm() {
 .form-error {
   margin: 0;
   color: var(--roady-status-danger, #e74c3c);
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
 }
 
 /* ── 푸터 ── */
@@ -682,18 +665,6 @@ function handleConfirm() {
   padding: 1.6rem 2.4rem;
   border-top: 1px solid var(--roady-border-default);
   flex-shrink: 0;
-}
-
-.modal-dismiss-btn {
-  background: var(--roady-surface-default);
-  border-color: var(--roady-border-default);
-  color: var(--roady-status-danger, #e74c3c);
-}
-
-.modal-dismiss-btn:hover:not(:disabled) {
-  background: rgba(231, 76, 60, 0.06);
-  border-color: var(--roady-status-danger, #e74c3c);
-  color: var(--roady-status-danger, #e74c3c);
 }
 
 /* ── 접근성 ── */

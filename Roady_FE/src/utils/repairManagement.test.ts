@@ -177,8 +177,8 @@ describe('parseStatusesParam', () => {
     expect(parseStatusesParam(undefined)).toEqual([...REPAIR_STATUS_FILTERS])
   })
 
-  it('returns no statuses when the query explicitly contains an empty value', () => {
-    expect(parseStatusesParam('')).toEqual([])
+  it('빈 쿼리도 전체 상태로 해석한다', () => {
+    expect(parseStatusesParam('')).toEqual([...REPAIR_STATUS_FILTERS])
   })
 
   it('parses a comma-separated string of backend status codes', () => {
@@ -220,8 +220,8 @@ describe('statusesToParam', () => {
     expect(statusesToParam(['in_progress'])).toBe('REPAIR_IN_PROGRESS')
   })
 
-  it('returns an empty value when all statuses are cleared', () => {
-    expect(statusesToParam([])).toBe('')
+  it('선택을 모두 해제해도 전체 상태와 같은 쿼리를 사용한다', () => {
+    expect(statusesToParam([])).toBeUndefined()
   })
 })
 

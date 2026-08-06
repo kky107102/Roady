@@ -45,6 +45,21 @@ const global = {
 }
 
 describe('RepairRequestModal', () => {
+  it('문서 내용을 모달 제목 아래의 상위 섹션으로 구분한다', () => {
+    const wrapper = mount(RepairRequestModal, {
+      props: { detail, imageBlobUrls: new Map(), readonly: true },
+      global,
+    })
+
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
+      '사건 정보',
+      '관리자 판정',
+      '탐지 이미지',
+      '비고',
+    ])
+    expect(wrapper.findAll('section[aria-labelledby]')).toHaveLength(4)
+  })
+
   it('신규 작성에서는 과거 요청 비고를 비우고 수정에서는 유지한다', () => {
     const detailWithPreviousNote = { ...detail, repairRequestNote: '이전 요청 비고' }
     const createWrapper = mount(RepairRequestModal, {
@@ -128,7 +143,7 @@ describe('RepairRequestModal', () => {
     const copyButton = wrapper.findAll('button').find((button) => button.text() === '요청 복사')
     expect(copyButton).toBeDefined()
     expect(copyButton!.find('svg').exists()).toBe(true)
-    expect(copyButton!.classes()).toContain('primary')
+    expect(copyButton!.classes()).toContain('secondary')
     await copyButton!.trigger('click')
 
     expect(wrapper.emitted('copy')).toHaveLength(1)
@@ -153,9 +168,9 @@ describe('RepairRequestModal', () => {
     const headerButtons = wrapper.find('.modal-header-actions').findAll('button')
     expect(headerButtons[0]!.text()).toBe('수정하기')
     expect(headerButtons[1]!.attributes('aria-label')).toBe('닫기')
-    expect(wrapper.find('.modal-footer').text()).toContain('닫기')
+    expect(wrapper.find('.modal-footer').text()).toContain('확인')
     expect(wrapper.find('.modal-footer').text()).toContain('요청 복사')
-    expect(wrapper.find('.modal-footer .modal-dismiss-btn').text()).toBe('닫기')
+    expect(wrapper.find('.modal-footer .primary').text()).toBe('확인')
   })
 
   it('수정 모드의 하단 버튼을 취소와 저장으로 구성한다', async () => {
@@ -170,7 +185,7 @@ describe('RepairRequestModal', () => {
 
     const footerButtons = wrapper.find('.modal-footer').findAll('button')
     expect(footerButtons.map((button) => button.text())).toEqual(['취소', '저장'])
-    expect(footerButtons[0]!.classes()).toContain('modal-dismiss-btn')
+    expect(footerButtons[0]!.classes()).toContain('secondary')
     expect(footerButtons[1]!.classes()).toContain('primary')
     await footerButtons[0]!.trigger('click')
 
@@ -215,6 +230,13 @@ describe('RepairCompletionModal', () => {
     expect(wrapper.text()).toContain('보수 완료 이미지가 없습니다.')
     expect(wrapper.text()).toContain('점자블록 교체 완료')
     expect(wrapper.text()).toContain('내용 복사')
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
+      '담당 정보',
+      '처리 일정',
+      '보수 전 사진',
+      '보수 완료 사진',
+      '완료 메모',
+    ])
   })
 
   it('완료 보고서 내용 복사 이벤트를 전달한다', async () => {

@@ -12,7 +12,7 @@ const mockApi = vi.hoisted(() => ({
 }))
 
 const mockRobotsApi = vi.hoisted(() => ({
-  get: vi.fn(),
+  get: vi.fn<(id: number) => Promise<{ id: number; name: string }>>(),
 }))
 
 vi.mock('@/api/damages', () => ({ damagesApi: mockApi }))
@@ -842,7 +842,9 @@ describe('DamageDetailPanel', () => {
 
     await wrapper.get('.pending-reset-btn').trigger('click')
 
-    const modal = document.body.querySelector('[aria-labelledby="reset-verdict-title"]')
+    const modal = Array.from(document.body.querySelectorAll('[role="alertdialog"]')).find(
+      (dialog) => dialog.textContent?.includes('판정을 되돌릴까요?'),
+    )
     expect(modal).not.toBeNull()
     expect(modal?.textContent).toContain('판정을 되돌릴까요?')
     expect(wrapper.emitted('verdict-reset')).toBeFalsy()

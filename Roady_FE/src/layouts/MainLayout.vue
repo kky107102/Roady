@@ -48,7 +48,7 @@ import ToastContainer from '@/components/common/ToastContainer.vue'
   position: absolute;
   top: -10rem;
   left: 1.6rem;
-  z-index: 9999;
+  z-index: var(--roady-z-skip-link);
   padding: 0.8rem 1.6rem;
   border-radius: 0 0 0.4rem 0.4rem;
   color: var(--roady-surface-default);
@@ -61,5 +61,12 @@ import ToastContainer from '@/components/common/ToastContainer.vue'
 
 .skip-link:focus {
   top: 0;
+}
+
+@media (max-width: 768px) {
+  .main-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
 }
 </style>

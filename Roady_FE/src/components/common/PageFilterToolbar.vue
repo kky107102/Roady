@@ -1,14 +1,21 @@
 <script setup lang="ts">
-defineProps<{ ariaLabel?: string }>()
+withDefaults(defineProps<{ ariaLabel?: string; compact?: boolean }>(), { compact: false })
+const emit = defineEmits<{ submit: [] }>()
 </script>
 
 <template>
-  <div class="page-filter-toolbar" role="search" :aria-label="ariaLabel">
+  <form
+    class="page-filter-toolbar"
+    :class="{ 'page-filter-toolbar--compact': compact }"
+    role="search"
+    :aria-label="ariaLabel"
+    @submit.prevent="emit('submit')"
+  >
     <slot />
     <div class="toolbar-actions">
       <slot name="actions" />
     </div>
-  </div>
+  </form>
 </template>
 
 <style scoped>
@@ -29,5 +36,23 @@ defineProps<{ ariaLabel?: string }>()
   gap: 0.8rem;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.page-filter-toolbar--compact {
+  padding: 0.8rem 0 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+@media (max-width: 48rem) {
+  .page-filter-toolbar {
+    align-items: stretch;
+    padding: 1.2rem 1.6rem;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 </style>

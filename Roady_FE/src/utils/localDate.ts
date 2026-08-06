@@ -23,6 +23,55 @@ export function localDateOffset(offsetDays: number): string {
   return localYMD(d)
 }
 
+export const DATE_RANGE_PRESETS = [
+  { label: '오늘', offset: 0 },
+  { label: '7일', offset: 6 },
+  { label: '30일', offset: 29 },
+] as const
+
+export const DEFAULT_DATE_RANGE_PRESET = 1
+export const DATE_RANGE_ORDER_ERROR = '시작일은 종료일보다 이전이어야 합니다.'
+export const ALL_DATE_RANGE_QUERY_VALUE = 'all'
+
+export function validateDateRange(from: string, to: string): string {
+  return from && to && from > to ? DATE_RANGE_ORDER_ERROR : ''
+}
+
+export function dateRangeForPreset(index: number): { from: string; to: string } {
+  const preset = DATE_RANGE_PRESETS[index] ?? DATE_RANGE_PRESETS[DEFAULT_DATE_RANGE_PRESET]
+  return { from: localDateOffset(preset.offset), to: todayLocalStr() }
+}
+
+function firstQueryString(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+export function dateRangeFromQuery(
+  query: { from?: unknown; to?: unknown; range?: unknown },
+  fallback = dateRangeForPreset(DEFAULT_DATE_RANGE_PRESET),
+): { from: string; to: string } {
+  if (firstQueryString(query.range) === ALL_DATE_RANGE_QUERY_VALUE) return { from: '', to: '' }
+  return {
+    from: firstQueryString(query.from) || fallback.from,
+    to: firstQueryString(query.to) || fallback.to,
+  }
+}
+
+export function dateRangeToQuery(from: string, to: string): Record<string, string> {
+  if (!from && !to) return { range: ALL_DATE_RANGE_QUERY_VALUE }
+  return {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  }
+}
+
+export function matchingDateRangePreset(from: string, to: string): number | null {
+  if (!from || !to || to !== todayLocalStr()) return null
+  const index = DATE_RANGE_PRESETS.findIndex((preset) => from === localDateOffset(preset.offset))
+  return index >= 0 ? index : null
+}
+
 /**
  * UI 시작일(YYYY-MM-DD)을 백엔드 API 날짜시간 문자열로 변환.
  * 백엔드 조건이 from <= createdAt 이므로 해당 날 자정을 그대로 사용한다.

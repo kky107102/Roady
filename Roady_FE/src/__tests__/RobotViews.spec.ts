@@ -6,10 +6,15 @@ import RobotDetailView from '@/views/RobotDetailView.vue'
 import RobotListView from '@/views/RobotListView.vue'
 import type { Robot } from '@/types/robot'
 
-const route = ref({ params: { id: '1' } })
+const route = ref({
+  params: { id: '1' },
+  query: {} as Record<string, string | undefined>,
+})
+const routerReplace = vi.fn<() => Promise<void>>()
 
 vi.mock('vue-router', () => ({
   useRoute: () => route.value,
+  useRouter: () => ({ replace: routerReplace }),
 }))
 
 vi.mock('@/api/robots', () => ({
@@ -73,7 +78,11 @@ const global = {
 }
 
 describe('RobotListView', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    route.value = { params: { id: '1' }, query: {} }
+    routerReplace.mockResolvedValue()
+  })
 
   it('shows an empty state when no robots are registered', async () => {
     vi.mocked(robotsApi.list).mockResolvedValue([])
@@ -136,6 +145,7 @@ describe('RobotListView', () => {
       '로디2호',
       '로디8호',
     ])
+    expect(wrapper.findAll('.number-cell').slice(1).map((cell) => cell.text())).toEqual(['1', '2'])
     expect(wrapper.text()).toContain('배터리 부족 5%')
     expect(wrapper.text()).toContain('운행 상태 오류')
     expect(wrapper.text()).toContain('연결 끊김')
@@ -157,7 +167,54 @@ describe('RobotListView', () => {
     await wrapper.get('#connection-filter').setValue('CONNECTED')
 
     expect(wrapper.findAll('.robot-name').map((cell) => cell.text())).toEqual(['로디8호'])
+    expect(wrapper.findAll('.number-cell').slice(1).map((cell) => cell.text())).toEqual(['1'])
     expect(wrapper.text()).toContain('1대 / 총 2대')
+  })
+
+  it('URL의 운행·연결 상태를 필터에 적용한다', async () => {
+    route.value = {
+      params: { id: '1' },
+      query: { operation: 'MOVING', connection: 'CONNECTED' },
+    }
+    vi.mocked(robotsApi.list).mockResolvedValue([
+      {
+        ...robot,
+        latestStatus: {
+          id: 1,
+          latitude: null,
+          longitude: null,
+          batteryLevel: 80,
+          operationStatus: 'MOVING',
+          connectionStatus: 'CONNECTED',
+          errorCode: null,
+          errorMessage: null,
+          recordedAt: '2026-07-29T11:00:00',
+        },
+      },
+      {
+        ...robot,
+        id: 2,
+        name: '대기 로디',
+        latestStatus: {
+          id: 2,
+          latitude: null,
+          longitude: null,
+          batteryLevel: 90,
+          operationStatus: 'STANDBY',
+          connectionStatus: 'CONNECTED',
+          errorCode: null,
+          errorMessage: null,
+          recordedAt: '2026-07-29T11:00:00',
+        },
+      },
+    ])
+
+    const wrapper = mount(RobotListView, { global })
+    await flushPromises()
+
+    expect((wrapper.get('#operation-filter').element as HTMLSelectElement).value).toBe('MOVING')
+    expect((wrapper.get('#connection-filter').element as HTMLSelectElement).value).toBe('CONNECTED')
+    expect(wrapper.findAll('.robot-name').map((cell) => cell.text())).toEqual(['로디 1호'])
   })
 
   it('retries after a list request failure', async () => {
@@ -179,7 +236,7 @@ describe('RobotListView', () => {
 describe('RobotDetailView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    route.value = { params: { id: '1' } }
+    route.value = { params: { id: '1' }, query: {} }
     vi.mocked(robotsApi.commands).mockResolvedValue([])
     vi.mocked(robotsApi.latestLocation).mockRejectedValue(new Error('no live location'))
   })
@@ -347,7 +404,7 @@ describe('RobotDetailView', () => {
   })
 
   it('does not request an invalid robot id', async () => {
-    route.value = { params: { id: 'invalid' } }
+    route.value = { params: { id: 'invalid' }, query: {} }
     const wrapper = mount(RobotDetailView, { global })
     await flushPromises()
 

@@ -123,9 +123,30 @@ describe('dashboard store', () => {
       ],
     })
     robotsApiMock.list.mockResolvedValue([
-      { id: 1, active: true, status: 'MOVING' },
-      { id: 2, active: false, status: 'MOVING' },
-      { id: 3, active: true, status: 'STANDBY' },
+      {
+        id: 1,
+        active: true,
+        status: 'MOVING',
+        latestStatus: { connectionStatus: 'CONNECTED', operationStatus: 'MOVING' },
+      },
+      {
+        id: 2,
+        active: true,
+        status: 'MOVING',
+        latestStatus: { connectionStatus: 'DISCONNECTED', operationStatus: 'MOVING' },
+      },
+      {
+        id: 3,
+        active: true,
+        status: 'STANDBY',
+        latestStatus: { connectionStatus: 'CONNECTED', operationStatus: 'STANDBY' },
+      },
+      {
+        id: 4,
+        active: false,
+        status: 'MOVING',
+        latestStatus: { connectionStatus: 'CONNECTED', operationStatus: 'MOVING' },
+      },
     ])
     const store = useDashboardStore()
 
@@ -135,6 +156,6 @@ describe('dashboard store', () => {
     expect(store.urgentReviewCount).toBe(1)
     expect(store.urgentDamages.map((item) => item.id)).toEqual([1])
     expect(store.requestedCount).toBe(1)
-    expect(store.activeRobotCount).toBe(1)
+    expect(store.activeRobotCount).toBe(2)
   })
 })

@@ -6,6 +6,7 @@ const leaflet = vi.hoisted(() => {
   const mapInstance = {
     remove: vi.fn(),
     setView: vi.fn(),
+    panTo: vi.fn(),
     fitBounds: vi.fn(),
     getBounds: vi.fn(() => ({
       getSouth: () => 37.4,
@@ -116,9 +117,117 @@ describe('CommonMap', () => {
     await wrapper.vm.$nextTick()
 
     expect(leaflet.mapInstance.stop).toHaveBeenCalledOnce()
-    expect(leaflet.mapInstance.setView).toHaveBeenCalledWith([37.51, 127], 15, {
-      animate: false,
+    expect(leaflet.mapInstance.panTo).toHaveBeenCalledWith([37.51, 127], {
+      animate: true,
+      duration: 0.2,
     })
+    expect(wrapper.emitted('markerSelect')).toBeUndefined()
+    expect(marker?.openPopup).toHaveBeenCalledOnce()
+
+    const moveEndHandler = leaflet.mapInstance.on.mock.calls.find(
+      ([event]) => event === 'moveend',
+    )?.[1] as (() => void) | undefined
+    moveEndHandler?.()
+    expect(wrapper.emitted('boundsChange')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('emits a selection directly for markers without a popup action', async () => {
+    const wrapper = mount(CommonMap, {
+      props: {
+        markers: [{ id: 10, latitude: 37.5, longitude: 127, title: 'damage #10' }],
+      },
+    })
+
+    const marker = leaflet.markerInstances[0]
+    const clickHandler = marker?.on?.mock.calls.find(([event]) => event === 'click')?.[1] as
+      (() => void) | undefined
+    clickHandler?.()
+    await Promise.resolve()
+
+    expect(wrapper.emitted('markerSelect')).toEqual([[10]])
+    expect(marker?.openPopup).toHaveBeenCalledOnce()
+    expect(leaflet.mapInstance.setView).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('emits a selection only when the popup action is clicked', async () => {
+    const wrapper = mount(CommonMap, {
+      props: {
+        markers: [
+          {
+            id: 10,
+            latitude: 37.5,
+            longitude: 127,
+            title: 'damage #10',
+            actionHref: '/damages?damageId=10',
+          },
+        ],
+      },
+    })
+
+    const popup = leaflet.markerInstances[0]?.bindPopup?.mock.calls[0]?.[0] as HTMLElement
+    popup.querySelector<HTMLAnchorElement>('.roady-map-popup__action')?.click()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('markerSelect')).toEqual([[10]])
+
+    wrapper.unmount()
+  })
+
+  it('does not reset the viewport when marker data refreshes', async () => {
+    const wrapper = mount(CommonMap, {
+      props: {
+        markers: [{ id: 10, latitude: 37.5, longitude: 127, title: 'damage #10' }],
+      },
+    })
+
+    expect(leaflet.mapInstance.setView).toHaveBeenCalledTimes(1)
+    const clickHandler = leaflet.markerInstances[0]?.on?.mock.calls.find(
+      ([event]) => event === 'click',
+    )?.[1] as (() => void) | undefined
+    clickHandler?.()
+    await Promise.resolve()
+
+    await wrapper.setProps({
+      markers: [
+        { id: 10, latitude: 37.5, longitude: 127, title: 'damage #10' },
+        { id: 11, latitude: 37.51, longitude: 127.01, title: 'damage #11' },
+      ],
+    })
+
+    expect(leaflet.mapInstance.setView).toHaveBeenCalledTimes(1)
+    expect(leaflet.mapInstance.fitBounds).not.toHaveBeenCalled()
+    expect(leaflet.markerInstances[1]?.openPopup).toHaveBeenCalledOnce()
+
+    wrapper.unmount()
+  })
+
+  it('동일한 마커 데이터가 다시 전달되면 열린 팝업을 재생성하지 않는다', async () => {
+    const markerItem = {
+      id: 10,
+      latitude: 37.5,
+      longitude: 127,
+      title: 'damage #10',
+      details: [{ label: '상태', value: '미확인' }],
+    }
+    const wrapper = mount(CommonMap, {
+      props: { markers: [markerItem] },
+    })
+    const marker = leaflet.markerInstances[0]
+    const clickHandler = marker?.on?.mock.calls.find(([event]) => event === 'click')?.[1] as
+      (() => void) | undefined
+    clickHandler?.()
+    await Promise.resolve()
+
+    await wrapper.setProps({
+      markers: [{ ...markerItem, details: markerItem.details.map((detail) => ({ ...detail })) }],
+    })
+
+    expect(leaflet.createMarker).toHaveBeenCalledOnce()
+    expect(marker?.remove).not.toHaveBeenCalled()
     expect(marker?.openPopup).toHaveBeenCalledOnce()
 
     wrapper.unmount()

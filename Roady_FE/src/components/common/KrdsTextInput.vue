@@ -176,8 +176,8 @@ defineExpose({
   position: absolute;
   top: 50%;
   right: 0.8rem;
-  width: 4rem;
-  height: 4rem;
+  width: 4.4rem;
+  height: 4.4rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;

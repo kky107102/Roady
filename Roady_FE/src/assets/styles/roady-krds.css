@@ -23,6 +23,7 @@
 
   /* Danger, warning, success, and informational feedback. */
   --roady-status-danger: #d32f2f;
+  --roady-status-danger-hover: #b3261e;
   --roady-status-warning: #e66a00;
   --roady-status-success: #16803c;
   --roady-status-info: #246beb;
@@ -36,6 +37,33 @@
   --roady-brand-accent-text: #805b00;
   --roady-focus-ring: rgb(47 107 154 / 22%);
   --roady-status-warning-text: #8a3f00;
+
+  /* Shared typography, shape, elevation, layer, and motion semantics. */
+  --roady-font-family:
+    'Pretendard GOV', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR',
+    'Apple SD Gothic Neo', sans-serif;
+  --roady-overlay: rgb(15 23 42 / 48%);
+  --roady-radius-control: 0.6rem;
+  --roady-radius-list-card: 1.6rem;
+  --roady-radius-dialog: 1.2rem;
+  --roady-shadow-list-card: 0 0.2rem 0.5rem rgb(15 23 42 / 6%);
+  --roady-shadow-list-card-hover: 0 0.5rem 1.2rem rgb(15 23 42 / 10%);
+  --roady-shadow-list-card-selected: 0 0.5rem 1.2rem rgb(22 58 95 / 16%);
+  --roady-shadow-dialog: 0 2rem 5rem rgb(15 23 42 / 24%);
+  --roady-z-map-control: 600;
+  --roady-z-modal: 3000;
+  --roady-z-toast: 9000;
+  --roady-z-skip-link: 9999;
+  --roady-transition-fast: 120ms ease;
+  --roady-control-sort-min-width: 17rem;
+
+  /* Runtime consumers such as Chart.js resolve these CSS variables in script. */
+  --roady-chart-total: #5b7c9d;
+  --roady-chart-total-hover: #466987;
+  --roady-chart-completed: #4f9d69;
+  --roady-chart-completed-hover: #3d8154;
+  --roady-chart-grid: #e8edf2;
+  --roady-chart-text: #6b7a8d;
 
   /* KRDS Adaptive compatibility palette. */
   --krds-color-light-primary-5: var(--roady-brand-primary-subtle);
@@ -101,11 +129,51 @@ body,
 body {
   color: var(--roady-text-primary);
   background: var(--roady-surface-background);
+  font-family: var(--roady-font-family);
   line-height: 1.5;
   letter-spacing: 0;
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 0.3rem solid var(--roady-focus-ring);
+  outline-offset: 0.2rem;
+}
+
+:where(button, input, select, textarea):disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+.roady-compact-select {
+  height: 4rem;
+  padding: 0 3.2rem 0 1.2rem;
+  border: 1px solid var(--roady-border-default);
+  border-radius: var(--roady-radius-control);
+  color: var(--roady-text-secondary);
+  background-color: var(--roady-surface-default);
+  font-size: var(--krds-pc-font-size-label-small);
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.roady-compact-select:hover {
+  border-color: var(--roady-brand-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

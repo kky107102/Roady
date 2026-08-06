@@ -12,6 +12,7 @@ import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import RepairRequestModal from '@/components/repairs/RepairRequestModal.vue'
 import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vue'
 import {
@@ -21,6 +22,7 @@ import {
   formatDamageTypeLabel,
   priorityBadgeType,
 } from '@/utils/repairRequest'
+import { repairStatusInfo } from '@/utils/repairManagement'
 
 // ── 라우터 ──────────────────────────────────────────────────
 const route = useRoute()
@@ -112,13 +114,6 @@ onUnmounted(() => {
 })
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
-const REPAIR_STATUS_MAP: Record<string, { label: string; type: BadgeType }> = {
-  REQUESTED: { label: '요청 전', type: 'warning' },
-  REPAIR_IN_PROGRESS: { label: '요청 완료', type: 'info' },
-  REPAIR_COMPLETED: { label: '보수 완료', type: 'success' },
-  CANCELED: { label: '취소', type: 'neutral' },
-}
-
 function formatDateTime(str: string | null | undefined): string {
   if (!str) return '-'
   const d = new Date(str)
@@ -151,7 +146,7 @@ function formatLocation(d: DamageDetail): string {
 const currentStatusInfo = computed(() => {
   const status = detail.value?.currentStatus
   if (!status) return null
-  return REPAIR_STATUS_MAP[status] ?? { label: status, type: 'neutral' as BadgeType }
+  return repairStatusInfo(status)
 })
 
 const priorityLabel = computed(() => formatPriorityLabel(detail.value?.processingPriority))
@@ -754,110 +749,36 @@ onUnmounted(() => {
       @edit="openRequestModal('edit')"
     />
 
-    <!-- 보수 요청 2차 확인 다이얼로그 -->
-    <Teleport to="body">
-      <div
-        v-if="requestConfirmOpen"
-        class="confirm-backdrop"
-        role="dialog"
-        aria-modal="true"
-        aria-label="보수 요청 확인"
-        @click.self="!requestSubmitting && (requestConfirmOpen = false)"
-      >
-        <div class="confirm-panel">
-          <p class="confirm-message">해당 사건을 보수 요청 처리하시겠습니까?</p>
-          <div class="confirm-actions">
-            <button
-              type="button"
-              class="krds-btn medium secondary"
-              :disabled="requestSubmitting"
-              @click="requestConfirmOpen = false"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              class="krds-btn medium filled primary"
-              :disabled="requestSubmitting"
-              :aria-busy="requestSubmitting"
-              @click="confirmRepairRequest"
-            >
-              {{ requestSubmitting ? '처리 중...' : '요청 전송' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      v-if="requestConfirmOpen"
+      title="보수 요청을 전송할까요?"
+      description="확인하면 선택한 담당자에게 보수 요청이 전달됩니다."
+      confirm-label="요청 전송"
+      :busy="requestSubmitting"
+      @cancel="requestConfirmOpen = false"
+      @confirm="confirmRepairRequest"
+    />
 
-    <!-- 보수 불필요 확인 다이얼로그 -->
-    <Teleport to="body">
-      <div
-        v-if="noRepairConfirmOpen"
-        class="confirm-backdrop"
-        role="dialog"
-        aria-modal="true"
-        aria-label="보수 불필요 처리 확인"
-        @click.self="!noRepairSubmitting && (noRepairConfirmOpen = false)"
-      >
-        <div class="confirm-panel">
-          <p class="confirm-message">해당 사건을 보수 불필요로 처리하시겠습니까?</p>
-          <div class="confirm-actions">
-            <button
-              type="button"
-              class="krds-btn medium secondary"
-              :disabled="noRepairSubmitting"
-              @click="noRepairConfirmOpen = false"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              class="krds-btn medium filled primary cancel-confirm-btn"
-              :disabled="noRepairSubmitting"
-              :aria-busy="noRepairSubmitting"
-              @click="confirmNoRepair"
-            >
-              {{ noRepairSubmitting ? '처리 중...' : '확인' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      v-if="noRepairConfirmOpen"
+      title="보수 불필요로 처리할까요?"
+      description="확인하면 해당 사건은 보수 대상에서 제외됩니다."
+      confirm-label="보수 불필요 처리"
+      :busy="noRepairSubmitting"
+      @cancel="noRepairConfirmOpen = false"
+      @confirm="confirmNoRepair"
+    />
 
-    <!-- 요청 취소 확인 다이얼로그 -->
-    <Teleport to="body">
-      <div
-        v-if="cancelConfirmOpen"
-        class="confirm-backdrop"
-        role="dialog"
-        aria-modal="true"
-        aria-label="요청 취소 확인"
-        @click.self="!cancelSubmitting && (cancelConfirmOpen = false)"
-      >
-        <div class="confirm-panel">
-          <p class="confirm-message">보수 요청을 취소하시겠습니까?</p>
-          <div class="confirm-actions">
-            <button
-              type="button"
-              class="krds-btn medium secondary"
-              :disabled="cancelSubmitting"
-              @click="cancelConfirmOpen = false"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              class="krds-btn medium filled primary cancel-confirm-btn"
-              :disabled="cancelSubmitting"
-              :aria-busy="cancelSubmitting"
-              @click="confirmCancelRequest"
-            >
-              {{ cancelSubmitting ? '처리 중...' : '확인' }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ConfirmDialog
+      v-if="cancelConfirmOpen"
+      title="보수 요청을 취소할까요?"
+      description="취소한 요청은 다시 보수 요청할 수 있습니다."
+      confirm-label="요청 취소"
+      tone="danger"
+      :busy="cancelSubmitting"
+      @cancel="cancelConfirmOpen = false"
+      @confirm="confirmCancelRequest"
+    />
 
     <!-- 보수 완료 모달 -->
     <RepairCompletionModal
@@ -1208,50 +1129,6 @@ onUnmounted(() => {
 
 .cancel-btn:hover:not(:disabled) {
   background: rgba(231, 76, 60, 0.06);
-}
-
-/* ── 확인 다이얼로그 ── */
-.confirm-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3100;
-  padding: 2rem;
-}
-
-.confirm-panel {
-  background: var(--roady-surface-default);
-  border-radius: 1.2rem;
-  padding: 2.4rem;
-  max-width: 36rem;
-  width: 100%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.24);
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-}
-
-.confirm-message {
-  margin: 0;
-  font-size: 1.6rem;
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-text-primary);
-  text-align: center;
-  line-height: 1.5;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 1rem;
-}
-
-.cancel-confirm-btn {
-  background: var(--roady-status-danger, #e74c3c);
-  border-color: var(--roady-status-danger, #e74c3c);
 }
 
 /* ── 공통 ── */

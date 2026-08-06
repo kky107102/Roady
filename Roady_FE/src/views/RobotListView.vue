@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { robotsApi } from '@/api/robots'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
@@ -18,17 +19,39 @@ import {
   formatDateTime,
   operationBadge,
   operationLabels,
+  matchesRobotStatus,
 } from '@/utils/robotDisplay'
 import { toRobotMapMarkers } from '@/utils/robotMap'
 import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
 
 const robots = ref<Robot[]>([])
+const route = useRoute()
+const router = useRouter()
 const mapRegion = useAssignedMapRegion()
 const loading = ref(true)
 const error = ref(false)
 const sortBy = ref('name-asc')
-const operationFilter = ref('ALL')
-const connectionFilter = ref('ALL')
+function queryString(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+function operationFilterFromQuery(value: unknown): RobotOperationStatus | 'ALL' {
+  const candidate = queryString(value)
+  return candidate in operationLabels ? (candidate as RobotOperationStatus) : 'ALL'
+}
+
+function connectionFilterFromQuery(value: unknown): RobotConnectionStatus | 'ALL' {
+  const candidate = queryString(value)
+  return candidate in connectionLabels ? (candidate as RobotConnectionStatus) : 'ALL'
+}
+
+const operationFilter = ref<RobotOperationStatus | 'ALL'>(
+  operationFilterFromQuery(route.query.operation),
+)
+const connectionFilter = ref<RobotConnectionStatus | 'ALL'>(
+  connectionFilterFromQuery(route.query.connection),
+)
 const searchInput = ref('')
 const appliedSearchQuery = ref('')
 
@@ -73,14 +96,9 @@ const displayedRobots = computed(() => {
       !normalizedQuery ||
       robot.name.toLocaleLowerCase('ko-KR').includes(normalizedQuery) ||
       robot.serialNumber.toLocaleLowerCase('ko-KR').includes(normalizedQuery)
-    const operationMatches =
-      operationFilter.value === 'ALL' ||
-      robot.latestStatus?.operationStatus === (operationFilter.value as RobotOperationStatus)
-    const connectionMatches =
-      connectionFilter.value === 'ALL' ||
-      robot.latestStatus?.connectionStatus === (connectionFilter.value as RobotConnectionStatus)
-
-    return searchMatches && operationMatches && connectionMatches
+    return (
+      searchMatches && matchesRobotStatus(robot, operationFilter.value, connectionFilter.value)
+    )
   })
 
   return [...filtered].sort((a, b) => {
@@ -151,6 +169,23 @@ function resetFilters() {
 function applySearch() {
   appliedSearchQuery.value = searchInput.value.trim()
 }
+
+watch([operationFilter, connectionFilter], ([operation, connection]) => {
+  const query = { ...route.query }
+  if (operation === 'ALL') delete query.operation
+  else query.operation = operation
+  if (connection === 'ALL') delete query.connection
+  else query.connection = connection
+  void router.replace({ query })
+})
+
+watch(
+  () => [route.query.operation, route.query.connection],
+  ([operation, connection]) => {
+    operationFilter.value = operationFilterFromQuery(operation)
+    connectionFilter.value = connectionFilterFromQuery(connection)
+  },
+)
 
 async function fetchRobots() {
   loading.value = true
@@ -253,6 +288,7 @@ onMounted(fetchRobots)
         label="운행 상태"
         size="medium"
         :options="operationOptions"
+        :filter-active="operationFilter !== 'ALL'"
       />
       <KrdsSelect
         id="connection-filter"
@@ -261,6 +297,7 @@ onMounted(fetchRobots)
         label="연결 상태"
         size="medium"
         :options="connectionOptions"
+        :filter-active="connectionFilter !== 'ALL'"
       />
       <KrdsTextInput
         id="robot-search"
@@ -272,10 +309,15 @@ onMounted(fetchRobots)
         autocomplete="off"
       />
       <div class="toolbar-actions">
-        <button type="submit" class="search-button">검색</button>
-        <button type="button" class="filter-reset" :disabled="!canReset" @click="resetFilters">
+        <button
+          type="button"
+          class="krds-btn medium secondary filter-reset"
+          :disabled="!canReset"
+          @click="resetFilters"
+        >
           필터 초기화
         </button>
+        <button type="submit" class="krds-btn medium filled primary search-button">검색</button>
       </div>
     </form>
 
@@ -305,9 +347,10 @@ onMounted(fetchRobots)
       <div v-else class="table-scroll">
         <table>
           <caption class="sr-only">
-            로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각
+            번호, 로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각
           </caption>
           <colgroup>
+            <col class="col-number" />
             <col class="col-name" />
             <col class="col-serial" />
             <col class="col-operation" />
@@ -318,6 +361,7 @@ onMounted(fetchRobots)
           </colgroup>
           <thead>
             <tr>
+              <th scope="col" class="number-cell">번호</th>
               <th scope="col">로봇명</th>
               <th scope="col">시리얼 번호</th>
               <th scope="col">운행 상태</th>
@@ -328,7 +372,8 @@ onMounted(fetchRobots)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="robot in displayedRobots" :key="robot.id">
+            <tr v-for="(robot, index) in displayedRobots" :key="robot.id">
+              <td class="number-cell">{{ index + 1 }}</td>
               <td class="robot-name">{{ robot.name }}</td>
               <td class="serial-number" :title="robot.serialNumber">
                 {{ robot.serialNumber }}
@@ -539,41 +584,15 @@ onMounted(fetchRobots)
 
 .search-button,
 .filter-reset {
-  height: 4.8rem;
   min-width: 0;
-  padding: 0 1rem;
-  border-radius: 0.6rem;
-  font-size: var(--krds-pc-font-size-body-small);
-  font-weight: var(--krds-font-weight-bold);
-  cursor: pointer;
 }
 
 .search-button {
   flex: 0 0 6.4rem;
-  border: 1px solid var(--roady-brand-primary);
-  color: var(--roady-surface-default);
-  background: var(--roady-brand-primary);
-}
-
-.search-button:hover {
-  background: var(--roady-brand-primary-hover);
 }
 
 .filter-reset {
   flex: 1 1 9.6rem;
-  border: 1px solid var(--roady-border-default);
-  color: var(--roady-text-secondary);
-  background: var(--roady-surface-default);
-}
-
-.filter-reset:hover:not(:disabled) {
-  border-color: var(--roady-brand-secondary);
-  color: var(--roady-brand-secondary);
-}
-
-.filter-reset:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 
 .table-scroll {
@@ -586,17 +605,21 @@ table {
   border-collapse: collapse;
 }
 
+.col-number {
+  width: 6%;
+}
+
 .col-name {
-  width: 14%;
+  width: 13%;
 }
 
 .col-serial {
-  width: 24%;
+  width: 21%;
 }
 
 .col-operation,
 .col-connection {
-  width: 13%;
+  width: 12%;
 }
 
 .col-battery {
@@ -645,7 +668,8 @@ tbody tr:hover {
 }
 
 .battery-cell,
-.updated-cell {
+.updated-cell,
+.number-cell {
   text-align: center;
 }
 
