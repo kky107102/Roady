@@ -22,7 +22,7 @@ import PageFilterActions from '@/components/common/PageFilterActions.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 import DamageCard from '@/components/damages/DamageCard.vue'
 import DamageReviewTabs from '@/components/damages/DamageReviewTabs.vue'
-import DamageStatusFilterChips from '@/components/damages/DamageStatusFilterChips.vue'
+import RepairStatusFilterChips from '@/components/common/RepairStatusFilterChips.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
 import type { ReviewDecisionPayload } from '@/components/damages/DamageDetailPanel.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
@@ -96,9 +96,7 @@ const listError = ref<string | null>(null)
 let listRequestSeq = 0
 
 const selectedConfirmedStatuses = ref<ConfirmedStatusFilter[]>([])
-const isAllConfirmedStatusesSelected = computed(
-  () => selectedConfirmedStatuses.value.length === 0,
-)
+const isAllConfirmedStatusesSelected = computed(() => selectedConfirmedStatuses.value.length === 0)
 
 function updateConfirmedStatuses(statuses: ConfirmedStatusFilter[]) {
   selectedConfirmedStatuses.value = statuses
@@ -479,7 +477,11 @@ onBeforeUnmount(stopDetailResize)
               >건
             </p>
           </div>
-          <select v-model="sortOrder" class="roady-compact-select list-sort-select" aria-label="탐지 사건 정렬">
+          <select
+            v-model="sortOrder"
+            class="roady-compact-select list-sort-select"
+            aria-label="탐지 사건 정렬"
+          >
             <option v-for="option in SORT_OPTIONS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
@@ -488,7 +490,7 @@ onBeforeUnmount(stopDetailResize)
 
         <DamageReviewTabs :model-value="reviewTab" @update:model-value="selectReviewTab" />
 
-        <DamageStatusFilterChips
+        <RepairStatusFilterChips
           v-if="reviewTab === 'confirmed'"
           :selected="selectedConfirmedStatuses"
           :counts="confirmedStatusCounts"

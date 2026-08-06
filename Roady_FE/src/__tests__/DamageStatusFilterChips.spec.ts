@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
-import DamageStatusFilterChips from '@/components/damages/DamageStatusFilterChips.vue'
+import RepairStatusFilterChips from '@/components/common/RepairStatusFilterChips.vue'
 
 const counts = {
   requested: 1,
@@ -8,9 +8,9 @@ const counts = {
   completed: 2,
 }
 
-describe('DamageStatusFilterChips', () => {
+describe('RepairStatusFilterChips', () => {
   it('처리 상태와 건수를 항상 노출한다', () => {
-    const wrapper = mount(DamageStatusFilterChips, {
+    const wrapper = mount(RepairStatusFilterChips, {
       props: {
         selected: [],
         counts,
@@ -25,7 +25,7 @@ describe('DamageStatusFilterChips', () => {
   })
 
   it('선택 상태를 aria-pressed로 전달한다', () => {
-    const wrapper = mount(DamageStatusFilterChips, {
+    const wrapper = mount(RepairStatusFilterChips, {
       props: {
         selected: ['requested'],
         counts,
@@ -39,7 +39,7 @@ describe('DamageStatusFilterChips', () => {
   })
 
   it('필터 칩을 누르면 다중 선택 상태를 갱신한다', async () => {
-    const wrapper = mount(DamageStatusFilterChips, {
+    const wrapper = mount(RepairStatusFilterChips, {
       props: {
         selected: ['requested'],
         counts,
@@ -59,7 +59,7 @@ describe('DamageStatusFilterChips', () => {
   })
 
   it('아무 상태도 선택하지 않았을 때 개별 칩을 누르면 해당 상태만 선택한다', async () => {
-    const wrapper = mount(DamageStatusFilterChips, {
+    const wrapper = mount(RepairStatusFilterChips, {
       props: {
         selected: [],
         counts,
@@ -72,7 +72,7 @@ describe('DamageStatusFilterChips', () => {
   })
 
   it('세 상태를 모두 선택하면 필터를 해제한다', async () => {
-    const wrapper = mount(DamageStatusFilterChips, {
+    const wrapper = mount(RepairStatusFilterChips, {
       props: {
         selected: ['requested', 'in_progress'],
         counts,
@@ -82,5 +82,18 @@ describe('DamageStatusFilterChips', () => {
     await wrapper.findAll('button')[2]!.trigger('click')
 
     expect(wrapper.emitted('update:selected')).toEqual([[[]]])
+  })
+
+  it('정렬 같은 부가 조작을 동일한 필터 바에 배치할 수 있다', () => {
+    const wrapper = mount(RepairStatusFilterChips, {
+      props: { selected: [], counts },
+      slots: {
+        actions: '<select aria-label="보수 사건 정렬"><option>우선순위 높은 순</option></select>',
+      },
+    })
+
+    expect(wrapper.get('.status-filter-actions').get('select').attributes('aria-label')).toBe(
+      '보수 사건 정렬',
+    )
   })
 })

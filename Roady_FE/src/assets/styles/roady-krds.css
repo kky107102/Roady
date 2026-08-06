@@ -55,6 +55,7 @@
   --roady-z-toast: 9000;
   --roady-z-skip-link: 9999;
   --roady-transition-fast: 120ms ease;
+  --roady-control-sort-min-width: 17rem;
 
   /* Runtime consumers such as Chart.js resolve these CSS variables in script. */
   --roady-chart-total: #5b7c9d;
@@ -158,6 +159,7 @@ textarea {
   color: var(--roady-text-secondary);
   background-color: var(--roady-surface-default);
   font-size: var(--krds-pc-font-size-label-small);
+  line-height: 1.5;
   cursor: pointer;
 }
 

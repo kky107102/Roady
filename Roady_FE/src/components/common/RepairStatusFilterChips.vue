@@ -1,22 +1,28 @@
 <script setup lang="ts">
-import type { ConfirmedStatusFilter } from '@/utils/damageReview'
+import type { RepairStatusFilter } from '@/utils/repairManagement'
 
-const props = defineProps<{
-  selected: ConfirmedStatusFilter[]
-  counts: Record<ConfirmedStatusFilter, number>
-}>()
+const props = withDefaults(
+  defineProps<{
+    selected: RepairStatusFilter[]
+    counts: Record<RepairStatusFilter, number>
+    ariaLabel?: string
+  }>(),
+  {
+    ariaLabel: '처리 상태 필터',
+  },
+)
 
 const emit = defineEmits<{
-  'update:selected': [ConfirmedStatusFilter[]]
+  'update:selected': [RepairStatusFilter[]]
 }>()
 
-const statuses: Array<{ value: ConfirmedStatusFilter; label: string }> = [
+const statuses: Array<{ value: RepairStatusFilter; label: string }> = [
   { value: 'requested', label: '요청 전' },
   { value: 'in_progress', label: '요청 완료' },
   { value: 'completed', label: '보수 완료' },
 ]
 
-function toggle(value: ConfirmedStatusFilter) {
+function toggle(value: RepairStatusFilter) {
   const selected = props.selected.includes(value)
     ? props.selected.filter((status) => status !== value)
     : statuses
@@ -28,7 +34,7 @@ function toggle(value: ConfirmedStatusFilter) {
 </script>
 
 <template>
-  <section class="status-filter" aria-label="처리 상태 필터">
+  <section class="status-filter" :aria-label="ariaLabel">
     <div class="status-filter-chips" role="group">
       <button
         v-for="status in statuses"
@@ -42,6 +48,9 @@ function toggle(value: ConfirmedStatusFilter) {
         <span>{{ status.label }} ({{ counts[status.value] }})</span>
       </button>
     </div>
+    <div v-if="$slots.actions" class="status-filter-actions">
+      <slot name="actions" />
+    </div>
   </section>
 </template>
 
@@ -49,6 +58,7 @@ function toggle(value: ConfirmedStatusFilter) {
 .status-filter {
   display: flex;
   align-items: center;
+  gap: var(--krds-number-6);
   padding: var(--krds-number-5) var(--krds-number-8);
   border-bottom: var(--krds-number-1) solid var(--roady-border-default);
   background: var(--roady-surface-background);
@@ -100,21 +110,34 @@ function toggle(value: ConfirmedStatusFilter) {
   background: var(--roady-brand-primary);
 }
 
-.status-filter-chip:focus {
+.status-filter-chip:focus,
+.status-filter-chip:active,
+.status-filter-chip:focus-visible {
   outline: none;
-}
-
-.status-filter-chip:active {
   box-shadow: none;
   transform: none;
 }
 
 .status-filter-chip:focus-visible {
-  outline: none;
-  box-shadow: none;
   text-decoration: underline;
   text-decoration-thickness: var(--krds-number-1);
   text-underline-offset: var(--krds-number-2);
 }
 
+.status-filter-actions {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+}
+
+@media (max-width: 48rem) {
+  .status-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .status-filter-actions {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+}
 </style>

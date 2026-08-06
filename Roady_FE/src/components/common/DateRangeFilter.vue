@@ -56,7 +56,9 @@ function onToInput(e: Event) {
           :class="{ 'is-active': activePreset === idx }"
           :aria-pressed="activePreset === idx"
           @click="setPreset(idx)"
-        >{{ p.label }}</button>
+        >
+          {{ p.label }}
+        </button>
       </div>
 
       <div class="date-range" role="group" aria-label="날짜 범위">
@@ -123,7 +125,10 @@ function onToInput(e: Event) {
   font-weight: var(--krds-font-weight-regular);
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s,
+    color 0.12s;
 }
 
 .preset-btn:hover {
@@ -132,9 +137,18 @@ function onToInput(e: Event) {
   background: var(--roady-brand-primary-subtle);
 }
 
+.preset-btn:focus,
+.preset-btn:active,
 .preset-btn:focus-visible {
-  outline: 2px solid var(--roady-focus-ring);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.preset-btn:focus-visible {
+  text-decoration: underline;
+  text-decoration-thickness: var(--krds-number-1);
+  text-underline-offset: var(--krds-number-2);
 }
 
 .preset-btn.is-active {

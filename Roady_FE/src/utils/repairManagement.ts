@@ -97,7 +97,7 @@ export function parseStatusesParam(
 ): RepairStatusFilter[] {
   if (param == null) return [...REPAIR_STATUS_FILTERS]
   const raw = Array.isArray(param) ? param.join(',') : param
-  if (raw.trim() === '') return []
+  if (raw.trim() === '') return [...REPAIR_STATUS_FILTERS]
   const parsed = raw
     .split(',')
     .map((s) => STATUS_TO_FILTER[s.trim()])
@@ -105,10 +105,8 @@ export function parseStatusesParam(
   return parsed.length > 0 ? parsed : [...REPAIR_STATUS_FILTERS]
 }
 
-export function statusesToParam(
-  statuses: RepairStatusFilter[],
-): string | undefined {
-  if (statuses.length === REPAIR_STATUS_FILTERS.length) return undefined
+export function statusesToParam(statuses: RepairStatusFilter[]): string | undefined {
+  if (statuses.length === 0 || statuses.length === REPAIR_STATUS_FILTERS.length) return undefined
   return statuses.map((s) => FILTER_TO_STATUS[s]).join(',')
 }
 

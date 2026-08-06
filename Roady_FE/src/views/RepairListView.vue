@@ -7,7 +7,7 @@ import type { DamageListItem } from '@/types/damage'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
 import PageFilterActions from '@/components/common/PageFilterActions.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
-import KrdsCheckbox from '@/components/common/KrdsCheckbox.vue'
+import RepairStatusFilterChips from '@/components/common/RepairStatusFilterChips.vue'
 import RepairTable from '@/components/repairs/RepairTable.vue'
 import {
   dateRangeForPreset,
@@ -25,7 +25,6 @@ import {
   statusesToParam,
   parseSortParam,
   REPAIR_STATUS_FILTERS,
-  REPAIR_FILTER_LABELS,
   REPAIR_SORT_OPTIONS,
 } from '@/utils/repairManagement'
 import type { RepairStatusFilter, RepairSort } from '@/utils/repairManagement'
@@ -54,9 +53,7 @@ const activeSort = computed(() => parseSortParam(normalizeQueryValue(route.query
 const formFrom = ref(appliedFrom.value)
 const formTo = ref(appliedTo.value)
 const formError = ref('')
-const activePreset = ref<number | null>(
-  matchingDateRangePreset(appliedFrom.value, appliedTo.value),
-)
+const activePreset = ref<number | null>(matchingDateRangePreset(appliedFrom.value, appliedTo.value))
 
 watch([appliedFrom, appliedTo], ([from, to]) => {
   formFrom.value = from
@@ -135,6 +132,9 @@ const displayedItems = computed(() => {
 })
 
 const totalCount = computed(() => allItems.value.length)
+const selectedStatusChips = computed<RepairStatusFilter[]>(() =>
+  activeStatuses.value.length === REPAIR_STATUS_FILTERS.length ? [] : activeStatuses.value,
+)
 
 // ── URL 쿼리 빌더 ─────────────────────────────────────────
 function buildQuery(overrides: Record<string, string | undefined> = {}): Record<string, string> {
@@ -159,37 +159,6 @@ function setStatuses(next: RepairStatusFilter[]) {
   const param = statusesToParam(next)
   router.replace({ query: buildQuery({ statuses: param }) })
 }
-
-function toggleStatus(filter: RepairStatusFilter, checked: boolean) {
-  const current = activeStatuses.value
-  if (checked) {
-    if (!current.includes(filter)) setStatuses([...current, filter])
-  } else {
-    setStatuses(current.filter((s) => s !== filter))
-  }
-}
-
-const isAllSelected = computed(() => activeStatuses.value.length === REPAIR_STATUS_FILTERS.length)
-
-const allChecked = computed({
-  get: () => isAllSelected.value,
-  set: (v: boolean) => setStatuses(v ? [...REPAIR_STATUS_FILTERS] : []),
-})
-
-const requestedChecked = computed({
-  get: () => activeStatuses.value.includes('requested'),
-  set: (v: boolean) => toggleStatus('requested', v),
-})
-
-const inProgressChecked = computed({
-  get: () => activeStatuses.value.includes('in_progress'),
-  set: (v: boolean) => toggleStatus('in_progress', v),
-})
-
-const completedChecked = computed({
-  get: () => activeStatuses.value.includes('completed'),
-  set: (v: boolean) => toggleStatus('completed', v),
-})
 
 // ── 정렬 ────────────────────────────────────────────────
 function handleSortChange(event: Event) {
@@ -248,44 +217,25 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
     <!-- 본문 -->
     <div class="repair-body">
       <!-- 목록 헤더: 상태 필터 + 정렬 -->
-      <div class="list-header">
-        <!-- 인라인 상태 체크박스 필터 -->
-        <fieldset class="status-filters" aria-label="보수 상태 필터">
-          <legend class="sr-only">보수 상태 필터</legend>
-          <KrdsCheckbox
-            id="repair-filter-all"
-            v-model="allChecked"
-            :label="`전체 (${totalCount}건)`"
-          />
-          <KrdsCheckbox
-            id="repair-filter-requested"
-            v-model="requestedChecked"
-            :label="`${REPAIR_FILTER_LABELS.requested} (${statusCounts.requested}건)`"
-          />
-          <KrdsCheckbox
-            id="repair-filter-in-progress"
-            v-model="inProgressChecked"
-            :label="`${REPAIR_FILTER_LABELS.in_progress} (${statusCounts.in_progress}건)`"
-          />
-          <KrdsCheckbox
-            id="repair-filter-completed"
-            v-model="completedChecked"
-            :label="`${REPAIR_FILTER_LABELS.completed} (${statusCounts.completed}건)`"
-          />
-        </fieldset>
-
-        <!-- 정렬 드롭다운 -->
-        <select
-          class="roady-compact-select sort-select"
-          :value="activeSort"
-          aria-label="보수 사건 정렬"
-          @change="handleSortChange"
-        >
-          <option v-for="option in REPAIR_SORT_OPTIONS" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
-      </div>
+      <RepairStatusFilterChips
+        :selected="selectedStatusChips"
+        :counts="statusCounts"
+        aria-label="보수 상태 필터"
+        @update:selected="setStatuses"
+      >
+        <template #actions>
+          <select
+            class="roady-compact-select sort-select"
+            :value="activeSort"
+            aria-label="보수 사건 정렬"
+            @change="handleSortChange"
+          >
+            <option v-for="option in REPAIR_SORT_OPTIONS" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </template>
+      </RepairStatusFilterChips>
 
       <!-- 테이블 영역 -->
       <div class="table-area">
@@ -329,33 +279,9 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
   gap: 1.2rem;
 }
 
-/* ── 목록 헤더 ── */
-.list-header {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: 1.2rem;
-  flex-shrink: 0;
-}
-
-/* ── 상태 필터 ── */
-.status-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem 1.2rem;
-  min-width: 0;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  flex: 1;
-}
-
 /* ── 정렬 드롭다운 ── */
 .sort-select {
-  margin-left: auto;
-  width: 14rem;
-  flex-shrink: 0;
+  min-inline-size: var(--roady-control-sort-min-width);
 }
 
 /* ── 테이블 영역 ── */
@@ -365,32 +291,14 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
   min-height: 0;
 }
 
-/* 스크린리더 전용 */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
 /* ── 반응형 ── */
 @media (max-width: 768px) {
   .repair-body {
     padding: 1.2rem;
   }
 
-  .list-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .sort-select {
-    margin-left: 0;
+    width: 100%;
   }
 }
 </style>
