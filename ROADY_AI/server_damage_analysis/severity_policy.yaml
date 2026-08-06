@@ -1,0 +1,40 @@
+policy:
+  version: "draft-1"
+  advisory_only: true
+
+damage_types:
+  missing:
+    weight: 1.0
+    minimum_severity: moderate
+  crack:
+    weight: 0.7
+    minimum_severity: minor
+  wear:
+    weight: 0.5
+    minimum_severity: normal
+
+ratio_thresholds:
+  normal_max_percent: 0.5
+  minor_max_percent: 5.0
+  moderate_max_percent: 15.0
+
+review:
+  boundary_margin_percent: 1.0
+  tactile_confidence: 0.25
+  damage_confidence: 0.05
+  minimum_damage_confidence_for_auto: 0.70
+  duplicate_mask_iou: 0.70
+  minimum_tactile_pixels: 100
+  model_quality_gate:
+    minimum_positive_damage_dice: 0.70
+    maximum_ratio_mae_pp: 3.0
+    minimum_severity_macro_f1: 0.80
+
+analysis_units:
+  block_aspect_ratio_min: 0.60
+  block_aspect_ratio_max: 1.67
+  expected_region:
+    minimum_neighbor_count: 3
+    maximum_size_cv: 0.20
+    maximum_spacing_cv: 0.25
+
