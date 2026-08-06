@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import threading
 import time
 from dataclasses import dataclass
@@ -99,11 +100,17 @@ class CameraWorker:
             return cv2.CAP_ANY
         raise ValueError(f"Unsupported camera backend: {self.config.backend}")
 
+    def _resolve_device_path(self) -> str | int:
+        if self.config.device_path is None:
+            return self.config.device_index
+        if os.path.isabs(self.config.device_path):
+            return self.config.device_path
+        return os.path.join("/dev/v4l/by-id", self.config.device_path)
+
     def _build_gstreamer_pipeline(self) -> str:
-        device = (
-            self.config.device_path
-            or f"/dev/video{self.config.device_index}"
-        )
+        device = self._resolve_device_path()
+        if isinstance(device, int):
+            device = f"/dev/video{device}"
         width = self.config.width or 1280
         height = self.config.height or 720
         fps = self.config.fps or 30
@@ -122,7 +129,7 @@ class CameraWorker:
         )
 
     def _device_source(self):
-        return self.config.device_path or self.config.device_index
+        return self._resolve_device_path()
 
     def _device_label(self) -> str:
         source = self._device_source()
