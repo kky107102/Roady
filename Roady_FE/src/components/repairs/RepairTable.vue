@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatCaseId, formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
+import { formatKoreanDateTimeOrDash as formatDateTime } from '@/utils/localDate'
 
 const props = defineProps<{
   items: DamageListItem[]
@@ -20,20 +21,6 @@ const props = defineProps<{
 const emit = defineEmits<{ retry: [] }>()
 
 const route = useRoute()
-
-function formatDateTime(str: string | null | undefined): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return '-'
-  return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(d)
-}
 
 function detailLinkTo(item: DamageListItem) {
   return {

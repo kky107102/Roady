@@ -16,6 +16,39 @@ export function todayLocalStr(): string {
   return localYMD(new Date())
 }
 
+interface DateTimeFormatOptions {
+  includeYear?: boolean
+  invalidValue?: 'input' | 'empty'
+}
+
+/** API 날짜·시간을 화면에서 사용하는 한국어 형식으로 변환한다. */
+export function formatKoreanDateTime(
+  value: string | null | undefined,
+  { includeYear = true, invalidValue = 'input' }: DateTimeFormatOptions = {},
+): string {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return invalidValue === 'input' ? value : '-'
+
+  return date.toLocaleString('ko-KR', {
+    ...(includeYear ? { year: 'numeric' as const } : {}),
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+export function formatShortKoreanDateTime(value: string | null | undefined): string {
+  return formatKoreanDateTime(value, { includeYear: false })
+}
+
+export function formatKoreanDateTimeOrDash(value: string | null | undefined): string {
+  return formatKoreanDateTime(value, { invalidValue: 'empty' })
+}
+
 /** 로컬 타임존 기준 오늘로부터 offsetDays일 전 날짜를 YYYY-MM-DD 형식으로 반환 */
 export function localDateOffset(offsetDays: number): string {
   const d = new Date()

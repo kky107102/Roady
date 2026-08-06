@@ -8,26 +8,17 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { reviewTabForDamage } from '@/utils/damageReview'
 import { formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
-import { toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
+import {
+  formatShortKoreanDateTime as formatDateTime,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
 
 const props = defineProps<{
   from?: string
   to?: string
   regionCode?: string
 }>()
-
-function formatDateTime(str: string | null): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 
 const items = ref<DamageListItem[]>([])
 const loading = ref(false)

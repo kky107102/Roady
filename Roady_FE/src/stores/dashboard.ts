@@ -16,6 +16,10 @@ import {
 } from '@/utils/localDate'
 
 const DASHBOARD_PAGE_SIZE = 100
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000
+const YEAR_CHART_THRESHOLD_DAYS = 730
+const MONTH_CHART_THRESHOLD_DAYS = 120
+const WEEK_CHART_THRESHOLD_DAYS = 31
 
 export interface DashboardFilter {
   from: string
@@ -28,12 +32,12 @@ function defaultFilter(): DashboardFilter {
 }
 
 function chartUnit(from: string, to: string): StatUnit {
-  const dayMilliseconds = 24 * 60 * 60 * 1000
-  const days = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / dayMilliseconds) + 1
+  const days =
+    Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / MILLISECONDS_PER_DAY) + 1
 
-  if (days > 730) return 'YEAR'
-  if (days > 120) return 'MONTH'
-  if (days > 31) return 'WEEK'
+  if (days > YEAR_CHART_THRESHOLD_DAYS) return 'YEAR'
+  if (days > MONTH_CHART_THRESHOLD_DAYS) return 'MONTH'
+  if (days > WEEK_CHART_THRESHOLD_DAYS) return 'WEEK'
   return 'DAY'
 }
 
@@ -112,8 +116,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       damages.value = [firstDamagePage, ...remainingPages].flatMap((page) => page.content)
       damagesTotalElements.value = firstDamagePage.totalElements
       robots.value = robotList
-    } catch (fetchError: unknown) {
-      if (import.meta.env.DEV) console.error('[Dashboard] fetchOverview:', fetchError)
+    } catch {
       error.value = '데이터를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
     } finally {
       loading.value = false
@@ -132,8 +135,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         to: toApiToDateTime(to),
         unit: chartUnit(from, to),
       })
-    } catch (fetchError: unknown) {
-      if (import.meta.env.DEV) console.error('[Dashboard] fetchTrend:', fetchError)
+    } catch {
       trendError.value = '탐지 추이 데이터를 불러오지 못했습니다.'
     } finally {
       trendLoading.value = false

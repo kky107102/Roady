@@ -26,8 +26,11 @@ import {
   formatDamageTypeLabel,
   formatPriorityLabel,
   priorityBadgeType,
+  REPAIR_DAMAGE_TYPE_OPTIONS as REVIEW_DAMAGE_TYPE_OPTIONS,
+  REPAIR_PRIORITY_OPTIONS as REVIEW_PRIORITY_OPTIONS,
 } from '@/utils/repairRequest'
 import { repairStatusInfo } from '@/utils/repairManagement'
+import { formatKoreanDateTime as formatDateTime } from '@/utils/localDate'
 
 const props = withDefaults(
   defineProps<{
@@ -261,21 +264,6 @@ onUnmounted(() => {
 
 // ── 표시 헬퍼 ─────────────────────────────────────────────
 
-const REVIEW_PRIORITY_OPTIONS = [
-  { value: 'URGENT', label: '긴급' },
-  { value: 'HIGH', label: '높음' },
-  { value: 'NORMAL', label: '보통' },
-  { value: 'LOW', label: '낮음' },
-]
-
-const REVIEW_DAMAGE_TYPE_OPTIONS = [
-  { value: 'LARGE_MISSING', label: '큰 결손' },
-  { value: 'SMALL_MISSING', label: '작은 결손' },
-  { value: 'WEAR', label: '마모' },
-  { value: 'CRACK', label: '균열' },
-  { value: 'OTHER', label: '기타' },
-]
-
 const STATUS_LABELS: Record<DamageStatus, string> = {
   COLLECTED: '수집완료',
   AI_ANALYZING: 'AI 분석중',
@@ -284,20 +272,6 @@ const STATUS_LABELS: Record<DamageStatus, string> = {
   REPAIR_IN_PROGRESS: repairStatusInfo('REPAIR_IN_PROGRESS').label,
   CANCELED: '취소',
   REPAIR_COMPLETED: repairStatusInfo('REPAIR_COMPLETED').label,
-}
-
-function formatDateTime(str: string | null): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 function formatCoords(lat: number | null, lng: number | null): string {

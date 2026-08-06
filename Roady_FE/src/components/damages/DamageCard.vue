@@ -7,6 +7,7 @@ import StatusBadge from '@/components/common/StatusBadge.vue'
 import { isReviewConfirmed } from '@/utils/damageReview'
 import { formatCaseId, formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
 import { repairStatusInfo } from '@/utils/repairManagement'
+import { formatKoreanDateTime as formatDate } from '@/utils/localDate'
 
 const props = defineProps<{
   item: DamageListItem
@@ -14,20 +15,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ select: [id: number] }>()
-
-function formatDate(str: string | null): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
 
 function formatCoords(lat: number | null, lng: number | null): string {
   if (lat == null || lng == null) return '위치 정보 없음'

@@ -3,6 +3,9 @@ import {
   dateRangeForPreset,
   dateRangeFromQuery,
   dateRangeToQuery,
+  formatKoreanDateTime,
+  formatKoreanDateTimeOrDash,
+  formatShortKoreanDateTime,
   localDateOffset,
   matchingDateRangePreset,
   todayLocalStr,
@@ -12,6 +15,41 @@ import {
 } from '@/utils/localDate'
 
 describe('localDate', () => {
+  describe('화면 날짜·시간 형식', () => {
+    const value = '2026-08-06T15:30:00'
+
+    it('전체 형식은 연도를 포함한다', () => {
+      expect(formatKoreanDateTime(value)).toBe(
+        new Date(value).toLocaleString('ko-KR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+      )
+    })
+
+    it('목록용 축약 형식은 연도를 제외한다', () => {
+      expect(formatShortKoreanDateTime(value)).toBe(
+        new Date(value).toLocaleString('ko-KR', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+      )
+    })
+
+    it('빈 값과 잘못된 값의 기존 대체 표시를 유지한다', () => {
+      expect(formatKoreanDateTime(null)).toBe('-')
+      expect(formatKoreanDateTime('invalid')).toBe('invalid')
+      expect(formatKoreanDateTimeOrDash('invalid')).toBe('-')
+    })
+  })
+
   it('세 화면에서 같은 날짜 순서 검증 문구를 사용한다', () => {
     expect(validateDateRange('2026-08-06', '2026-08-05')).toBe(
       '시작일은 종료일보다 이전이어야 합니다.',
