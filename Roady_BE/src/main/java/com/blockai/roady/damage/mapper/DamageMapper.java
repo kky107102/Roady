@@ -338,6 +338,16 @@ public interface DamageMapper {
 
     @Update("""
             UPDATE damages
+            SET current_status = #{status}
+            WHERE id = #{damageId}
+            """)
+    int updateStatus(
+            @Param("damageId") Long damageId,
+            @Param("status") String status
+    );
+
+    @Update("""
+            UPDATE damages
             SET
                 current_status = 'REPAIR_IN_PROGRESS',
                 processing_priority = #{processingPriority},

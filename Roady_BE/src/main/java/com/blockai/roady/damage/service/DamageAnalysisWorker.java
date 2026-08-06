@@ -22,6 +22,7 @@ public class DamageAnalysisWorker {
     private final DamageAnalysisQueue queue;
     private final DamageAiAnalysisResultMapper analysisResultMapper;
     private final DamageMapper damageMapper;
+    private final DamageAiAnalysisService aiAnalysisService;
     private final AiImageAnalysisClient aiClient;
     private final AiImageAnalysisResultParser resultParser;
     private final AiImageAnalysisProperties properties;
@@ -30,6 +31,7 @@ public class DamageAnalysisWorker {
             DamageAnalysisQueue queue,
             DamageAiAnalysisResultMapper analysisResultMapper,
             DamageMapper damageMapper,
+            DamageAiAnalysisService aiAnalysisService,
             AiImageAnalysisClient aiClient,
             AiImageAnalysisResultParser resultParser,
             AiImageAnalysisProperties properties
@@ -37,6 +39,7 @@ public class DamageAnalysisWorker {
         this.queue = queue;
         this.analysisResultMapper = analysisResultMapper;
         this.damageMapper = damageMapper;
+        this.aiAnalysisService = aiAnalysisService;
         this.aiClient = aiClient;
         this.resultParser = resultParser;
         this.properties = properties;
@@ -66,7 +69,7 @@ public class DamageAnalysisWorker {
         }
 
         try {
-            analysisResultMapper.markProcessing(analysisResult.getId());
+            aiAnalysisService.markProcessing(analysisResult.getId());
             var damage = damageMapper.findSummaryById(message.damageId());
             if (damage == null) {
                 throw new IllegalArgumentException("Damage not found.");
@@ -78,14 +81,10 @@ public class DamageAnalysisWorker {
 
             String rawResult = aiClient.analyze(damage, images);
             ParsedAiImageAnalysisResult parsedResult = resultParser.parse(rawResult);
-            analysisResultMapper.markSucceeded(
+            aiAnalysisService.markSucceeded(
                     analysisResult.getId(),
-                    parsedResult.damaged(),
-                    parsedResult.damageScore(),
-                    parsedResult.damageType(),
-                    parsedResult.repairRequired(),
-                    parsedResult.repairPriority(),
-                    parsedResult.confidenceScore(),
+                    message.damageId(),
+                    parsedResult,
                     rawResult
             );
         } catch (RuntimeException ex) {
@@ -95,7 +94,7 @@ public class DamageAnalysisWorker {
                     message.damageId(),
                     ex
             );
-            analysisResultMapper.markFailed(analysisResult.getId(), ex.getMessage());
+            aiAnalysisService.markFailed(analysisResult.getId(), message.damageId(), ex.getMessage());
             queue.deadLetter(message);
         }
     }

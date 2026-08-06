@@ -85,6 +85,8 @@ public class DamageController {
                 capturedAt,
                 images
         );
+        aiAnalysisService.createAndEnqueue(damage.id());
+        damage = damageService.getSummary(damage.id());
         var imageResponses = damageService.getImageMetadata(damage.id()).stream()
                 .map(DamageImageResponse::from)
                 .toList();

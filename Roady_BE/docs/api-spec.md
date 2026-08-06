@@ -26,7 +26,7 @@
 | 사용자 | `PATCH` | `/api/users/{userId}/role` | 구현됨 | 사용자 권한 변경 |
 | 사용자 | `PATCH` | `/api/users/{userId}/active` | 구현됨 | 사용자 활성 상태 변경 |
 | 사용자 | `PATCH` | `/api/users/{userId}/assigned-region` | 구현됨 | 사용자 담당 시군구 코드 변경 |
-| 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 등록 |
+| 파손 | `POST` | `/api/damages` | 구현됨 | 파손 이미지와 위치 정보 저장 후 AI 분석 작업 자동 등록 |
 | 파손 | `GET` | `/api/damages` | 구현됨 | 파손 목록 검색, 지역코드·기간 필터 및 페이지 조회 |
 | 파손 | `GET` | `/api/damages/{damageId}` | 구현됨 | 파손 상세 조회 |
 | 파손 | `PATCH` | `/api/damages/{damageId}/review` | 구현됨 | 관리자 검토 단계에서 파손 상태, 처리 우선순위, 판정 파손 유형, 비고 수정 |
@@ -55,7 +55,7 @@
 | 로봇 경로 | `DELETE` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 삭제 |
 | 로봇 경로 | `POST` | `/api/robot-routes/{routeId}/dispatch` | 설계안 | 점검 경로 로봇 전송 |
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}/actual-path` | 설계안 | 실제 이동 경로 조회 |
-| AI 분석 | `POST` | `/api/damages/{damageId}/analysis-jobs` | 구현됨 | 저장된 파손 이미지 AI 분석 작업 생성 |
+| AI 분석 | `POST` | `/api/damages/{damageId}/analysis-jobs` | 구현됨 | 저장된 파손 이미지 수동 재분석 작업 생성 |
 | AI 분석 | `GET` | `/api/damages/{damageId}/analysis-jobs` | 구현됨 | 파손별 AI 분석 작업 목록 조회 |
 | AI 분석 | `GET` | `/api/damage-ai-analysis-results/{analysisResultId}` | 구현됨 | AI 분석 결과 단건 조회 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 요청 |
@@ -1390,7 +1390,7 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| 파손 등록 | `POST` | `/api/damages` | `ADMIN`, `INSPECTOR`, `ROBOT/DEVICE` | 이미지, 위치, 촬영 일시, 장치 정보를 저장한다. |
+| 파손 등록 | `POST` | `/api/damages` | `ADMIN`, `INSPECTOR`, `ROBOT/DEVICE` | 이미지, 위치, 촬영 일시, 장치 정보를 저장하고 AI 분석 작업을 자동 등록한다. |
 | 파손 목록 검색 | `GET` | `/api/damages` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 기간, 처리 상태, 로봇, 담당자, 시군구 코드, 사건번호·주소 키워드로 검색하고 페이지 단위로 조회한다. |
 | 대시보드 파손 요약 | `GET` | `/api/dashboard/damages/summary` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 검색 조건에 해당하는 전체 건수, 미배정 건수, 상태별 건수를 조회한다. |
 | 지도 마커 조회 | `GET` | `/api/damages/map-markers` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 지도 표시용 좌표와 상태 요약을 조회한다. |
@@ -1572,7 +1572,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
-| AI 분석 작업 생성 | `POST` | `/api/damages/{damageId}/analysis-jobs` | `ADMIN`, `INSPECTOR` | 저장된 파손 이미지를 분석 큐에 등록한다. |
+| AI 분석 작업 생성 | `POST` | `/api/damages/{damageId}/analysis-jobs` | `ADMIN`, `INSPECTOR` | 저장된 파손 이미지를 수동으로 재분석 큐에 등록한다. 최초 분석은 파손 등록 시 자동 생성된다. |
 | 파손별 AI 분석 작업 목록 조회 | `GET` | `/api/damages/{damageId}/analysis-jobs` | 로그인 사용자 | 특정 파손의 AI 분석 작업과 결과 목록을 조회한다. |
 | AI 분석 결과 단건 조회 | `GET` | `/api/damage-ai-analysis-results/{analysisResultId}` | 로그인 사용자 | AI 분석 결과 한 건을 조회한다. |
 | AI 분석 요청 | `POST` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 동기식 또는 대표 분석 요청 API. 후속 설계안 |
@@ -1605,16 +1605,16 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 ```text
 POST /api/damages
   -> 파손 정보와 이미지 저장
-  -> POST /api/damages/{damageId}/analysis-jobs
   -> Spring이 damage_ai_analysis_results에 QUEUED 작업 생성
+  -> 파손 상태를 AI_ANALYZING으로 전환
   -> Redis Queue 등록
   -> Spring Worker가 작업 소비 및 PROCESSING 전환
   -> AI Server POST /analyze 호출
-  -> 성공 시 결과 컬럼과 raw_result 저장, SUCCESS 전환
-  -> 실패 시 오류 원문을 raw_result에 저장, FAILED 전환 및 Dead Letter Queue 등록
+  -> 성공 시 결과 컬럼과 raw_result 저장, SUCCESS 및 AI_ANALYZED 전환
+  -> 실패 시 오류 원문을 raw_result에 저장, FAILED 및 COLLECTED 전환 후 Dead Letter Queue 등록
 ```
 
-`POST /api/damages`는 이미지와 파손 정보만 저장한다. 이미지 업로드만으로 AI 분석 작업이 자동 등록되지는 않으며, 업로드 응답의 `id`를 사용해 `POST /api/damages/{damageId}/analysis-jobs`를 호출해야 한다.
+`POST /api/damages`가 성공하면 이미지 저장과 AI 분석 작업 등록이 모두 완료되며 응답의 `currentStatus`는 `AI_ANALYZING`이다. `POST /api/damages/{damageId}/analysis-jobs`는 운영자가 수동 재분석을 요청할 때 사용한다.
 
 ### 10.2 내부 AI 서버 이미지 분석 API
 

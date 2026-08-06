@@ -49,6 +49,7 @@ class DamageAiAnalysisServiceTest {
         }).when(analysisResultMapper).insert(any(DamageAiAnalysisResult.class));
         DamageAiAnalysisResult savedResult = result(10L, 1L, DamageAiAnalysisStatus.QUEUED);
         when(analysisResultMapper.findById(10L)).thenReturn(savedResult);
+        when(damageMapper.updateStatus(1L, "AI_ANALYZING")).thenReturn(1);
 
         DamageAiAnalysisResult result = service.createAndEnqueue(1L);
 
@@ -56,6 +57,7 @@ class DamageAiAnalysisServiceTest {
         ArgumentCaptor<DamageAnalysisQueueMessage> messageCaptor =
                 ArgumentCaptor.forClass(DamageAnalysisQueueMessage.class);
         verify(analysisResultMapper).insert(resultCaptor.capture());
+        verify(damageMapper).updateStatus(1L, "AI_ANALYZING");
         verify(queue).enqueue(messageCaptor.capture());
 
         assertThat(resultCaptor.getValue().getDamageId()).isEqualTo(1L);
@@ -75,6 +77,43 @@ class DamageAiAnalysisServiceTest {
 
         verify(analysisResultMapper, never()).insert(any(DamageAiAnalysisResult.class));
         verify(queue, never()).enqueue(any(DamageAnalysisQueueMessage.class));
+    }
+
+    @Test
+    void markSucceededStoresResultAndMovesDamageToAiAnalyzed() {
+        ParsedAiImageAnalysisResult parsedResult = new ParsedAiImageAnalysisResult(
+                true,
+                82,
+                "CRACK",
+                true,
+                "HIGH",
+                java.math.BigDecimal.valueOf(0.91)
+        );
+        when(analysisResultMapper.markSucceeded(
+                10L,
+                true,
+                82,
+                "CRACK",
+                true,
+                "HIGH",
+                java.math.BigDecimal.valueOf(0.91),
+                "raw-result"
+        )).thenReturn(1);
+        when(damageMapper.updateStatus(1L, "AI_ANALYZED")).thenReturn(1);
+
+        service.markSucceeded(10L, 1L, parsedResult, "raw-result");
+
+        verify(damageMapper).updateStatus(1L, "AI_ANALYZED");
+    }
+
+    @Test
+    void markFailedStoresFailureAndReturnsDamageToCollected() {
+        when(analysisResultMapper.markFailed(10L, "AI server unavailable")).thenReturn(1);
+        when(damageMapper.updateStatus(1L, "COLLECTED")).thenReturn(1);
+
+        service.markFailed(10L, 1L, "AI server unavailable");
+
+        verify(damageMapper).updateStatus(1L, "COLLECTED");
     }
 
     private DamageSummary summary(Long damageId) {
