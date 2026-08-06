@@ -51,6 +51,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
     <table class="repair-table" aria-label="보수 관리 사건 목록">
       <thead>
         <tr>
+          <th class="col-number" scope="col">번호</th>
           <th class="col-priority" scope="col">우선순위</th>
           <th class="col-case-id" scope="col">사건번호</th>
           <th class="col-name" scope="col">사건명</th>
@@ -61,7 +62,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
       <tbody>
         <!-- 로딩 -->
         <tr v-if="loading" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <LoadingSpinner label="목록 불러오는 중" />
             </div>
@@ -70,7 +71,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 
         <!-- 오류 -->
         <tr v-else-if="error" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <ErrorState :message="error" @retry="emit('retry')" />
             </div>
@@ -79,7 +80,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 
         <!-- 빈 결과 -->
         <tr v-else-if="showEmpty" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <EmptyState
                 :title="emptyTitle ?? '조회된 사건이 없습니다'"
@@ -90,7 +91,8 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
         </tr>
 
         <!-- 데이터 행 -->
-        <tr v-else v-for="item in items" :key="item.id" class="data-row">
+        <tr v-else v-for="(item, index) in items" :key="item.id" class="data-row">
+          <td class="col-number">{{ index + 1 }}</td>
           <td class="col-priority">
             <StatusBadge
               :type="priorityBadgeType(item.processingPriority)"
@@ -172,6 +174,13 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 }
 
 /* ── 컬럼 너비 ── */
+.col-number {
+  width: 64px;
+  color: var(--roady-text-tertiary);
+  text-align: center !important;
+  white-space: nowrap;
+}
+
 .col-priority {
   width: 96px;
   flex-shrink: 0;

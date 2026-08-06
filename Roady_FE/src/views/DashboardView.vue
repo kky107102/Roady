@@ -352,7 +352,11 @@ onUnmounted(() => {
             <div class="section-header">
               <h2 class="section-title">신규 탐지 알림</h2>
             </div>
-            <RecentDamageList />
+            <RecentDamageList
+              :from="store.filter.from"
+              :to="store.filter.to"
+              :region-code="store.filter.regionCode"
+            />
           </section>
         </div>
 

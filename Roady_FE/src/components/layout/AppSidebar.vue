@@ -359,7 +359,7 @@ async function handleLogout() {
 }
 
 .profile-name {
-  color: var(--roady-surface-default);
+  color: rgb(255 255 255 / 82%);
   font-size: var(--krds-pc-font-size-label-medium);
   font-weight: var(--krds-font-weight-bold);
 }
