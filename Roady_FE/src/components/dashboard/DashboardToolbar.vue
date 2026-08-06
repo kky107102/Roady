@@ -2,8 +2,9 @@
 import { ref, watch } from 'vue'
 import type { DashboardFilter } from '@/stores/dashboard'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
+import PageFilterActions from '@/components/common/PageFilterActions.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
-import { dateRangeForPreset, matchingDateRangePreset } from '@/utils/localDate'
+import { dateRangeForPreset, matchingDateRangePreset, validateDateRange } from '@/utils/localDate'
 
 interface Props {
   modelValue: DashboardFilter
@@ -15,12 +16,14 @@ const emit = defineEmits<{ 'update:modelValue': [DashboardFilter]; apply: [Dashb
 
 const local = ref<DashboardFilter>({ ...props.modelValue })
 const localPreset = ref<number | null>(matchingDateRangePreset(props.modelValue.from, props.modelValue.to))
+const error = ref('')
 
 watch(
   () => props.modelValue,
   (val) => {
     local.value = { ...val }
     localPreset.value = matchingDateRangePreset(val.from, val.to)
+    error.value = ''
   },
 )
 
@@ -48,18 +51,23 @@ const regionOptions = [
 
 function updateFrom(val: string) {
   local.value = { ...local.value, from: val }
+  error.value = ''
 }
 
 function updateTo(val: string) {
   local.value = { ...local.value, to: val }
+  error.value = ''
 }
 
 function handlePresetApply({ from, to }: { from: string; to: string }) {
+  error.value = ''
   emit('update:modelValue', { ...local.value, from, to })
   emit('apply', { ...local.value, from, to })
 }
 
 function handleApply() {
+  error.value = validateDateRange(local.value.from, local.value.to)
+  if (error.value) return
   emit('update:modelValue', { ...local.value })
   emit('apply', { ...local.value })
 }
@@ -67,6 +75,7 @@ function handleApply() {
 function handleReset() {
   local.value = { ...dateRangeForPreset(1), regionCode: '' }
   localPreset.value = 1
+  error.value = ''
   emit('update:modelValue', { ...local.value })
   emit('apply', { ...local.value })
 }
@@ -75,13 +84,14 @@ function handleReset() {
 <template>
   <PageFilterToolbar
     aria-label="대시보드 조회 조건"
-    :class="{ 'dashboard-toolbar--compact': compact }"
+    :compact="compact"
     @submit="handleApply"
   >
     <DateRangeFilter
       :from="local.from"
       :to="local.to"
       :active-preset="localPreset"
+      :error="error"
       @update:from="updateFrom"
       @update:to="updateTo"
       @update:active-preset="localPreset = $event"
@@ -98,22 +108,7 @@ function handleReset() {
     </div>
 
     <template #actions>
-      <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-      <button type="submit" class="krds-btn small filled primary apply-btn">
-        조회
-      </button>
+      <PageFilterActions @reset="handleReset" />
     </template>
   </PageFilterToolbar>
 </template>
-
-<style scoped>
-.apply-btn {
-  min-width: 6.4rem;
-}
-
-.dashboard-toolbar--compact {
-  padding: 0.8rem 0 0;
-  border-bottom: 0;
-  background: transparent;
-}
-</style>

@@ -23,6 +23,7 @@
 
   /* Danger, warning, success, and informational feedback. */
   --roady-status-danger: #d32f2f;
+  --roady-status-danger-hover: #b3261e;
   --roady-status-warning: #e66a00;
   --roady-status-success: #16803c;
   --roady-status-info: #246beb;

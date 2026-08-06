@@ -6,7 +6,10 @@ import { damagesApi } from '@/api/damages'
 import type { DamageListQuery } from '@/api/damages'
 import {
   dateRangeForPreset,
+  dateRangeFromQuery,
+  dateRangeToQuery,
   matchingDateRangePreset,
+  validateDateRange,
   toApiFromDateTime,
   toApiToDateTime,
 } from '@/utils/localDate'
@@ -15,9 +18,11 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
+import PageFilterActions from '@/components/common/PageFilterActions.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
-import KrdsCheckbox from '@/components/common/KrdsCheckbox.vue'
 import DamageCard from '@/components/damages/DamageCard.vue'
+import DamageReviewTabs from '@/components/damages/DamageReviewTabs.vue'
+import DamageStatusFilterChips from '@/components/damages/DamageStatusFilterChips.vue'
 import DamageDetailPanel from '@/components/damages/DamageDetailPanel.vue'
 import type { ReviewDecisionPayload } from '@/components/damages/DamageDetailPanel.vue'
 import CommonMap from '@/components/common/CommonMap.vue'
@@ -33,8 +38,7 @@ import {
   isReviewVisible,
   sortReviewDamages,
 } from '@/utils/damageReview'
-import type { DamageSort, ReviewTab } from '@/utils/damageReview'
-import { REPAIR_FILTER_LABELS } from '@/utils/repairManagement'
+import type { ConfirmedStatusFilter, DamageSort, ReviewTab } from '@/utils/damageReview'
 
 // ── 상수 ──────────────────────────────────────────────────
 
@@ -56,8 +60,9 @@ const mapRegion = useAssignedMapRegion()
 // ── 적용된 필터 (URL = 단일 진실 소스) ────────────────────
 
 const defaultDateRange = dateRangeForPreset(1)
-const appliedFrom = computed(() => String(route.query.from || defaultDateRange.from))
-const appliedTo = computed(() => String(route.query.to || defaultDateRange.to))
+const appliedRange = computed(() => dateRangeFromQuery(route.query, defaultDateRange))
+const appliedFrom = computed(() => appliedRange.value.from)
+const appliedTo = computed(() => appliedRange.value.to)
 const reviewTab = computed<ReviewTab>(() =>
   route.query.review === 'confirmed' ? 'confirmed' : 'pending',
 )
@@ -90,56 +95,14 @@ const listLoading = ref(false)
 const listError = ref<string | null>(null)
 let listRequestSeq = 0
 
-const CONFIRMED_STATUS_FILTERS = ['requested', 'in_progress', 'completed'] as const
-type ConfirmedStatusFilter = (typeof CONFIRMED_STATUS_FILTERS)[number]
-const selectedConfirmedStatuses = ref<ConfirmedStatusFilter[]>([...CONFIRMED_STATUS_FILTERS])
+const selectedConfirmedStatuses = ref<ConfirmedStatusFilter[]>([])
 const isAllConfirmedStatusesSelected = computed(
-  () => selectedConfirmedStatuses.value.length === CONFIRMED_STATUS_FILTERS.length,
+  () => selectedConfirmedStatuses.value.length === 0,
 )
 
-function setConfirmedStatus(status: ConfirmedStatusFilter, checked: boolean) {
-  if (checked) {
-    if (!selectedConfirmedStatuses.value.includes(status)) {
-      selectedConfirmedStatuses.value = [...selectedConfirmedStatuses.value, status]
-    }
-    return
-  }
-
-  selectedConfirmedStatuses.value = selectedConfirmedStatuses.value.filter(
-    (item) => item !== status,
-  )
+function updateConfirmedStatuses(statuses: ConfirmedStatusFilter[]) {
+  selectedConfirmedStatuses.value = statuses
 }
-
-const allConfirmedStatusesChecked = computed({
-  get: () => isAllConfirmedStatusesSelected.value,
-  set: (checked: boolean) => {
-    selectedConfirmedStatuses.value = checked ? [...CONFIRMED_STATUS_FILTERS] : []
-  },
-})
-const requestedStatusChecked = computed({
-  get: () => selectedConfirmedStatuses.value.includes('requested'),
-  set: (checked: boolean) => setConfirmedStatus('requested', checked),
-})
-const inProgressStatusChecked = computed({
-  get: () => selectedConfirmedStatuses.value.includes('in_progress'),
-  set: (checked: boolean) => setConfirmedStatus('in_progress', checked),
-})
-const completedStatusChecked = computed({
-  get: () => selectedConfirmedStatuses.value.includes('completed'),
-  set: (checked: boolean) => setConfirmedStatus('completed', checked),
-})
-const confirmedFilterTags = computed(() => {
-  if (isAllConfirmedStatusesSelected.value) return ['전체']
-  if (selectedConfirmedStatuses.value.length === 0) return ['선택 없음']
-  const labels: Record<ConfirmedStatusFilter, string> = {
-    requested: REPAIR_FILTER_LABELS.requested,
-    in_progress: REPAIR_FILTER_LABELS.in_progress,
-    completed: REPAIR_FILTER_LABELS.completed,
-  }
-  return CONFIRMED_STATUS_FILTERS.filter((status) =>
-    selectedConfirmedStatuses.value.includes(status),
-  ).map((status) => labels[status])
-})
 
 function confirmedStatusCategory(item: DamageListItem): ConfirmedStatusFilter | null {
   if (item.currentStatus === 'REQUESTED') {
@@ -157,7 +120,6 @@ const confirmedItems = computed(() =>
 )
 
 const confirmedStatusCounts = computed(() => ({
-  all: confirmedItems.value.length,
   requested: confirmedItems.value.filter((item) => confirmedStatusCategory(item) === 'requested')
     .length,
   in_progress: confirmedItems.value.filter(
@@ -266,7 +228,7 @@ async function loadDamages() {
 // ── URL 변경 → 폼 동기화 + 목록 초기 로드 ───────────────
 
 watch(
-  () => [route.query.from, route.query.to, route.query.review, route.query.sort],
+  () => [route.query.from, route.query.to, route.query.range, route.query.review, route.query.sort],
   () => {
     syncFormFromUrl()
     sortOrder.value = parseDamageSort(route.query.sort, reviewTab.value)
@@ -278,14 +240,9 @@ watch(
 // ── 폼 핸들러 ──────────────────────────────────────────────
 
 function handleApply() {
-  formError.value = ''
-  if (formFrom.value && formTo.value && formFrom.value > formTo.value) {
-    formError.value = '시작일은 종료일보다 이전이어야 합니다.'
-    return
-  }
-  const query: Record<string, string> = {}
-  if (formFrom.value) query.from = formFrom.value
-  if (formTo.value) query.to = formTo.value
+  formError.value = validateDateRange(formFrom.value, formTo.value)
+  if (formError.value) return
+  const query: Record<string, string> = dateRangeToQuery(formFrom.value, formTo.value)
   if (mapRegion.selectedCode.value) query.emd = mapRegion.selectedCode.value
   query.review = reviewTab.value
   router.push({ name: 'damages', query })
@@ -301,8 +258,7 @@ function handleReset() {
     name: 'damages',
     query: {
       review: reviewTab.value,
-      from: range.from,
-      to: range.to,
+      ...dateRangeToQuery(range.from, range.to),
       ...(mapRegion.selectedCode.value ? { emd: mapRegion.selectedCode.value } : {}),
     },
   })
@@ -439,7 +395,7 @@ function selectReviewTab(tab: ReviewTab) {
 
 watch(reviewTab, (tab) => {
   sortOrder.value = parseDamageSort(route.query.sort, tab)
-  selectedConfirmedStatuses.value = [...CONFIRMED_STATUS_FILTERS]
+  selectedConfirmedStatuses.value = []
 })
 
 const detailPanelWidth = ref(460)
@@ -507,10 +463,7 @@ onBeforeUnmount(stopDetailResize)
       </div>
 
       <template #actions>
-        <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-        <button type="submit" class="krds-btn small filled primary">
-          조회
-        </button>
+        <PageFilterActions @reset="handleReset" />
       </template>
     </PageFilterToolbar>
 
@@ -533,67 +486,14 @@ onBeforeUnmount(stopDetailResize)
           </select>
         </div>
 
-        <div class="review-tabs" role="tablist" aria-label="관리자 확인 여부">
-          <button
-            type="button"
-            role="tab"
-            class="review-tab"
-            :class="{ 'is-active': reviewTab === 'pending' }"
-            :aria-selected="reviewTab === 'pending'"
-            @click="selectReviewTab('pending')"
-          >
-            미확인
-          </button>
-          <button
-            type="button"
-            role="tab"
-            class="review-tab"
-            :class="{ 'is-active': reviewTab === 'confirmed' }"
-            :aria-selected="reviewTab === 'confirmed'"
-            @click="selectReviewTab('confirmed')"
-          >
-            확인
-          </button>
-        </div>
+        <DamageReviewTabs :model-value="reviewTab" @update:model-value="selectReviewTab" />
 
-        <details v-if="reviewTab === 'confirmed'" class="confirmed-filter-menu">
-          <summary class="confirmed-filter-trigger">
-            <span>상태 필터</span>
-            <span class="confirmed-filter-tags" aria-label="선택된 상태">
-              <span
-                v-for="tag in confirmedFilterTags"
-                :key="tag"
-                class="confirmed-filter-tag"
-                :class="{ 'is-empty': tag === '선택 없음' }"
-              >
-                {{ tag }}
-              </span>
-            </span>
-          </summary>
-          <fieldset class="confirmed-status-filters">
-            <legend class="sr-only">확인 사건 처리 상태</legend>
-            <KrdsCheckbox
-              id="confirmed-filter-all"
-              v-model="allConfirmedStatusesChecked"
-              :label="`전체 (${confirmedStatusCounts.all}건)`"
-            />
-            <KrdsCheckbox
-              id="confirmed-filter-requested"
-              v-model="requestedStatusChecked"
-              :label="`${REPAIR_FILTER_LABELS.requested} (${confirmedStatusCounts.requested}건)`"
-            />
-            <KrdsCheckbox
-              id="confirmed-filter-in-progress"
-              v-model="inProgressStatusChecked"
-              :label="`${REPAIR_FILTER_LABELS.in_progress} (${confirmedStatusCounts.in_progress}건)`"
-            />
-            <KrdsCheckbox
-              id="confirmed-filter-completed"
-              v-model="completedStatusChecked"
-              :label="`${REPAIR_FILTER_LABELS.completed} (${confirmedStatusCounts.completed}건)`"
-            />
-          </fieldset>
-        </details>
+        <DamageStatusFilterChips
+          v-if="reviewTab === 'confirmed'"
+          :selected="selectedConfirmedStatuses"
+          :counts="confirmedStatusCounts"
+          @update:selected="updateConfirmedStatuses"
+        />
 
         <div class="list-body">
           <!-- 초기 로딩 -->
@@ -741,155 +641,6 @@ onBeforeUnmount(stopDetailResize)
 
 .list-sort-select {
   width: 12rem;
-}
-
-.review-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--roady-border-default);
-  background: var(--roady-surface-default);
-}
-
-.review-tab {
-  position: relative;
-  min-height: 44px;
-  border: 0;
-  background: transparent;
-  color: var(--roady-text-tertiary);
-  font-size: 14px;
-  font-weight: var(--krds-font-weight-bold);
-  cursor: pointer;
-}
-
-.review-tab::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 3px;
-  background: transparent;
-  content: '';
-}
-
-.review-tab.is-active {
-  color: var(--roady-brand-primary);
-}
-
-.review-tab.is-active::after {
-  background: var(--roady-brand-primary);
-}
-
-.review-tab:hover {
-  background: var(--roady-surface-background);
-}
-
-.confirmed-filter-menu {
-  position: relative;
-  flex-shrink: 0;
-  margin: 0;
-  border-bottom: 1px solid var(--roady-border-default);
-  background: var(--roady-surface-background);
-}
-
-.confirmed-filter-trigger {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 4.4rem;
-  padding: 0 1.6rem;
-  color: var(--roady-text-secondary);
-  font-size: 1.4rem;
-  font-weight: var(--krds-font-weight-bold);
-  cursor: pointer;
-  list-style: none;
-  outline: none;
-  box-shadow: none;
-}
-
-.confirmed-filter-trigger::-webkit-details-marker {
-  display: none;
-}
-
-.confirmed-filter-trigger:hover {
-  background: var(--roady-brand-primary-subtle);
-}
-
-.confirmed-filter-trigger:focus,
-.confirmed-filter-trigger:focus-visible {
-  box-shadow: none;
-}
-
-.confirmed-filter-trigger:focus-visible {
-  outline: 2px solid var(--roady-focus-ring);
-  outline-offset: -2px;
-}
-
-.confirmed-filter-trigger::after {
-  width: 0.8rem;
-  height: 0.8rem;
-  margin-left: auto;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-  content: '';
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform 0.15s ease;
-}
-
-.confirmed-filter-menu[open] .confirmed-filter-trigger::after {
-  transform: rotate(225deg) translate(-2px, -2px);
-}
-
-.confirmed-filter-tags {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  min-width: 0;
-}
-
-.confirmed-filter-tag {
-  padding: 0.2rem 0.8rem;
-  border-radius: 999px;
-  background: var(--roady-brand-primary-subtle);
-  color: var(--roady-brand-primary);
-  font-size: 1.2rem;
-  font-weight: var(--krds-font-weight-regular);
-  white-space: nowrap;
-}
-
-.confirmed-filter-tag.is-empty {
-  background: var(--roady-surface-default);
-  color: var(--roady-text-tertiary);
-}
-
-.confirmed-status-filters {
-  position: absolute;
-  top: calc(100% - 0.4rem);
-  right: 1.2rem;
-  z-index: 20;
-  display: grid;
-  gap: 1rem;
-  width: 23rem;
-  max-width: calc(100% - 2.4rem);
-  margin: 0;
-  padding: 1.4rem 1.6rem;
-  border: 1px solid var(--roady-border-default);
-  border-radius: 0.8rem;
-  background: var(--roady-surface-default);
-  box-shadow: 0 0.8rem 2.4rem rgb(0 0 0 / 12%);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
 }
 
 .list-title {

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
+import type { DashboardFilter } from '@/stores/dashboard'
 import { damagesApi } from '@/api/damages'
 import CommonMap from '@/components/common/CommonMap.vue'
 import MapRegionFilter from '@/components/common/MapRegionFilter.vue'
@@ -16,9 +17,16 @@ import { reviewTabForDamage } from '@/utils/damageReview'
 import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
 import type { DamageMapMarkerResponse } from '@/types/damage'
 import type { MapBounds } from '@/types/map'
-import { toApiFromDateTime, toApiToDateTime } from '@/utils/localDate'
+import {
+  dateRangeForPreset,
+  dateRangeFromQuery,
+  dateRangeToQuery,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
 
 const store = useDashboardStore()
+const route = useRoute()
 const router = useRouter()
 const mapRegion = useAssignedMapRegion()
 const boundaryMarkers = ref<DamageMapMarkerResponse[] | null>(null)
@@ -26,6 +34,38 @@ const currentMapBounds = ref<MapBounds | null>(null)
 const mapMarkersLoading = ref(false)
 const mapMarkersError = ref<string | null>(null)
 let mapMarkerRequestSequence = 0
+
+const defaultDashboardRange = dateRangeForPreset(1)
+
+function dashboardFilterFromRoute(): DashboardFilter {
+  const range = dateRangeFromQuery(route.query, defaultDashboardRange)
+  return {
+    ...range,
+    regionCode: store.filter.regionCode,
+  }
+}
+
+store.filter = dashboardFilterFromRoute()
+
+function applyDashboardFilter(filter: DashboardFilter) {
+  const query = { ...route.query }
+  delete query.from
+  delete query.to
+  delete query.range
+  Object.assign(query, dateRangeToQuery(filter.from, filter.to))
+  void router.push({ name: 'dashboard', query })
+  void store.applyFilter(filter)
+}
+
+watch(
+  () => [route.query.from, route.query.to, route.query.range],
+  () => {
+    const next = dashboardFilterFromRoute()
+    if (next.from !== store.filter.from || next.to !== store.filter.to) {
+      void store.applyFilter(next)
+    }
+  },
+)
 
 const hasTrendData = computed(() => store.timeSeries.items.some((item) => item.totalCount > 0))
 
@@ -95,6 +135,14 @@ function openDamageDetail(id: string | number) {
   router.push({ name: 'damages', query: damageDetailQuery(id) })
 }
 
+async function openMovingRobots() {
+  await store.refreshRobots().catch(() => undefined)
+  await router.push({
+    name: 'robots',
+    query: { operation: 'MOVING', connection: 'CONNECTED' },
+  })
+}
+
 const REFRESH_MS = 5 * 60 * 1000
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
@@ -120,7 +168,7 @@ onUnmounted(() => {
 <template>
   <div class="dashboard-view">
     <!-- 조회 조건 툴바 (전체 너비) -->
-    <DashboardToolbar v-model="store.filter" @apply="store.applyFilter" />
+    <DashboardToolbar v-model="store.filter" @apply="applyDashboardFilter" />
 
     <!-- 스크롤 콘텐츠 영역 -->
     <div class="dashboard-scroll">
@@ -234,7 +282,8 @@ onUnmounted(() => {
             label="운행 중 로디"
             :count="store.activeRobotCount"
             variant="dark"
-            :to="{ name: 'robots' }"
+            action
+            @activate="openMovingRobots"
           >
             <template #icon>
               <svg

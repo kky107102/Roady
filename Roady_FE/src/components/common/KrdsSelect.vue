@@ -19,6 +19,7 @@ interface Props {
   required?: boolean
   showRequiredMark?: boolean
   disabled?: boolean
+  filterActive?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -29,6 +30,7 @@ const props = withDefaults(defineProps<Props>(), {
   required: false,
   showRequiredMark: true,
   disabled: false,
+  filterActive: false,
 })
 
 const emit = defineEmits<{
@@ -65,7 +67,11 @@ function handleChange(event: Event) {
         :id="id"
         :name="name"
         :value="modelValue"
-        :class="['krds-form-select', size, { 'is-error': error }]"
+        :class="[
+          'krds-form-select',
+          size,
+          { 'is-error': error, 'is-filter-active': filterActive },
+        ]"
         :required="required"
         :disabled="disabled"
         :aria-invalid="error ? 'true' : undefined"
@@ -117,5 +123,16 @@ function handleChange(event: Event) {
   border-color: var(--roady-brand-primary);
   outline: 0.3rem solid var(--roady-focus-ring);
   outline-offset: 0.1rem;
+}
+
+.krds-form-select.is-filter-active {
+  border-color: var(--roady-brand-secondary);
+  color: var(--roady-text-primary);
+  background-color: var(--roady-surface-default);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.krds-form-select.is-filter-active:hover {
+  border-color: var(--roady-brand-primary);
 }
 </style>

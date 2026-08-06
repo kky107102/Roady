@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { DATE_RANGE_PRESETS, dateRangeForPreset } from '@/utils/localDate'
 
-defineProps<{
+const props = defineProps<{
   from: string
   to: string
   error?: string
@@ -16,6 +16,14 @@ const emit = defineEmits<{
 }>()
 
 function setPreset(idx: number) {
+  if (props.activePreset === idx) {
+    emit('update:activePreset', null)
+    emit('update:from', '')
+    emit('update:to', '')
+    emit('preset-apply', { from: '', to: '' })
+    return
+  }
+
   const { from: fromStr, to: toStr } = dateRangeForPreset(idx)
   emit('update:activePreset', idx)
   emit('update:from', fromStr)

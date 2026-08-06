@@ -6,6 +6,7 @@ import type { RepairRequestPayload } from '@/types/repair'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import DocumentSection from '@/components/common/DocumentSection.vue'
 import { useDialogFocus } from '@/composables/useDialogFocus'
 import {
   formatCaseId,
@@ -201,8 +202,7 @@ function handleConfirm() {
         <!-- 본문 -->
         <div class="modal-body">
           <!-- 사건 기본 정보 -->
-          <section class="info-section" aria-label="사건 기본 정보">
-            <h3 class="section-title">사건 정보</h3>
+          <DocumentSection title="사건 정보">
             <dl class="info-grid">
               <div class="info-row">
                 <dt class="info-label">사건번호</dt>
@@ -245,11 +245,10 @@ function handleConfirm() {
                 </dd>
               </div>
             </dl>
-          </section>
+          </DocumentSection>
 
           <!-- 관리자 판정 -->
-          <section class="info-section" aria-label="관리자 판정">
-            <h3 class="section-title">관리자 판정</h3>
+          <DocumentSection title="관리자 판정">
             <dl class="info-grid">
               <div class="info-row">
                 <dt class="info-label">우선순위</dt>
@@ -288,11 +287,10 @@ function handleConfirm() {
                 </dd>
               </div>
             </dl>
-          </section>
+          </DocumentSection>
 
           <!-- 탐지 이미지 -->
-          <section class="info-section" aria-label="탐지 이미지">
-            <h3 class="section-title">탐지 이미지</h3>
+          <DocumentSection title="탐지 이미지">
             <div class="image-section">
               <div v-if="detail.imageCount > 0 && imagesLoading" class="image-loading">
                 <LoadingSpinner label="이미지 불러오는 중" />
@@ -333,11 +331,10 @@ function handleConfirm() {
               </div>
               <div v-else class="image-empty">등록된 탐지 이미지가 없습니다.</div>
             </div>
-          </section>
+          </DocumentSection>
 
           <!-- 비고 -->
-          <section class="info-section" aria-label="비고">
-            <h3 class="section-title">비고</h3>
+          <DocumentSection title="비고">
             <p v-if="readonly" class="note-text">{{ note || '-' }}</p>
             <div v-else class="note-field">
               <label for="repair-request-note" class="sr-only">
@@ -354,7 +351,7 @@ function handleConfirm() {
               />
               <p id="repair-note-hint" class="note-hint">{{ note.length }}/1000자</p>
             </div>
-          </section>
+          </DocumentSection>
           <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         </div>
 
@@ -448,7 +445,7 @@ function handleConfirm() {
 
 .modal-title {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: var(--krds-pc-font-size-heading-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -469,7 +466,7 @@ function handleConfirm() {
   background: var(--roady-surface-default);
   border-radius: var(--roady-radius-control);
   color: var(--roady-text-primary);
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-medium);
   cursor: pointer;
 }
@@ -522,21 +519,6 @@ function handleConfirm() {
   gap: 2rem;
 }
 
-.info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.section-title {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: var(--krds-font-weight-bold);
-  color: var(--roady-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
 .info-grid {
   display: flex;
   flex-direction: column;
@@ -553,13 +535,13 @@ function handleConfirm() {
 .info-label {
   flex-shrink: 0;
   min-width: 8rem;
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-tertiary);
 }
 
 .info-value {
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-primary);
   line-height: 1.5;
   word-break: break-word;
@@ -580,7 +562,7 @@ function handleConfirm() {
   padding: 0.3rem 0.8rem;
   border: 1px solid var(--roady-border-default);
   border-radius: 4px;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   font-family: monospace;
   color: var(--roady-text-secondary);
   background: var(--roady-surface-background);
@@ -630,7 +612,7 @@ function handleConfirm() {
 .image-empty {
   padding: 2rem;
   text-align: center;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-tertiary);
   border: 1px dashed var(--roady-border-default);
   border-radius: 0.8rem;
@@ -640,7 +622,7 @@ function handleConfirm() {
 /* ── 비고 ── */
 .note-text {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
@@ -656,14 +638,14 @@ function handleConfirm() {
 .note-textarea {
   width: 100%;
   resize: vertical;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   line-height: 1.6;
   min-height: 9.6rem;
 }
 
 .note-hint {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-text-tertiary);
   text-align: right;
 }
@@ -671,7 +653,7 @@ function handleConfirm() {
 .form-error {
   margin: 0;
   color: var(--roady-status-danger, #e74c3c);
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
 }
 
 /* ── 푸터 ── */

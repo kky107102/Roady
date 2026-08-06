@@ -15,6 +15,7 @@ import AiResultBadge from '@/components/common/AiResultBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import RepairRequestModal from '@/components/repairs/RepairRequestModal.vue'
 import RepairCompletionModal from '@/components/repairs/RepairCompletionModal.vue'
 import { useNotificationStore } from '@/stores/notification'
@@ -79,12 +80,8 @@ const requestViewOpen = ref(false)
 const completionReportOpen = ref(false)
 const requestCopyState = ref<'idle' | 'success' | 'error'>('idle')
 const completionCopyState = ref<'idle' | 'success' | 'error'>('idle')
-const noRepairDialogRef = ref<HTMLElement | null>(null)
-const resetVerdictDialogRef = ref<HTMLElement | null>(null)
 const reviewDialogRef = ref<HTMLElement | null>(null)
 
-useDialogFocus(noRepairDialogRef, noRepairModalOpen)
-useDialogFocus(resetVerdictDialogRef, resetVerdictModalOpen)
 useDialogFocus(reviewDialogRef, reviewModalOpen)
 let requestCopyTimer: ReturnType<typeof setTimeout> | null = null
 let completionCopyTimer: ReturnType<typeof setTimeout> | null = null
@@ -947,88 +944,28 @@ async function copyCompletionReport() {
     @copy="copyCompletionReport"
   />
 
+  <ConfirmDialog
+    v-if="noRepairModalOpen"
+    title="보수 불필요로 판정할까요?"
+    description="판정 후 사건은 확인 목록으로 이동합니다. 필요한 경우 확인 목록에서 판정을 수정할 수 있습니다."
+    confirm-label="보수 불필요로 판정"
+    :busy="verdictSubmitting"
+    @cancel="noRepairModalOpen = false"
+    @confirm="submitNoRepair"
+  />
+
+  <ConfirmDialog
+    v-if="resetVerdictModalOpen"
+    title="판정을 되돌릴까요?"
+    description="저장된 관리자 판정이 취소되고 사건은 미확인 목록으로 이동합니다."
+    confirm-label="판정 되돌리기"
+    tone="danger"
+    :busy="verdictSubmitting"
+    @cancel="resetVerdictModalOpen = false"
+    @confirm="submitResetVerdict"
+  />
+
   <Teleport to="body">
-    <div
-      v-if="noRepairModalOpen"
-      class="review-modal-backdrop"
-      @click.self="noRepairModalOpen = false"
-    >
-      <section
-        ref="noRepairDialogRef"
-        class="review-modal review-modal--confirm"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="no-repair-title"
-        aria-describedby="no-repair-description"
-      >
-        <div class="confirm-modal-icon" aria-hidden="true">!</div>
-        <div class="confirm-modal-content">
-          <h2 id="no-repair-title">보수 불필요로 판정할까요?</h2>
-          <p id="no-repair-description">
-            판정 후 사건은 확인 목록으로 이동합니다. 필요한 경우 확인 목록에서 판정을 수정할 수
-            있습니다.
-          </p>
-        </div>
-        <div class="review-modal-actions confirm-modal-actions">
-          <button
-            type="button"
-            class="krds-btn medium secondary"
-            @click="noRepairModalOpen = false"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            class="krds-btn medium filled primary"
-            :disabled="verdictSubmitting"
-            @click="submitNoRepair"
-          >
-            {{ verdictSubmitting ? '처리 중' : '보수 불필요로 판정' }}
-          </button>
-        </div>
-      </section>
-    </div>
-
-    <div
-      v-if="resetVerdictModalOpen"
-      class="review-modal-backdrop"
-      @click.self="resetVerdictModalOpen = false"
-    >
-      <section
-        ref="resetVerdictDialogRef"
-        class="review-modal review-modal--confirm"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="reset-verdict-title"
-        aria-describedby="reset-verdict-description"
-      >
-        <div class="confirm-modal-icon" aria-hidden="true">!</div>
-        <div class="confirm-modal-content">
-          <h2 id="reset-verdict-title">판정을 되돌릴까요?</h2>
-          <p id="reset-verdict-description">
-            저장된 관리자 판정이 취소되고 사건은 미확인 목록으로 이동합니다.
-          </p>
-        </div>
-        <div class="review-modal-actions confirm-modal-actions">
-          <button
-            type="button"
-            class="krds-btn medium secondary"
-            @click="resetVerdictModalOpen = false"
-          >
-            취소
-          </button>
-          <button
-            type="button"
-            class="krds-btn medium filled primary"
-            :disabled="verdictSubmitting"
-            @click="submitResetVerdict"
-          >
-            {{ verdictSubmitting ? '처리 중' : '판정 되돌리기' }}
-          </button>
-        </div>
-      </section>
-    </div>
-
     <div v-if="reviewModalOpen" class="review-modal-backdrop" @click.self="reviewModalOpen = false">
       <form
         ref="reviewDialogRef"
@@ -1894,43 +1831,6 @@ async function copyCompletionReport() {
   border-radius: var(--roady-radius-dialog);
   background: var(--roady-surface-default);
   box-shadow: var(--roady-shadow-dialog);
-}
-
-.review-modal--confirm {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 16px;
-  width: min(480px, 100%);
-}
-
-.confirm-modal-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--roady-status-warning) 15%, #fff);
-  color: var(--roady-status-warning);
-  font-size: 22px;
-  font-weight: var(--krds-font-weight-bold);
-}
-
-.confirm-modal-content h2 {
-  margin: 0;
-  color: var(--roady-text-primary);
-  font-size: var(--krds-pc-font-size-heading-xsmall);
-}
-
-.confirm-modal-content p {
-  margin: 8px 0 0;
-  color: var(--roady-text-secondary);
-  font-size: var(--krds-pc-font-size-body-small);
-  line-height: 1.6;
-}
-
-.confirm-modal-actions {
-  grid-column: 1 / -1;
 }
 
 .review-modal-head {

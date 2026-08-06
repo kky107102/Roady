@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import roadyLogo from '@/assets/images/roady-logo.png'
@@ -19,12 +19,12 @@ const userProfileLabel = computed(() => {
   return `${user.value.username} · ${userRoleLabel.value}`
 })
 
-const canOpenSettings = computed(() => user.value?.role === 'ADMIN')
-
 const userInitials = computed(() => {
   if (!user.value) return ''
   return user.value.username.slice(0, 2).toUpperCase()
 })
+
+const logoutPending = ref(false)
 
 const visibleGroups = computed(() =>
   navGroups
@@ -42,8 +42,14 @@ function isActive(routeName: string) {
 }
 
 async function handleLogout() {
-  await authStore.logout()
-  await router.replace({ name: 'login' })
+  if (logoutPending.value) return
+  logoutPending.value = true
+  try {
+    await authStore.logout()
+    await router.replace({ name: 'login' })
+  } finally {
+    logoutPending.value = false
+  }
 }
 </script>
 
@@ -140,41 +146,27 @@ async function handleLogout() {
       </template>
     </nav>
 
-    <!-- Sidebar footer actions -->
-    <div class="sidebar-footer" aria-label="사용자 메뉴">
-      <div class="profile-icon" role="img" :aria-label="userProfileLabel" :title="userProfileLabel">
-        {{ userInitials }}
-      </div>
-
-      <RouterLink
-        v-if="canOpenSettings"
-        :to="{ name: 'admin-users' }"
-        class="footer-action"
-        :class="{ 'is-active': isActive('admin-users') }"
-        aria-label="설정 관리"
-        title="설정 관리"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
+    <!-- Sidebar profile -->
+    <div class="sidebar-footer" aria-label="관리자 프로필">
+      <div class="profile-summary">
+        <div
+          class="profile-icon"
+          role="img"
+          :aria-label="userProfileLabel"
+          :title="userProfileLabel"
         >
-          <circle cx="12" cy="12" r="3" />
-          <path
-            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-          />
-        </svg>
-      </RouterLink>
-
+          {{ userInitials }}
+        </div>
+        <div class="profile-details">
+          <strong class="profile-name">{{ user?.username || '사용자' }}</strong>
+          <span class="profile-department">{{ userRoleLabel }}</span>
+        </div>
+      </div>
       <button
         type="button"
-        class="footer-action"
+        class="logout-button"
+        :disabled="logoutPending"
         aria-label="로그아웃"
-        title="로그아웃"
         @click="handleLogout"
       >
         <svg
@@ -190,6 +182,7 @@ async function handleLogout() {
           <polyline points="16 17 21 12 16 7" />
           <line x1="21" y1="12" x2="9" y2="12" />
         </svg>
+        <span class="sr-only">{{ logoutPending ? '로그아웃 중' : '로그아웃' }}</span>
       </button>
     </div>
   </aside>
@@ -320,13 +313,21 @@ async function handleLogout() {
   text-overflow: ellipsis;
 }
 
-/* ── Footer actions ── */
+/* ── Sidebar profile ── */
 .sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 1.6rem;
+  gap: var(--krds-number-6);
+  padding: var(--krds-number-8);
   border-top: 0.1rem solid rgb(255 255 255 / 10%);
+}
+
+.profile-summary {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--krds-number-6);
+  min-width: 0;
 }
 
 .profile-icon {
@@ -341,41 +342,83 @@ async function handleLogout() {
   font-size: 1.3rem;
   font-weight: var(--krds-font-weight-bold);
   letter-spacing: 0;
+  flex-shrink: 0;
 }
 
-.footer-action {
+.profile-details {
+  display: grid;
+  gap: var(--krds-number-2);
+  min-width: 0;
+}
+
+.profile-name,
+.profile-department {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-name {
+  color: var(--roady-surface-default);
+  font-size: var(--krds-pc-font-size-label-medium);
+  font-weight: var(--krds-font-weight-bold);
+}
+
+.profile-department {
+  color: rgb(255 255 255 / 60%);
+  font-size: var(--krds-pc-font-size-label-xsmall);
+}
+
+.logout-button {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 3.6rem;
-  height: 3.6rem;
+  width: var(--krds-number-14);
+  height: var(--krds-number-14);
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  color: rgb(255 255 255 / 50%);
+  border-radius: var(--roady-radius-control);
+  color: rgb(255 255 255 / 60%);
   background: transparent;
+  font: inherit;
   cursor: pointer;
-  text-decoration: none;
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
+    background-color var(--roady-transition-fast),
+    color var(--roady-transition-fast);
 }
 
-.footer-action:hover,
-.footer-action.is-active {
-  background: rgb(255 255 255 / 8%);
+.logout-button:hover:not(:disabled) {
   color: var(--roady-surface-default);
+  background: rgb(255 255 255 / 10%);
 }
 
-.footer-action:focus-visible {
+.logout-button:focus-visible {
   outline: 0.2rem solid rgb(255 255 255 / 55%);
   outline-offset: 0.1rem;
-  color: var(--roady-surface-default);
 }
 
-.footer-action svg {
-  width: 1.8rem;
-  height: 1.8rem;
+.logout-button:disabled {
+  opacity: 0.55;
+}
+
+.logout-button svg {
+  flex-shrink: 0;
+  width: var(--krds-number-9);
+  height: var(--krds-number-9);
+}
+
+.sr-only {
+  position: absolute;
+  width: var(--krds-number-1);
+  height: var(--krds-number-1);
+  padding: 0;
+  margin: calc(var(--krds-number-1) * -1);
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 @media (max-width: 768px) {
@@ -400,7 +443,7 @@ async function handleLogout() {
   .brand-subtitle,
   .nav-group-label,
   .nav-divider,
-  .profile-icon {
+  .profile-summary {
     display: none;
   }
 
@@ -431,15 +474,15 @@ async function handleLogout() {
   }
 
   .sidebar-footer {
-    gap: 0.4rem;
     padding: 1rem 1.2rem;
     border-top: 0;
     border-left: 0.1rem solid rgb(255 255 255 / 10%);
   }
 
-  .footer-action {
-    width: 4.4rem;
-    height: 4.4rem;
+  .logout-button {
+    width: var(--krds-number-15);
+    height: var(--krds-number-15);
+    border-radius: 50%;
   }
 }
 

@@ -45,6 +45,21 @@ const global = {
 }
 
 describe('RepairRequestModal', () => {
+  it('문서 내용을 모달 제목 아래의 상위 섹션으로 구분한다', () => {
+    const wrapper = mount(RepairRequestModal, {
+      props: { detail, imageBlobUrls: new Map(), readonly: true },
+      global,
+    })
+
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
+      '사건 정보',
+      '관리자 판정',
+      '탐지 이미지',
+      '비고',
+    ])
+    expect(wrapper.findAll('section[aria-labelledby]')).toHaveLength(4)
+  })
+
   it('신규 작성에서는 과거 요청 비고를 비우고 수정에서는 유지한다', () => {
     const detailWithPreviousNote = { ...detail, repairRequestNote: '이전 요청 비고' }
     const createWrapper = mount(RepairRequestModal, {
@@ -215,6 +230,13 @@ describe('RepairCompletionModal', () => {
     expect(wrapper.text()).toContain('보수 완료 이미지가 없습니다.')
     expect(wrapper.text()).toContain('점자블록 교체 완료')
     expect(wrapper.text()).toContain('내용 복사')
+    expect(wrapper.findAll('h3').map((heading) => heading.text())).toEqual([
+      '담당 정보',
+      '처리 일정',
+      '보수 전 사진',
+      '보수 완료 사진',
+      '완료 메모',
+    ])
   })
 
   it('완료 보고서 내용 복사 이벤트를 전달한다', async () => {

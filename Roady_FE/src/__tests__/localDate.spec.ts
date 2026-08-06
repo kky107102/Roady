@@ -1,14 +1,29 @@
 import { describe, it, expect } from 'vitest'
 import {
   dateRangeForPreset,
+  dateRangeFromQuery,
+  dateRangeToQuery,
   localDateOffset,
   matchingDateRangePreset,
   todayLocalStr,
   toApiFromDateTime,
   toApiToDateTime,
+  validateDateRange,
 } from '@/utils/localDate'
 
 describe('localDate', () => {
+  it('세 화면에서 같은 날짜 순서 검증 문구를 사용한다', () => {
+    expect(validateDateRange('2026-08-06', '2026-08-05')).toBe(
+      '시작일은 종료일보다 이전이어야 합니다.',
+    )
+    expect(validateDateRange('2026-08-05', '2026-08-06')).toBe('')
+  })
+
+  it('기간 전체 선택을 URL에서 명시적으로 유지한다', () => {
+    expect(dateRangeToQuery('', '')).toEqual({ range: 'all' })
+    expect(dateRangeFromQuery({ range: 'all' })).toEqual({ from: '', to: '' })
+  })
+
   it('공통 기본 기간인 최근 7일을 같은 프리셋으로 판별한다', () => {
     const range = dateRangeForPreset(1)
     expect(matchingDateRangePreset(range.from, range.to)).toBe(1)

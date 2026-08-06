@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import type { RepairCompletePayload } from '@/types/repair'
 import type { DamageImage } from '@/types/damage'
 import { useDialogFocus } from '@/composables/useDialogFocus'
+import DocumentSection from '@/components/common/DocumentSection.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -103,7 +104,6 @@ function handleConfirm() {
 function handleBack() {
   step.value = 'input'
 }
-
 </script>
 
 <template>
@@ -146,46 +146,47 @@ function handleBack() {
 
         <!-- 입력 단계 -->
         <div v-if="readonly" class="modal-body">
-          <div class="assignment-grid">
-            <div>
-              <span class="field-label">담당 주무관</span>
-              <p class="readonly-value">{{ officialName || '-' }}</p>
+          <DocumentSection title="담당 정보">
+            <div class="assignment-grid">
+              <div>
+                <span class="field-label">담당 주무관</span>
+                <p class="readonly-value">{{ officialName || '-' }}</p>
+              </div>
+              <div>
+                <span class="field-label">보수 담당자</span>
+                <p class="readonly-value">{{ repairerName || '-' }}</p>
+              </div>
             </div>
-            <div>
-              <span class="field-label">보수 담당자</span>
-              <p class="readonly-value">{{ repairerName || '-' }}</p>
+          </DocumentSection>
+          <DocumentSection title="처리 일정">
+            <div class="date-grid">
+              <div>
+                <span class="field-label">보수 요청 일자</span>
+                <p class="readonly-value">{{ formatDateTime(requestedAt) }}</p>
+              </div>
+              <div>
+                <span class="field-label">보수 완료 일자</span>
+                <p class="readonly-value">{{ completionDate || '-' }}</p>
+              </div>
             </div>
-          </div>
-          <div class="date-grid">
-            <div>
-              <span class="field-label">보수 요청 일자</span>
-              <p class="readonly-value">{{ formatDateTime(requestedAt) }}</p>
-            </div>
-            <div>
-              <span class="field-label">보수 완료 일자</span>
-              <p class="readonly-value">{{ completionDate || '-' }}</p>
-            </div>
-          </div>
+          </DocumentSection>
 
-          <section class="report-section" aria-labelledby="before-photo-title">
-            <h3 id="before-photo-title" class="field-label">보수 전 사진</h3>
+          <DocumentSection title="보수 전 사진">
             <div v-if="loadedBeforeImages.length" class="report-image-grid">
               <figure v-for="(image, index) in loadedBeforeImages" :key="image.id">
                 <img :src="imageBlobUrls.get(image.id)" :alt="`보수 전 사진 ${index + 1}`" />
               </figure>
             </div>
             <div v-else class="report-image-empty" role="status">보수 전 이미지가 없습니다.</div>
-          </section>
+          </DocumentSection>
 
-          <section class="report-section" aria-labelledby="after-photo-title">
-            <h3 id="after-photo-title" class="field-label">보수 완료 사진</h3>
+          <DocumentSection title="보수 완료 사진">
             <div class="report-image-empty" role="status">보수 완료 이미지가 없습니다.</div>
-          </section>
+          </DocumentSection>
 
-          <div class="field-group">
-            <span class="field-label">완료 메모</span>
+          <DocumentSection title="완료 메모">
             <p class="readonly-value readonly-value--note">{{ completionNote || '-' }}</p>
-          </div>
+          </DocumentSection>
         </div>
 
         <div v-else-if="step === 'input'" class="modal-body">
@@ -359,7 +360,7 @@ function handleBack() {
 
 .modal-title {
   margin: 0;
-  font-size: 1.8rem;
+  font-size: var(--krds-pc-font-size-heading-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -416,14 +417,14 @@ function handleBack() {
 
 .confirm-text {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: var(--krds-pc-font-size-body-medium);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
 
 .confirm-note {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -432,7 +433,7 @@ function handleBack() {
 .confirm-date,
 .readonly-value {
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-body-small);
   color: var(--roady-text-secondary);
 }
 
@@ -452,15 +453,10 @@ function handleBack() {
   gap: 1.6rem;
 }
 
-.date-grid > div,
-.report-section {
+.date-grid > div {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
-}
-
-.report-section h3 {
-  margin: 0;
 }
 
 .report-image-grid {
@@ -518,7 +514,7 @@ function handleBack() {
 }
 
 .field-label {
-  font-size: 1.4rem;
+  font-size: var(--krds-pc-font-size-label-small);
   font-weight: var(--krds-font-weight-bold);
   color: var(--roady-text-primary);
 }
@@ -539,12 +535,12 @@ function handleBack() {
 
 .field-error {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: var(--krds-pc-font-size-label-small);
 }
 
 .field-hint {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: var(--krds-pc-font-size-label-xsmall);
   color: var(--roady-text-tertiary);
 }
 

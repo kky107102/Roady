@@ -30,10 +30,40 @@ export const DATE_RANGE_PRESETS = [
 ] as const
 
 export const DEFAULT_DATE_RANGE_PRESET = 1
+export const DATE_RANGE_ORDER_ERROR = '시작일은 종료일보다 이전이어야 합니다.'
+export const ALL_DATE_RANGE_QUERY_VALUE = 'all'
+
+export function validateDateRange(from: string, to: string): string {
+  return from && to && from > to ? DATE_RANGE_ORDER_ERROR : ''
+}
 
 export function dateRangeForPreset(index: number): { from: string; to: string } {
   const preset = DATE_RANGE_PRESETS[index] ?? DATE_RANGE_PRESETS[DEFAULT_DATE_RANGE_PRESET]
   return { from: localDateOffset(preset.offset), to: todayLocalStr() }
+}
+
+function firstQueryString(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+export function dateRangeFromQuery(
+  query: { from?: unknown; to?: unknown; range?: unknown },
+  fallback = dateRangeForPreset(DEFAULT_DATE_RANGE_PRESET),
+): { from: string; to: string } {
+  if (firstQueryString(query.range) === ALL_DATE_RANGE_QUERY_VALUE) return { from: '', to: '' }
+  return {
+    from: firstQueryString(query.from) || fallback.from,
+    to: firstQueryString(query.to) || fallback.to,
+  }
+}
+
+export function dateRangeToQuery(from: string, to: string): Record<string, string> {
+  if (!from && !to) return { range: ALL_DATE_RANGE_QUERY_VALUE }
+  return {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  }
 }
 
 export function matchingDateRangePreset(from: string, to: string): number | null {

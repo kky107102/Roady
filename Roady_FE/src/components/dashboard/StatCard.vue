@@ -8,21 +8,30 @@ interface Props {
   subText?: string
   variant?: 'default' | 'danger' | 'dark'
   to?: RouteLocationRaw
+  action?: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   subText: '',
   variant: 'default',
   to: undefined,
+  action: false,
 })
+
+const emit = defineEmits<{ activate: [] }>()
+
+function activate() {
+  if (props.action) emit('activate')
+}
 </script>
 
 <template>
   <component
-    :is="to ? RouterLink : 'div'"
+    :is="to ? RouterLink : action ? 'button' : 'div'"
     class="stat-card"
-    :class="[`is-${variant}`, { 'is-link': !!to }]"
-    v-bind="to ? { to } : {}"
+    :class="[`is-${variant}`, { 'is-link': !!to || action }]"
+    v-bind="to ? { to } : action ? { type: 'button' } : {}"
+    @click="activate"
   >
     <div class="stat-card__header">
       <span class="stat-card__label">{{ label }}</span>
@@ -47,6 +56,9 @@ withDefaults(defineProps<Props>(), {
   border: 1px solid var(--roady-border-default);
   border-radius: 0.8rem;
   background: var(--roady-surface-default);
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .stat-card.is-dark {

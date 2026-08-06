@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { robotsApi } from '@/api/robots'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
@@ -18,17 +19,39 @@ import {
   formatDateTime,
   operationBadge,
   operationLabels,
+  matchesRobotStatus,
 } from '@/utils/robotDisplay'
 import { toRobotMapMarkers } from '@/utils/robotMap'
 import { useAssignedMapRegion } from '@/composables/useAssignedMapRegion'
 
 const robots = ref<Robot[]>([])
+const route = useRoute()
+const router = useRouter()
 const mapRegion = useAssignedMapRegion()
 const loading = ref(true)
 const error = ref(false)
 const sortBy = ref('name-asc')
-const operationFilter = ref('ALL')
-const connectionFilter = ref('ALL')
+function queryString(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+function operationFilterFromQuery(value: unknown): RobotOperationStatus | 'ALL' {
+  const candidate = queryString(value)
+  return candidate in operationLabels ? (candidate as RobotOperationStatus) : 'ALL'
+}
+
+function connectionFilterFromQuery(value: unknown): RobotConnectionStatus | 'ALL' {
+  const candidate = queryString(value)
+  return candidate in connectionLabels ? (candidate as RobotConnectionStatus) : 'ALL'
+}
+
+const operationFilter = ref<RobotOperationStatus | 'ALL'>(
+  operationFilterFromQuery(route.query.operation),
+)
+const connectionFilter = ref<RobotConnectionStatus | 'ALL'>(
+  connectionFilterFromQuery(route.query.connection),
+)
 const searchInput = ref('')
 const appliedSearchQuery = ref('')
 
@@ -73,14 +96,9 @@ const displayedRobots = computed(() => {
       !normalizedQuery ||
       robot.name.toLocaleLowerCase('ko-KR').includes(normalizedQuery) ||
       robot.serialNumber.toLocaleLowerCase('ko-KR').includes(normalizedQuery)
-    const operationMatches =
-      operationFilter.value === 'ALL' ||
-      robot.latestStatus?.operationStatus === (operationFilter.value as RobotOperationStatus)
-    const connectionMatches =
-      connectionFilter.value === 'ALL' ||
-      robot.latestStatus?.connectionStatus === (connectionFilter.value as RobotConnectionStatus)
-
-    return searchMatches && operationMatches && connectionMatches
+    return (
+      searchMatches && matchesRobotStatus(robot, operationFilter.value, connectionFilter.value)
+    )
   })
 
   return [...filtered].sort((a, b) => {
@@ -151,6 +169,23 @@ function resetFilters() {
 function applySearch() {
   appliedSearchQuery.value = searchInput.value.trim()
 }
+
+watch([operationFilter, connectionFilter], ([operation, connection]) => {
+  const query = { ...route.query }
+  if (operation === 'ALL') delete query.operation
+  else query.operation = operation
+  if (connection === 'ALL') delete query.connection
+  else query.connection = connection
+  void router.replace({ query })
+})
+
+watch(
+  () => [route.query.operation, route.query.connection],
+  ([operation, connection]) => {
+    operationFilter.value = operationFilterFromQuery(operation)
+    connectionFilter.value = connectionFilterFromQuery(connection)
+  },
+)
 
 async function fetchRobots() {
   loading.value = true
@@ -253,6 +288,7 @@ onMounted(fetchRobots)
         label="운행 상태"
         size="medium"
         :options="operationOptions"
+        :filter-active="operationFilter !== 'ALL'"
       />
       <KrdsSelect
         id="connection-filter"
@@ -261,6 +297,7 @@ onMounted(fetchRobots)
         label="연결 상태"
         size="medium"
         :options="connectionOptions"
+        :filter-active="connectionFilter !== 'ALL'"
       />
       <KrdsTextInput
         id="robot-search"
@@ -310,9 +347,10 @@ onMounted(fetchRobots)
       <div v-else class="table-scroll">
         <table>
           <caption class="sr-only">
-            로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각
+            번호, 로봇명, 시리얼 번호, 운행 및 연결 상태, 배터리, 마지막 갱신 시각
           </caption>
           <colgroup>
+            <col class="col-number" />
             <col class="col-name" />
             <col class="col-serial" />
             <col class="col-operation" />
@@ -323,6 +361,7 @@ onMounted(fetchRobots)
           </colgroup>
           <thead>
             <tr>
+              <th scope="col" class="number-cell">번호</th>
               <th scope="col">로봇명</th>
               <th scope="col">시리얼 번호</th>
               <th scope="col">운행 상태</th>
@@ -333,7 +372,8 @@ onMounted(fetchRobots)
             </tr>
           </thead>
           <tbody>
-            <tr v-for="robot in displayedRobots" :key="robot.id">
+            <tr v-for="(robot, index) in displayedRobots" :key="robot.id">
+              <td class="number-cell">{{ index + 1 }}</td>
               <td class="robot-name">{{ robot.name }}</td>
               <td class="serial-number" :title="robot.serialNumber">
                 {{ robot.serialNumber }}
@@ -565,17 +605,21 @@ table {
   border-collapse: collapse;
 }
 
+.col-number {
+  width: 6%;
+}
+
 .col-name {
-  width: 14%;
+  width: 13%;
 }
 
 .col-serial {
-  width: 24%;
+  width: 21%;
 }
 
 .col-operation,
 .col-connection {
-  width: 13%;
+  width: 12%;
 }
 
 .col-battery {
@@ -624,7 +668,8 @@ tbody tr:hover {
 }
 
 .battery-cell,
-.updated-cell {
+.updated-cell,
+.number-cell {
   text-align: center;
 }
 

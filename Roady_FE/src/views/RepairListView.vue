@@ -5,12 +5,16 @@ import { damagesApi } from '@/api/damages'
 import type { DamageListQuery } from '@/api/damages'
 import type { DamageListItem } from '@/types/damage'
 import PageFilterToolbar from '@/components/common/PageFilterToolbar.vue'
+import PageFilterActions from '@/components/common/PageFilterActions.vue'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 import KrdsCheckbox from '@/components/common/KrdsCheckbox.vue'
 import RepairTable from '@/components/repairs/RepairTable.vue'
 import {
   dateRangeForPreset,
+  dateRangeFromQuery,
+  dateRangeToQuery,
   matchingDateRangePreset,
+  validateDateRange,
   toApiFromDateTime,
   toApiToDateTime,
 } from '@/utils/localDate'
@@ -32,8 +36,9 @@ const router = useRouter()
 
 // ── URL → 적용 필터 (단일 진실 소스) ──────────────────────
 const defaultDateRange = dateRangeForPreset(1)
-const appliedFrom = computed(() => String(route.query.from || defaultDateRange.from))
-const appliedTo = computed(() => String(route.query.to || defaultDateRange.to))
+const appliedRange = computed(() => dateRangeFromQuery(route.query, defaultDateRange))
+const appliedFrom = computed(() => appliedRange.value.from)
+const appliedTo = computed(() => appliedRange.value.to)
 
 function normalizeQueryValue(v: unknown): string | string[] | undefined {
   if (v == null) return undefined
@@ -133,13 +138,17 @@ const totalCount = computed(() => allItems.value.length)
 
 // ── URL 쿼리 빌더 ─────────────────────────────────────────
 function buildQuery(overrides: Record<string, string | undefined> = {}): Record<string, string> {
-  const base: Record<string, string | undefined> = {}
-  if (appliedFrom.value) base.from = appliedFrom.value
-  if (appliedTo.value) base.to = appliedTo.value
+  const from = Object.hasOwn(overrides, 'from') ? overrides.from || '' : appliedFrom.value
+  const to = Object.hasOwn(overrides, 'to') ? overrides.to || '' : appliedTo.value
+  const base: Record<string, string | undefined> = dateRangeToQuery(from, to)
   const statusParam = statusesToParam(activeStatuses.value)
   if (statusParam) base.statuses = statusParam
   if (activeSort.value !== 'priority') base.sort = activeSort.value
-  const merged = { ...base, ...overrides }
+  const remainingOverrides = { ...overrides }
+  delete remainingOverrides.from
+  delete remainingOverrides.to
+  delete remainingOverrides.range
+  const merged = { ...base, ...remainingOverrides }
   return Object.fromEntries(
     Object.entries(merged).filter((entry): entry is [string, string] => entry[1] != null),
   )
@@ -191,11 +200,8 @@ function handleSortChange(event: Event) {
 
 // ── 날짜 필터 핸들러 ─────────────────────────────────────
 function handleSearch() {
-  formError.value = ''
-  if (formFrom.value && formTo.value && formFrom.value > formTo.value) {
-    formError.value = '시작일은 종료일보다 이전이어야 합니다.'
-    return
-  }
+  formError.value = validateDateRange(formFrom.value, formTo.value)
+  if (formError.value) return
   router.push({
     query: buildQuery({
       from: formFrom.value || undefined,
@@ -235,10 +241,7 @@ function handlePresetApply({ from, to }: { from: string; to: string }) {
         @preset-apply="handlePresetApply"
       />
       <template #actions>
-        <button type="button" class="krds-btn small secondary" @click="handleReset">초기화</button>
-        <button type="submit" class="krds-btn small filled primary">
-          조회
-        </button>
+        <PageFilterActions @reset="handleReset" />
       </template>
     </PageFilterToolbar>
 
