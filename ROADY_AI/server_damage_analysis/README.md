@@ -73,6 +73,44 @@ uvicorn ROADY_AI.server_damage_analysis.api:app \
 }
 ```
 
+### Docker
+
+저장소 루트에서 AI 서버 이미지를 빌드한다.
+
+```bash
+docker build -f ROADY_AI/Dockerfile -t roady-ai:latest .
+```
+
+GPU 실행:
+
+```bash
+docker run --rm --gpus all \
+  -e ROADY_AI_DEVICE=0 \
+  -p 8000:8000 \
+  roady-ai:latest
+```
+
+CPU 실행:
+
+```bash
+docker run --rm \
+  -e ROADY_AI_DEVICE=cpu \
+  -p 8000:8000 \
+  roady-ai:latest
+```
+
+EC2에서 GPU 실행하려면 NVIDIA GPU가 있는 G/P 계열 인스턴스, NVIDIA 드라이버,
+Docker, NVIDIA Container Toolkit이 필요하다. 배포 전에 다음 명령으로 컨테이너의
+GPU 접근을 검증한다.
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu22.04 nvidia-smi
+```
+
+일반 EC2 인스턴스에서는 `ROADY_AI_DEVICE=cpu`를 사용해야 하며 1초 응답 목표는
+보장하지 않는다. GPU 서버는 startup 단계에서 모델 SHA-256 검증과 1회 워밍업을
+완료한 뒤 `/health/ready`를 활성화한다.
+
 ## 판정 정책
 
 | 파손 비율 | 추정 심각도 | 보수 우선순위 |
