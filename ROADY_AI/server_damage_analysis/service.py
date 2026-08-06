@@ -58,15 +58,16 @@ class _AnalyzedImage:
     index: int
     filename: str
     payload: dict[str, Any]
-    damage_score: int
-    damage_ratio: float
-    damage_ratio_percent: float
-    severity: str
+    damage_score: int | None
+    damage_ratio: float | None
+    damage_ratio_percent: float | None
+    severity: str | None
     confidence_score: float | None
+    damage_detected: bool
 
     @property
     def damaged(self) -> bool:
-        return self.damage_score > 0
+        return self.damage_detected
 
 
 def calculate_damage_score(damage_ratio_percent: float) -> int:
@@ -133,8 +134,8 @@ class DamageAnalysisService:
         selected = max(
             analyzed,
             key=lambda item: (
-                item.damage_score,
-                item.damage_ratio,
+                item.damage_score if item.damage_score is not None else -1,
+                item.damage_ratio if item.damage_ratio is not None else -1.0,
                 item.confidence_score if item.confidence_score is not None else -1.0,
             ),
         )
@@ -142,23 +143,31 @@ class DamageAnalysisService:
 
         analysis = selected.payload["analysis"]
         model = selected.payload["model"]
-        repair_required = selected.severity in {"moderate", "severe"}
+        repair_required = (
+            None
+            if selected.severity is None
+            else selected.severity in {"moderate", "severe"}
+        )
 
         return DamageAnalysisResponse(
             damaged=selected.damaged,
             damage_score=selected.damage_score,
             damage_type=None,
             repair_required=repair_required,
-            repair_priority=PRIORITY_BY_SEVERITY[selected.severity],
+            repair_priority=(
+                None
+                if selected.severity is None
+                else PRIORITY_BY_SEVERITY[selected.severity]
+            ),
             confidence_score=(
                 selected.confidence_score if selected.damaged else None
             ),
             analysis_detail=AnalysisDetail(
                 model=ModelDetail(
                     name=str(model["name"]),
-                    weights=str(model["weights"]),
+                    weights=str(model.get("weights", self.model_path.name)),
                     weights_sha256=self.model_sha256,
-                    classes={str(key): str(value) for key, value in model["classes"].items()},
+                    classes=self._model_classes(model),
                 ),
                 aggregation=AggregationDetail(
                     image_count=len(analyzed),
@@ -170,13 +179,15 @@ class DamageAnalysisService:
                 estimated_severity_label=str(
                     analysis.get(
                         "estimated_severity_label",
-                        SEVERITY_LABELS[selected.severity],
+                        None if selected.severity is None else SEVERITY_LABELS[selected.severity],
                     )
                 ),
                 review_required=bool(analysis.get("review_required", False)),
                 review_reasons=[str(reason) for reason in analysis.get("review_reasons", [])],
                 advisory_only=bool(analysis.get("advisory_only", True)),
                 regions=selected.payload["regions"],
+                units=list(selected.payload.get("units", [])),
+                summary=dict(selected.payload.get("summary", analysis)),
                 quality={
                     str(key): float(value)
                     for key, value in selected.payload.get("quality", {}).items()
@@ -196,23 +207,28 @@ class DamageAnalysisService:
             imgsz=self.imgsz,
             device=self.device,
         )
-        tactile_pixels = int(
-            payload.get("regions", {}).get("tactile_block", {}).get("pixels", 0)
-        )
-        if tactile_pixels <= 0:
-            raise AnalysisInputError(
-                f"Tactile block was not detected in image index {index}."
-            )
-
         analysis = payload["analysis"]
-        ratio = max(0.0, min(float(analysis["damage_ratio"]), 1.0))
-        ratio_percent = round(ratio * 100, 2)
-        score = calculate_damage_score(ratio * 100)
-        severity = str(analysis["estimated_severity"])
-        if severity not in PRIORITY_BY_SEVERITY:
+        summary = payload.get("summary", analysis)
+        raw_ratio_percent = summary.get("max_damage_ratio_percent")
+        if raw_ratio_percent is None:
+            raw_ratio_percent = analysis.get("damage_ratio_percent")
+        if raw_ratio_percent is None and analysis.get("damage_ratio") is not None:
+            raw_ratio_percent = float(analysis["damage_ratio"]) * 100
+        ratio_percent = (
+            None
+            if raw_ratio_percent is None
+            else round(max(0.0, min(float(raw_ratio_percent), 100.0)), 2)
+        )
+        ratio = None if ratio_percent is None else round(ratio_percent / 100, 6)
+        score = None if ratio_percent is None else calculate_damage_score(ratio_percent)
+        raw_severity = summary.get("estimated_severity", analysis.get("estimated_severity"))
+        severity = None if raw_severity is None else str(raw_severity)
+        if severity is not None and severity not in PRIORITY_BY_SEVERITY:
             raise RuntimeError(f"Unknown estimated severity: {severity}")
 
-        raw_confidence = payload["regions"]["damage"].get("confidence")
+        raw_confidence = payload.get("regions", {}).get("damage", {}).get("confidence")
+        if raw_confidence is None:
+            raw_confidence = self._maximum_damage_confidence(payload)
         confidence = (
             None
             if raw_confidence is None
@@ -223,11 +239,37 @@ class DamageAnalysisService:
             filename=item.filename,
             payload=payload,
             damage_score=score,
-            damage_ratio=round(ratio, 6),
+            damage_ratio=ratio,
             damage_ratio_percent=ratio_percent,
             severity=severity,
             confidence_score=confidence,
+            damage_detected=(
+                bool(summary.get("damage_detected", analysis.get("damage_detected", False)))
+                if str(payload.get("schema_version", "1.0")) == "2.0"
+                else bool(score and score > 0)
+            ),
         )
+
+    @staticmethod
+    def _model_classes(model: dict[str, Any]) -> dict[str, str]:
+        classes = model.get("classes")
+        if isinstance(classes, dict):
+            return {str(key): str(value) for key, value in classes.items()}
+        return {
+            str(index): str(name)
+            for index, name in enumerate(model.get("class_names", []))
+        }
+
+    @staticmethod
+    def _maximum_damage_confidence(payload: dict[str, Any]) -> float | None:
+        values = [
+            details.get("confidence")
+            for unit in payload.get("units", [])
+            for name, details in unit.get("damage_types", {}).items()
+            if name in {"missing", "crack", "wear"}
+            and details.get("confidence") is not None
+        ]
+        return max(values) if values else None
 
     def _summary(self, item: _AnalyzedImage) -> ImageAnalysisSummary:
         analysis = item.payload["analysis"]

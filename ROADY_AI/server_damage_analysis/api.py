@@ -94,11 +94,22 @@ def create_app(
                 detail="AI model is not ready.",
             )
         service: DamageAnalysisService = app.state.service
+        analyzer = service.analyzer
+        class_names = getattr(analyzer, "class_names", {})
+        classes = (
+            {str(key): str(value) for key, value in class_names.items()}
+            if isinstance(class_names, dict)
+            else {str(index): str(value) for index, value in enumerate(class_names)}
+        )
         return ModelInfoResponse(
-            name="yolo26s-seg-server-v1",
+            name=(
+                service.model_path.stem
+                if classes
+                else "yolo26s-seg-server-v1"
+            ),
             weights=service.model_path.name,
             weights_sha256=service.model_sha256,
-            classes={"0": "tactile_block", "1": "damage"},
+            classes=classes,
             device=service.device,
             imgsz=service.imgsz,
         )

@@ -32,10 +32,10 @@ class ImageAnalysisSummary(BaseModel):
     index: int = Field(ge=0)
     filename: str
     damaged: bool
-    damage_score: int = Field(ge=0, le=100)
-    damage_ratio: float = Field(ge=0.0, le=1.0)
-    damage_ratio_percent: float = Field(ge=0.0, le=100.0)
-    estimated_severity: Severity
+    damage_score: int | None = Field(default=None, ge=0, le=100)
+    damage_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    damage_ratio_percent: float | None = Field(default=None, ge=0.0, le=100.0)
+    estimated_severity: Severity | None = None
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     review_required: bool
 
@@ -43,17 +43,19 @@ class ImageAnalysisSummary(BaseModel):
 class AnalysisDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     model: ModelDetail
     aggregation: AggregationDetail
-    damage_ratio: float = Field(ge=0.0, le=1.0)
-    damage_ratio_percent: float = Field(ge=0.0, le=100.0)
-    estimated_severity: Severity
-    estimated_severity_label: str
+    damage_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    damage_ratio_percent: float | None = Field(default=None, ge=0.0, le=100.0)
+    estimated_severity: Severity | None = None
+    estimated_severity_label: str | None = None
     review_required: bool
     review_reasons: list[str]
     advisory_only: bool
     regions: dict[str, Any]
+    units: list[dict[str, Any]]
+    summary: dict[str, Any]
     quality: dict[str, float]
     images: list[ImageAnalysisSummary]
     inference_ms: float = Field(ge=0.0)
@@ -63,9 +65,9 @@ class DamageAnalysisResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     damaged: bool
-    damage_score: int = Field(ge=0, le=100)
+    damage_score: int | None = Field(default=None, ge=0, le=100)
     damage_type: None = None
-    repair_required: bool
+    repair_required: bool | None
     repair_priority: RepairPriority | None
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)
     analysis_detail: AnalysisDetail

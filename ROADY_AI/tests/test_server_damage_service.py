@@ -87,11 +87,28 @@ def test_service_returns_normal_contract_below_damage_threshold():
     assert response.confidence_score is None
 
 
-def test_service_rejects_result_without_tactile_block():
+def test_service_returns_review_contract_without_tactile_block():
     service = make_service(FakeAnalyzer([payload(0.0, None, tactile_pixels=0)]))
 
-    with pytest.raises(AnalysisInputError, match="Tactile block was not detected"):
-        service.analyze_images([input_image("missing.jpg")])
+    response = service.analyze_images([input_image("missing.jpg")])
+    assert response.damaged is False
+    assert response.analysis_detail.review_required is True
+
+
+def test_service_preserves_unknown_missing_as_null_instead_of_zero():
+    service = make_service(FakeAnalyzer([v2_unknown_missing_payload()]))
+
+    response = service.analyze_images([input_image("unknown-missing.jpg")])
+
+    assert response.damaged is True
+    assert response.damage_score is None
+    assert response.repair_required is None
+    assert response.repair_priority is None
+    assert response.analysis_detail.damage_ratio is None
+    assert response.analysis_detail.damage_ratio_percent is None
+    assert response.analysis_detail.estimated_severity is None
+    assert response.analysis_detail.review_required is True
+    assert response.analysis_detail.schema_version == "2.0"
 
 
 class FakeAnalyzer:
@@ -174,4 +191,49 @@ def payload(
             "ratio_mae_pp": 6.085,
             "severity_macro_f1": 0.2187,
         },
+    }
+
+
+def v2_unknown_missing_payload() -> dict:
+    reasons = [{"code": "MISSING_AREA_UNCERTAIN", "message": "결손 범위를 계산할 수 없습니다."}]
+    return {
+        "schema_version": "2.0",
+        "model": {
+            "name": "server-multiclass-v2",
+            "task": "segmentation",
+            "class_names": ["tactile_block", "missing", "crack", "wear"],
+            "policy_version": "draft-1",
+            "class_mapping_valid": True,
+        },
+        "regions": {
+            "tactile_block": {"pixels": 1000, "polygons": []},
+            "damage": {"pixels": 100, "polygons": []},
+        },
+        "units": [
+            {
+                "damage_types": {
+                    "missing": {"detected": True, "confidence": 0.82},
+                    "crack": {"detected": False, "confidence": None},
+                    "wear": {"detected": False, "confidence": None},
+                }
+            }
+        ],
+        "summary": {
+            "damage_detected": True,
+            "estimated_severity": None,
+            "repair_priority": "inspection_required",
+            "max_damage_ratio_percent": None,
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "analysis": {
+            "damage_detected": True,
+            "damage_ratio_percent": None,
+            "estimated_severity": None,
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "quality": {},
     }

@@ -22,6 +22,38 @@ class DamageEvidence:
     bbox: BBox
     score: float
     sources: frozenset[str]
+    roi_selection: "RoiSelection | None" = None
+
+
+@dataclass(frozen=True)
+class RoiSelection:
+    bbox: BBox
+    roi_source: str
+    analysis_unit_hint: str
+    tactile_detection_count: int
+    roi_fallback_used: bool
+
+    def metadata(self) -> dict[str, object]:
+        return {
+            "roi_source": self.roi_source,
+            "analysis_unit_hint": self.analysis_unit_hint,
+            "tactile_detection_count": self.tactile_detection_count,
+            "roi_fallback_used": self.roi_fallback_used,
+        }
+
+
+@dataclass(frozen=True)
+class FrameQualityAssessment:
+    score: float
+    hard_gate_passed: bool
+    stable: bool
+    sharpness: float
+    roi_width: int
+    roi_height: int
+    roi_area: int
+    area_change_ratio: float | None
+    center_shift_ratio: float | None
+    rejection_reasons: tuple[str, ...]
 
 
 @dataclass
@@ -34,8 +66,14 @@ class DamageCandidate:
     best_score: float = 0.0
     best_quality: float = -1.0
     best_original: np.ndarray | None = None
-    best_roi: np.ndarray | None = None
+    best_analysis_roi: np.ndarray | None = None
     best_location: tuple[float, float] | None = None
+    best_roi_metadata: dict[str, object] = field(default_factory=dict)
+    best_frame_quality_verified: bool = False
+    best_available_quality: float = -1.0
+    last_roi_center: tuple[float, float] | None = None
+    last_roi_area: float | None = None
+    stable_observation_count: int = 0
     confirmed: bool = False
     ready_emitted: bool = False
     reported: bool = False
@@ -47,10 +85,16 @@ class DamageCandidate:
 class ReadyDamageEvent:
     candidate_id: int
     original_image: np.ndarray
-    tactile_roi: np.ndarray
+    analysis_roi: np.ndarray
     observation_count: int
     best_score: float
     location: tuple[float, float] | None
+    metadata: dict[str, object]
+
+    @property
+    def tactile_roi(self) -> np.ndarray:
+        """Deprecated compatibility alias for callers using the old field name."""
+        return self.analysis_roi
 
 
 class DamageEventPipeline:
@@ -71,6 +115,17 @@ class DamageEventPipeline:
         candidate_timeout_sec: float = 1.0,
         reported_track_cooldown_sec: float = 5.0,
         match_center_ratio: float = 0.20,
+        tactile_roi_margin_ratio: float = 0.20,
+        damage_fallback_scale: float = 1.5,
+        tactile_relation_iou: float = 0.01,
+        frame_edge_margin_px: int = 3,
+        minimum_roi_width_px: int = 32,
+        minimum_roi_height_px: int = 32,
+        minimum_roi_area_px: int = 1024,
+        minimum_sharpness: float = 10.0,
+        stable_area_change_ratio: float = 0.10,
+        stable_center_shift_ratio: float = 0.03,
+        stable_observation_count: int = 2,
     ) -> None:
         if confirm_count < 1:
             raise ValueError("confirm_count must be positive")
@@ -83,6 +138,17 @@ class DamageEventPipeline:
         self.candidate_timeout_sec = candidate_timeout_sec
         self.reported_track_cooldown_sec = reported_track_cooldown_sec
         self.match_center_ratio = match_center_ratio
+        self.tactile_roi_margin_ratio = tactile_roi_margin_ratio
+        self.damage_fallback_scale = damage_fallback_scale
+        self.tactile_relation_iou = tactile_relation_iou
+        self.frame_edge_margin_px = frame_edge_margin_px
+        self.minimum_roi_width_px = minimum_roi_width_px
+        self.minimum_roi_height_px = minimum_roi_height_px
+        self.minimum_roi_area_px = minimum_roi_area_px
+        self.minimum_sharpness = minimum_sharpness
+        self.stable_area_change_ratio = stable_area_change_ratio
+        self.stable_center_shift_ratio = stable_center_shift_ratio
+        self.required_stable_observations = max(1, stable_observation_count)
         self._candidates: dict[int, DamageCandidate] = {}
         self._next_id = 1
         self._last_detections: tuple[DamageDetection, ...] = ()
@@ -106,7 +172,12 @@ class DamageEventPipeline:
         detections, _ = self.detector.detect(frame)
         self._last_detections = tuple(detections)
         evidence = self._collect_detector_evidence(detections)
-        merged = self._merge_frame_evidence(evidence)
+        tactile_boxes = [
+            detection.xyxy
+            for detection in detections
+            if detection.label == "tactile_block"
+        ]
+        merged = self._merge_frame_evidence(evidence, tactile_boxes, frame.shape)
 
         for item in merged:
             candidate = self._match_candidate(item.bbox, frame.shape, timestamp)
@@ -150,7 +221,10 @@ class DamageEventPipeline:
         ]
 
     def _merge_frame_evidence(
-        self, evidence: list[DamageEvidence]
+        self,
+        evidence: list[DamageEvidence],
+        tactile_boxes: list[BBox],
+        frame_shape: tuple[int, ...],
     ) -> list[DamageEvidence]:
         remaining = list(evidence)
         merged: list[DamageEvidence] = []
@@ -170,11 +244,20 @@ class DamageEventPipeline:
             for item in group:
                 combined_score *= 1.0 - item.score
                 sources.update(item.sources)
+            merged_bbox = _union_bbox([item.bbox for item in group])
             merged.append(
                 DamageEvidence(
-                    bbox=_union_bbox([item.bbox for item in group]),
+                    bbox=merged_bbox,
                     score=1.0 - combined_score,
                     sources=frozenset(sources),
+                    roi_selection=select_analysis_roi(
+                        damage_bbox=merged_bbox,
+                        tactile_boxes=tactile_boxes,
+                        frame_shape=frame_shape,
+                        tactile_margin_ratio=self.tactile_roi_margin_ratio,
+                        fallback_scale=self.damage_fallback_scale,
+                        relation_iou=self.tactile_relation_iou,
+                    ),
                 )
             )
         return merged
@@ -273,12 +356,70 @@ class DamageEventPipeline:
             candidate.confirmed = True
         candidate.best_score = max(candidate.best_score, evidence.score)
 
-        quality = image_quality(frame, evidence.bbox, evidence.score)
-        if quality > candidate.best_quality:
-            candidate.best_quality = quality
+        selection = evidence.roi_selection or select_analysis_roi(
+            damage_bbox=evidence.bbox,
+            tactile_boxes=[],
+            frame_shape=frame.shape,
+            tactile_margin_ratio=self.tactile_roi_margin_ratio,
+            fallback_scale=self.damage_fallback_scale,
+            relation_iou=self.tactile_relation_iou,
+        )
+        assessment = assess_frame_quality(
+            frame=frame,
+            roi_selection=selection,
+            damage_bbox=evidence.bbox,
+            confidence=evidence.score,
+            previous_center=candidate.last_roi_center,
+            previous_area=candidate.last_roi_area,
+            frame_edge_margin_px=self.frame_edge_margin_px,
+            minimum_roi_width_px=self.minimum_roi_width_px,
+            minimum_roi_height_px=self.minimum_roi_height_px,
+            minimum_roi_area_px=self.minimum_roi_area_px,
+            minimum_sharpness=self.minimum_sharpness,
+            stable_area_change_ratio=self.stable_area_change_ratio,
+            stable_center_shift_ratio=self.stable_center_shift_ratio,
+        )
+        if assessment.stable:
+            candidate.stable_observation_count += 1
+        else:
+            candidate.stable_observation_count = 0
+        verified = (
+            assessment.hard_gate_passed
+            and candidate.stable_observation_count >= self.required_stable_observations
+        )
+        candidate.last_roi_center = _bbox_center(selection.bbox)
+        candidate.last_roi_area = _bbox_area(selection.bbox)
+
+        should_replace = (
+            verified and not candidate.best_frame_quality_verified
+        ) or (
+            verified == candidate.best_frame_quality_verified
+            and assessment.score > candidate.best_available_quality
+        )
+        if should_replace:
+            candidate.best_quality = assessment.score
+            candidate.best_available_quality = assessment.score
+            candidate.best_frame_quality_verified = verified
             candidate.best_original = frame.copy()
-            candidate.best_roi = expanded_crop(frame, evidence.bbox, scale=1.5)
+            candidate.best_analysis_roi = crop_bbox(frame, selection.bbox)
             candidate.best_location = location
+            candidate.best_roi_metadata = {
+                **selection.metadata(),
+                "frame_selection_status": (
+                    "quality_gate_passed" if verified else "fallback_best_available"
+                ),
+                "frame_quality_verified": verified,
+                "frame_quality": {
+                    "score": round(assessment.score, 6),
+                    "sharpness": round(assessment.sharpness, 3),
+                    "roi_width": assessment.roi_width,
+                    "roi_height": assessment.roi_height,
+                    "roi_area": assessment.roi_area,
+                    "area_change_ratio": assessment.area_change_ratio,
+                    "center_shift_ratio": assessment.center_shift_ratio,
+                    "rejection_reasons": list(assessment.rejection_reasons),
+                },
+            }
 
     def _finalize_expired(
         self, timestamp: float, force: bool = False
@@ -301,7 +442,7 @@ class DamageEventPipeline:
             if (
                 not candidate.confirmed
                 or candidate.best_original is None
-                or candidate.best_roi is None
+                or candidate.best_analysis_roi is None
             ):
                 if expired or force:
                     candidate.ready_emitted = True
@@ -311,10 +452,11 @@ class DamageEventPipeline:
                 ReadyDamageEvent(
                     candidate_id=candidate.candidate_id,
                     original_image=candidate.best_original,
-                    tactile_roi=candidate.best_roi,
+                    analysis_roi=candidate.best_analysis_roi,
                     observation_count=len(candidate.observation_times),
                     best_score=candidate.best_score,
                     location=candidate.best_location,
+                    metadata=dict(candidate.best_roi_metadata),
                 )
             )
         # Unconfirmed expired candidates are no longer useful and have no event
@@ -329,7 +471,8 @@ class DamageEventPipeline:
 
 
 def image_quality(frame: np.ndarray, bbox: BBox, confidence: float) -> float:
-    crop = expanded_crop(frame, bbox, scale=1.0)
+    """Legacy scalar score retained for compatibility with existing callers."""
+    crop = crop_bbox(frame, bbox)
     gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
     sharpness = min(float(cv2.Laplacian(gray, cv2.CV_64F).var()) / 500.0, 1.0)
     x1, y1, x2, y2 = _clip_bbox(bbox, frame.shape[1], frame.shape[0])
@@ -345,6 +488,120 @@ def image_quality(frame: np.ndarray, bbox: BBox, confidence: float) -> float:
     return 0.35 * confidence + 0.30 * sharpness + 0.20 * size_score + 0.15 * complete
 
 
+def select_analysis_roi(
+    *,
+    damage_bbox: BBox,
+    tactile_boxes: list[BBox],
+    frame_shape: tuple[int, ...],
+    tactile_margin_ratio: float = 0.20,
+    fallback_scale: float = 1.5,
+    relation_iou: float = 0.01,
+) -> RoiSelection:
+    """Select tactile detections related to damage without assuming one box per block."""
+    related = [
+        bbox
+        for bbox in tactile_boxes
+        if _boxes_related(damage_bbox, bbox, relation_iou)
+    ]
+    if related:
+        union = _union_bbox(related)
+        roi_bbox = _expand_bbox_by_ratio(union, tactile_margin_ratio)
+        return RoiSelection(
+            bbox=_clip_bbox(roi_bbox, frame_shape[1], frame_shape[0]),
+            roi_source="tactile_block",
+            analysis_unit_hint="block_or_block_group",
+            tactile_detection_count=len(related),
+            roi_fallback_used=False,
+        )
+    return RoiSelection(
+        bbox=_clip_bbox(
+            _scale_bbox(damage_bbox, fallback_scale), frame_shape[1], frame_shape[0]
+        ),
+        roi_source="damage_fallback",
+        analysis_unit_hint="unknown",
+        tactile_detection_count=0,
+        roi_fallback_used=True,
+    )
+
+
+def assess_frame_quality(
+    *,
+    frame: np.ndarray,
+    roi_selection: RoiSelection,
+    damage_bbox: BBox,
+    confidence: float,
+    previous_center: tuple[float, float] | None,
+    previous_area: float | None,
+    frame_edge_margin_px: int,
+    minimum_roi_width_px: int,
+    minimum_roi_height_px: int,
+    minimum_roi_area_px: int,
+    minimum_sharpness: float,
+    stable_area_change_ratio: float,
+    stable_center_shift_ratio: float,
+) -> FrameQualityAssessment:
+    crop = crop_bbox(frame, roi_selection.bbox)
+    x1, y1, x2, y2 = roi_selection.bbox
+    width = max(0, int(round(x2 - x1)))
+    height = max(0, int(round(y2 - y1)))
+    area = width * height
+    sharpness = 0.0
+    if crop.size:
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    touches_edge = (
+        x1 <= frame_edge_margin_px
+        or y1 <= frame_edge_margin_px
+        or x2 >= frame.shape[1] - frame_edge_margin_px
+        or y2 >= frame.shape[0] - frame_edge_margin_px
+    )
+    reasons: list[str] = []
+    if roi_selection.roi_fallback_used:
+        reasons.append("TACTILE_RELATION_UNAVAILABLE")
+    if touches_edge:
+        reasons.append("ROI_TOUCHES_FRAME_EDGE")
+    if width < minimum_roi_width_px or height < minimum_roi_height_px:
+        reasons.append("ROI_DIMENSION_TOO_SMALL")
+    if area < minimum_roi_area_px:
+        reasons.append("ROI_AREA_TOO_SMALL")
+    if sharpness < minimum_sharpness:
+        reasons.append("ROI_NOT_SHARP")
+    if crop.size == 0:
+        reasons.append("ROI_CROP_EMPTY")
+    if not _boxes_related(damage_bbox, roi_selection.bbox, 0.0):
+        reasons.append("DAMAGE_TACTILE_RELATION_INVALID")
+
+    center = _bbox_center(roi_selection.bbox)
+    diagonal = max(float(np.hypot(frame.shape[1], frame.shape[0])), 1.0)
+    area_change = None
+    center_shift = None
+    stable = False
+    if previous_center is not None and previous_area is not None and previous_area > 0:
+        area_change = abs(area - previous_area) / previous_area
+        center_shift = float(np.hypot(center[0] - previous_center[0], center[1] - previous_center[1])) / diagonal
+        stable = (
+            area_change <= stable_area_change_ratio
+            and center_shift <= stable_center_shift_ratio
+        )
+
+    sharpness_score = min(sharpness / max(minimum_sharpness * 5.0, 1.0), 1.0)
+    size_score = min(area / max(frame.shape[0] * frame.shape[1] * 0.08, 1.0), 1.0)
+    stability_score = 1.0 if stable else 0.0
+    score = 0.35 * confidence + 0.25 * sharpness_score + 0.20 * size_score + 0.20 * stability_score
+    return FrameQualityAssessment(
+        score=score,
+        hard_gate_passed=not reasons,
+        stable=stable,
+        sharpness=sharpness,
+        roi_width=width,
+        roi_height=height,
+        roi_area=area,
+        area_change_ratio=None if area_change is None else round(area_change, 6),
+        center_shift_ratio=None if center_shift is None else round(center_shift, 6),
+        rejection_reasons=tuple(reasons),
+    )
+
+
 def _bbox_center(bbox: BBox) -> tuple[float, float]:
     x1, y1, x2, y2 = bbox
     return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
@@ -356,18 +613,58 @@ def _shift_bbox(bbox: BBox, dx: float, dy: float) -> BBox:
 
 
 def expanded_crop(frame: np.ndarray, bbox: BBox, scale: float = 1.5) -> np.ndarray:
+    return crop_bbox(frame, _scale_bbox(bbox, scale))
+
+
+def crop_bbox(frame: np.ndarray, bbox: BBox) -> np.ndarray:
+    clipped = _clip_bbox(bbox, frame.shape[1], frame.shape[0])
+    cx1, cy1, cx2, cy2 = (int(round(value)) for value in clipped)
+    return frame[cy1:cy2, cx1:cx2].copy()
+
+
+def _scale_bbox(bbox: BBox, scale: float) -> BBox:
     x1, y1, x2, y2 = bbox
     center_x = (x1 + x2) / 2.0
     center_y = (y1 + y2) / 2.0
     width = max(x2 - x1, 1.0) * scale
     height = max(y2 - y1, 1.0) * scale
-    clipped = _clip_bbox(
-        (center_x - width / 2, center_y - height / 2, center_x + width / 2, center_y + height / 2),
-        frame.shape[1],
-        frame.shape[0],
+    return (
+        center_x - width / 2,
+        center_y - height / 2,
+        center_x + width / 2,
+        center_y + height / 2,
     )
-    cx1, cy1, cx2, cy2 = (int(round(value)) for value in clipped)
-    return frame[cy1:cy2, cx1:cx2].copy()
+
+
+def _expand_bbox_by_ratio(bbox: BBox, margin_ratio: float) -> BBox:
+    x1, y1, x2, y2 = bbox
+    margin_x = max(x2 - x1, 1.0) * margin_ratio
+    margin_y = max(y2 - y1, 1.0) * margin_ratio
+    return (x1 - margin_x, y1 - margin_y, x2 + margin_x, y2 + margin_y)
+
+
+def _bbox_area(bbox: BBox) -> float:
+    return max(0.0, bbox[2] - bbox[0]) * max(0.0, bbox[3] - bbox[1])
+
+
+def _point_inside(point: tuple[float, float], bbox: BBox) -> bool:
+    return bbox[0] <= point[0] <= bbox[2] and bbox[1] <= point[1] <= bbox[3]
+
+
+def _boxes_related(damage_bbox: BBox, tactile_bbox: BBox, relation_iou: float) -> bool:
+    intersection = _intersection_area(damage_bbox, tactile_bbox)
+    return (
+        intersection > 0
+        or _iou(damage_bbox, tactile_bbox) >= relation_iou > 0
+        or _point_inside(_bbox_center(damage_bbox), tactile_bbox)
+        or _point_inside(_bbox_center(tactile_bbox), damage_bbox)
+    )
+
+
+def _intersection_area(first: BBox, second: BBox) -> float:
+    return max(0.0, min(first[2], second[2]) - max(first[0], second[0])) * max(
+        0.0, min(first[3], second[3]) - max(first[1], second[1])
+    )
 
 
 def _clip_bbox(bbox: BBox, width: int, height: int) -> BBox:

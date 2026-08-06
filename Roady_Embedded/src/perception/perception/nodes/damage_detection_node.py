@@ -43,6 +43,17 @@ class DamageDetectionNode(Node):
         self.declare_parameter("min_observation_interval_sec", 0.1)
         self.declare_parameter("candidate_timeout_sec", 1.0)
         self.declare_parameter("reported_track_cooldown_sec", 5.0)
+        self.declare_parameter("tactile_roi_margin_ratio", 0.20)
+        self.declare_parameter("damage_fallback_scale", 1.5)
+        self.declare_parameter("tactile_relation_iou", 0.01)
+        self.declare_parameter("frame_edge_margin_px", 3)
+        self.declare_parameter("minimum_roi_width_px", 32)
+        self.declare_parameter("minimum_roi_height_px", 32)
+        self.declare_parameter("minimum_roi_area_px", 1024)
+        self.declare_parameter("minimum_roi_sharpness", 10.0)
+        self.declare_parameter("stable_area_change_ratio", 0.10)
+        self.declare_parameter("stable_center_shift_ratio", 0.03)
+        self.declare_parameter("stable_observation_count", 2)
         self.declare_parameter("process_every_n_frames", 1)
         self.declare_parameter("benchmark_duration_sec", 0.0)
         self.declare_parameter(
@@ -85,6 +96,39 @@ class DamageDetectionNode(Node):
             ),
             reported_track_cooldown_sec=float(
                 self.get_parameter("reported_track_cooldown_sec").value
+            ),
+            tactile_roi_margin_ratio=float(
+                self.get_parameter("tactile_roi_margin_ratio").value
+            ),
+            damage_fallback_scale=float(
+                self.get_parameter("damage_fallback_scale").value
+            ),
+            tactile_relation_iou=float(
+                self.get_parameter("tactile_relation_iou").value
+            ),
+            frame_edge_margin_px=int(
+                self.get_parameter("frame_edge_margin_px").value
+            ),
+            minimum_roi_width_px=int(
+                self.get_parameter("minimum_roi_width_px").value
+            ),
+            minimum_roi_height_px=int(
+                self.get_parameter("minimum_roi_height_px").value
+            ),
+            minimum_roi_area_px=int(
+                self.get_parameter("minimum_roi_area_px").value
+            ),
+            minimum_sharpness=float(
+                self.get_parameter("minimum_roi_sharpness").value
+            ),
+            stable_area_change_ratio=float(
+                self.get_parameter("stable_area_change_ratio").value
+            ),
+            stable_center_shift_ratio=float(
+                self.get_parameter("stable_center_shift_ratio").value
+            ),
+            stable_observation_count=int(
+                self.get_parameter("stable_observation_count").value
             ),
         )
         self._frame_count = 0
@@ -136,9 +180,15 @@ class DamageDetectionNode(Node):
             "min_observation_interval_sec": float(
                 self.get_parameter("min_observation_interval_sec").value
             ),
-            "reported_track_cooldown_sec": float(
-                self.get_parameter("reported_track_cooldown_sec").value
-            ),
+                "reported_track_cooldown_sec": float(
+                    self.get_parameter("reported_track_cooldown_sec").value
+                ),
+                "tactile_roi_margin_ratio": float(
+                    self.get_parameter("tactile_roi_margin_ratio").value
+                ),
+                "damage_fallback_scale": float(
+                    self.get_parameter("damage_fallback_scale").value
+                ),
             "latency_scope": "camera ROS stamp to callback completion",
         }
 
@@ -288,10 +338,11 @@ class DamageDetectionNode(Node):
         )
         try:
             event = self._repository.save_event(
-                images=[ready.original_image, ready.tactile_roi],
+                images=[ready.original_image, ready.analysis_roi],
                 location=location,
                 robot_id=robot_id,
                 description=description,
+                metadata={"ai": ready.metadata},
             )
         except Exception as exc:
             self._pipeline.retry(ready.candidate_id)

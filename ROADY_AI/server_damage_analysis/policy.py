@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 
 @dataclass(frozen=True)
 class AnalysisPolicy:
-    """서비스 잠정 정책. 비율 값은 0~1 범위다."""
+    """Deprecated v1 policy whose ratio values use the 0~1 range."""
 
     normal_limit: float = 0.005
     minor_limit: float = 0.05
@@ -23,7 +27,7 @@ class AnalysisPolicy:
 
 @dataclass(frozen=True)
 class ModelQuality:
-    """고정된 검증 지표. v1의 서비스 기준 평가 결과다."""
+    """Fixed validation metrics used by the conservative quality gate."""
 
     positive_damage_dice: float = 0.08300269501207208
     damage_f2: float = 0.826086956521739
@@ -66,6 +70,7 @@ def decide_review(
     quality: ModelQuality,
     policy: AnalysisPolicy,
 ) -> list[str]:
+    """Deprecated v1 review policy retained for API compatibility."""
     reasons: list[str] = []
     if not image_quality_ok:
         reasons.append("image_quality_insufficient")
@@ -90,3 +95,75 @@ def decide_review(
     if quality.severity_macro_f1 < policy.minimum_severity_macro_f1:
         reasons.append("severity_quality_below_target")
     return list(dict.fromkeys(reasons))
+
+
+SEVERITY_ORDER = {"normal": 0, "minor": 1, "moderate": 2, "severe": 3}
+
+
+@dataclass(frozen=True)
+class SeverityDecision:
+    severity: str
+    repair_priority: str
+    repair_priority_label: str
+    reason: dict[str, Any]
+
+
+def load_severity_policy(path: str | Path | None = None) -> dict[str, Any]:
+    policy_path = Path(path) if path else Path(__file__).with_name("severity_policy.yaml")
+    with policy_path.open("r", encoding="utf-8") as file:
+        payload = yaml.safe_load(file)
+    if not isinstance(payload, dict):
+        raise ValueError("severity policy must be a YAML object")
+    return payload
+
+
+def severity_for_percent(ratio_percent: float, policy: dict[str, Any]) -> str:
+    thresholds = policy["ratio_thresholds"]
+    if ratio_percent < float(thresholds["normal_max_percent"]):
+        return "normal"
+    if ratio_percent < float(thresholds["minor_max_percent"]):
+        return "minor"
+    if ratio_percent < float(thresholds["moderate_max_percent"]):
+        return "moderate"
+    return "severe"
+
+
+def evaluate_unit_severity(
+    damage_types: dict[str, dict[str, Any]], policy: dict[str, Any]
+) -> SeverityDecision:
+    """Return the maximum subtype severity and an explicit decision reason."""
+    decisions: list[tuple[int, str, str, float | None, str]] = []
+    for damage_type, result in damage_types.items():
+        if not result.get("detected", False):
+            continue
+        ratio = result.get("ratio_percent")
+        type_policy = policy["damage_types"][damage_type]
+        floor = str(type_policy["minimum_severity"])
+        measured = severity_for_percent(float(ratio), policy) if ratio is not None else "normal"
+        severity = max((floor, measured), key=SEVERITY_ORDER.__getitem__)
+        rule = (
+            f"{damage_type}_ratio_above_{severity}_threshold"
+            if ratio is not None and SEVERITY_ORDER[measured] >= SEVERITY_ORDER[floor]
+            else f"{damage_type}_minimum_severity"
+        )
+        decisions.append((SEVERITY_ORDER[severity], severity, damage_type, ratio, rule))
+
+    if not decisions:
+        severity = "normal"
+        dominant = None
+        ratio = 0.0
+        rule = "no_damage_detected"
+    else:
+        _, severity, dominant, ratio, rule = max(decisions, key=lambda item: item[0])
+    priority, priority_label = PRIORITY_BY_SEVERITY[severity]
+    return SeverityDecision(
+        severity=severity,
+        repair_priority=priority,
+        repair_priority_label=priority_label,
+        reason={
+            "dominant_damage_type": dominant,
+            "rule": rule,
+            "measured_ratio_percent": ratio,
+            "policy_version": policy["policy"]["version"],
+        },
+    )

@@ -14,9 +14,9 @@
   ],
   "properties": {
     "damaged": { "type": "boolean" },
-    "damage_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "damage_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
     "damage_type": { "type": "null" },
-    "repair_required": { "type": "boolean" },
+    "repair_required": { "type": ["boolean", "null"] },
     "repair_priority": {
       "type": ["string", "null"],
       "enum": ["LOW", "NORMAL", "HIGH", "URGENT", null]

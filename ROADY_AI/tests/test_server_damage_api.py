@@ -8,7 +8,11 @@ from fastapi.testclient import TestClient
 
 from ROADY_AI.server_damage_analysis.api import create_app
 from ROADY_AI.server_damage_analysis.config import AppSettings
-from ROADY_AI.tests.test_server_damage_service import FakeAnalyzer, payload
+from ROADY_AI.tests.test_server_damage_service import (
+    FakeAnalyzer,
+    payload,
+    v2_unknown_missing_payload,
+)
 
 
 def test_analyze_accepts_spring_multipart_contract(tmp_path: Path):
@@ -76,6 +80,25 @@ def test_analyze_rejects_invalid_damage_id(tmp_path: Path):
 
     assert response.status_code == 422
     assert response.json()["detail"] == "damageId must be a positive integer."
+
+
+def test_analyze_keeps_not_estimable_missing_values_null(tmp_path: Path):
+    app = build_test_app(tmp_path, [v2_unknown_missing_payload()])
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/analyze",
+            data={"damageId": "42"},
+            files=[("images", ("damage.jpg", jpeg_bytes(), "image/jpeg"))],
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["damaged"] is True
+    assert body["damage_score"] is None
+    assert body["repair_required"] is None
+    assert body["analysis_detail"]["damage_ratio"] is None
+    assert body["analysis_detail"]["estimated_severity"] is None
 
 
 def build_test_app(tmp_path: Path, payloads: list[dict]):

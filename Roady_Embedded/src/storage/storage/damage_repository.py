@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import cv2
 import numpy as np
@@ -27,6 +27,7 @@ class DamageEvent:
     longitude: float
     captured_at: str
     image_paths: tuple[str, ...]
+    metadata: dict[str, Any] | None = None
 
 
 class DamageRepository:
@@ -46,6 +47,7 @@ class DamageRepository:
         robot_id: int = 1,
         description: str = "도로 균열 감지",
         captured_at: Optional[datetime] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> DamageEvent:
         if not 1 <= len(images) <= 3:
             raise ValueError("an event must contain between 1 and 3 images")
@@ -83,6 +85,7 @@ class DamageRepository:
             longitude=location.longitude,
             captured_at=now.replace(tzinfo=None).isoformat(timespec="seconds"),
             image_paths=tuple(path.name for path in image_paths),
+            metadata=metadata,
         )
         try:
             self._write_json_atomically(event_path, self.to_dict(event))
@@ -116,7 +119,7 @@ class DamageRepository:
 
     @staticmethod
     def to_dict(event: DamageEvent) -> dict:
-        return {
+        payload = {
             "eventId": event.event_id,
             "robotId": event.robot_id,
             "description": event.description,
@@ -125,6 +128,9 @@ class DamageRepository:
             "capturedAt": event.captured_at,
             "images": list(event.image_paths),
         }
+        if event.metadata is not None:
+            payload["metadata"] = event.metadata
+        return payload
 
     @staticmethod
     def to_json(event: DamageEvent) -> str:
