@@ -1598,6 +1598,177 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `analyzedAt` | string, null | 분석 일시 |
 | `createdAt` | string | 분석 작업 생성 일시 |
 
+### 10.1 비동기 이미지 분석 처리 흐름
+
+이미지 분석 작업의 큐와 상태는 Spring이 관리한다. AI 서버는 Redis와 RDB에 직접 연결하지 않고, Spring 워커가 전달한 요청 한 건을 동기 방식으로 처리한다.
+
+```text
+POST /api/damages
+  -> 파손 정보와 이미지 저장
+  -> POST /api/damages/{damageId}/analysis-jobs
+  -> Spring이 damage_ai_analysis_results에 QUEUED 작업 생성
+  -> Redis Queue 등록
+  -> Spring Worker가 작업 소비 및 PROCESSING 전환
+  -> AI Server POST /analyze 호출
+  -> 성공 시 결과 컬럼과 raw_result 저장, SUCCESS 전환
+  -> 실패 시 오류 원문을 raw_result에 저장, FAILED 전환 및 Dead Letter Queue 등록
+```
+
+`POST /api/damages`는 이미지와 파손 정보만 저장한다. 이미지 업로드만으로 AI 분석 작업이 자동 등록되지는 않으며, 업로드 응답의 `id`를 사용해 `POST /api/damages/{damageId}/analysis-jobs`를 호출해야 한다.
+
+### 10.2 내부 AI 서버 이미지 분석 API
+
+Spring 워커 전용 내부 API다. 프론트엔드와 로봇은 이 API를 직접 호출하지 않는다. Docker Compose 환경에서 Spring은 `http://ai:8000/analyze`를 사용한다.
+
+| 항목 | 내용 |
+| --- | --- |
+| Method | `POST` |
+| URL | `/analyze` |
+| 호출 주체 | Spring AI 분석 워커 |
+| Content-Type | `multipart/form-data` |
+| 응답 Content-Type | `application/json` |
+
+#### Form Data
+
+| 필드 | 타입 | 필수 | 제약 | 설명 |
+| --- | --- | --- | --- | --- |
+| `damageId` | string | 예 | 양의 정수 형식 | Spring 파손 ID |
+| `images` | file[] | 예 | 1~50개, 파일당 최대 20MB, 요청 전체 최대 200MB | 저장된 파손 이미지 목록 |
+| `latitude` | string | 아니오 | 빈 문자열 허용 | 촬영 위도. v1 분석에는 사용하지 않음 |
+| `longitude` | string | 아니오 | 빈 문자열 허용 | 촬영 경도. v1 분석에는 사용하지 않음 |
+| `capturedAt` | string | 아니오 | 빈 문자열 허용 | 촬영 일시. v1 분석에는 사용하지 않음 |
+
+```bash
+curl -X POST "http://localhost:8000/analyze" \
+  -F "damageId=1" \
+  -F "latitude=37.5665000" \
+  -F "longitude=126.9780000" \
+  -F "capturedAt=2026-08-06T13:50:00" \
+  -F "images=@damage-1.jpg" \
+  -F "images=@damage-2.jpg"
+```
+
+#### Response `200 OK`
+
+최상위 필드는 `damage_ai_analysis_results`의 구조화된 컬럼에 대응한다. `analysis_detail`은 판정 근거와 이미지별 결과이며, Spring은 응답 전체 JSON을 `raw_result`에 함께 보존한다.
+
+```json
+{
+  "damaged": true,
+  "damage_score": 45,
+  "damage_type": null,
+  "repair_required": true,
+  "repair_priority": "NORMAL",
+  "confidence_score": 0.8432,
+  "analysis_detail": {
+    "schema_version": "1.0",
+    "model": {
+      "name": "yolo26s-seg-server-v1",
+      "weights": "yolo26s_seg_v1_best.pt",
+      "weights_sha256": "97bf493309ebc45135b21b686235b5a421eeed6346596877498b2d9f9de0966f",
+      "classes": {
+        "0": "tactile_block",
+        "1": "damage"
+      }
+    },
+    "aggregation": {
+      "image_count": 2,
+      "selected_image_index": 1,
+      "strategy": "max_damage_score"
+    },
+    "damage_ratio": 0.0859,
+    "damage_ratio_percent": 8.59,
+    "estimated_severity": "moderate",
+    "estimated_severity_label": "보통 추정",
+    "review_required": true,
+    "review_reasons": [
+      "damage_mask_quality_below_target"
+    ],
+    "advisory_only": true,
+    "regions": {
+      "tactile_block": {
+        "confidence": 0.91,
+        "pixels": 125000
+      },
+      "damage": {
+        "confidence": 0.8432,
+        "pixels": 10738
+      }
+    },
+    "quality": {
+      "positive_damage_dice": 0.083,
+      "damage_f2": 0.8261,
+      "ratio_mae_pp": 6.085,
+      "severity_macro_f1": 0.2187
+    },
+    "images": [
+      {
+        "index": 0,
+        "filename": "damage-1.jpg",
+        "damaged": false,
+        "damage_score": 0,
+        "damage_ratio": 0.0,
+        "damage_ratio_percent": 0.0,
+        "estimated_severity": "normal",
+        "confidence_score": null,
+        "review_required": true
+      },
+      {
+        "index": 1,
+        "filename": "damage-2.jpg",
+        "damaged": true,
+        "damage_score": 45,
+        "damage_ratio": 0.0859,
+        "damage_ratio_percent": 8.59,
+        "estimated_severity": "moderate",
+        "confidence_score": 0.8432,
+        "review_required": true
+      }
+    ],
+    "inference_ms": 72.4
+  }
+}
+```
+
+| 필드 | 타입 | 설명 |
+| --- | --- | --- |
+| `damaged` | boolean | `damage_score > 0` 여부 |
+| `damage_score` | number | 파손 비율을 0~100으로 변환한 점수 |
+| `damage_type` | null | 현재 모델은 파손 유형을 분류하지 않으므로 항상 `null` |
+| `repair_required` | boolean | 심각도 `moderate`, `severe`이면 `true` |
+| `repair_priority` | string, null | `LOW`, `NORMAL`, `HIGH`. 정상은 `null`이며 v1은 `URGENT`를 자동 결정하지 않음 |
+| `confidence_score` | number, null | 대표 이미지의 파손 마스크 confidence. 파손이 없으면 `null` |
+| `analysis_detail` | object | 모델, 집계, 영역, 품질, 검토 사유, 이미지별 분석 결과 |
+
+여러 이미지가 전달되면 `damage_score`, 파손 비율, confidence 순으로 가장 큰 이미지를 대표 결과로 선택한다.
+
+#### 파손 점수 및 보수 정책
+
+| 파손 비율 | `damage_score` | 심각도 | `repair_required` | `repair_priority` |
+| --- | ---: | --- | --- | --- |
+| 0.5% 미만 | 0 | `normal` | `false` | `null` |
+| 0.5% 이상 5% 미만 | 1~30 선형 변환 | `minor` | `false` | `LOW` |
+| 5% 이상 15% 미만 | 31~70 선형 변환 | `moderate` | `true` | `NORMAL` |
+| 15% 이상 | 71~100 선형 변환 | `severe` | `true` | `HIGH` |
+
+#### Error
+
+| 상태 코드 | 발생 상황 | Spring 처리 |
+| --- | --- | --- |
+| `413` | 개별 이미지 또는 전체 요청 용량 초과 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
+| `415` | 빈 파일 또는 디코딩할 수 없는 이미지 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
+| `422` | 잘못된 `damageId`, 이미지 개수 오류, 점자블록 미검출 등 분석 입력 오류 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
+| `500` | 모델 추론 중 내부 오류 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
+| `503` | 모델 로딩이 완료되지 않은 상태에서 readiness 또는 모델 정보 요청 | Compose health check 실패 및 Spring 시작 대기 |
+
+### 10.3 내부 AI 서버 상태 API
+
+| Method | URL | 정상 응답 | 설명 |
+| --- | --- | --- | --- |
+| `GET` | `/health/live` | `200 {"status":"ok"}` | FastAPI 프로세스 생존 확인 |
+| `GET` | `/health/ready` | `200 {"status":"ready"}` | 모델 검증, 로딩, 워밍업 완료 확인 |
+| `GET` | `/model-info` | `200` | 모델명, 가중치, SHA-256, 클래스, device, imgsz 확인 |
+
 ## 11. 처리 상태 및 보수 API 설계
 
 ### 11.1 처리 상태
