@@ -17,13 +17,9 @@ class ObstacleCameraNode(Node):
     def __init__(self):
         super().__init__("obstacle_camera_node")
 
-        self.declare_parameter("device_index", 0)
         self.declare_parameter(
             "device_path",
-            (
-                "/dev/v4l/by-id/"
-                "usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0"
-            ),
+            "usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0",
         )
         self.declare_parameter("backend", "v4l2")
         self.declare_parameter("pixel_format", "MJPG")
@@ -43,13 +39,16 @@ class ObstacleCameraNode(Node):
         pixel_format = self.get_parameter("pixel_format").value
         topic = self.get_parameter("topic").value
         device_path = str(self.get_parameter("device_path").value)
+        if not device_path:
+            raise ValueError(
+                "device_path must contain a camera name from /dev/v4l/by-id"
+            )
 
         self._frame_id = self.get_parameter("frame_id").value
         self._worker = CameraWorker(
             CameraConfig(
                 name="obstacle_camera",
-                device_index=int(self.get_parameter("device_index").value),
-                device_path=device_path or None,
+                device_path=device_path,
                 backend=str(backend),
                 pixel_format=str(pixel_format) if pixel_format else None,
                 width=int(width) if width else None,
@@ -76,9 +75,8 @@ class ObstacleCameraNode(Node):
             stats_interval if stats_interval > 0 else 2.0,
             self._log_fps_stats,
         )
-        device = device_path or f"index {self.get_parameter('device_index').value}"
         self.get_logger().info(
-            f"Obstacle camera ({device}) publishing on {topic}"
+            f"Obstacle camera ({device_path}) publishing on {topic}"
         )
 
     def destroy_node(self):

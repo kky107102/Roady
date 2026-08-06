@@ -23,8 +23,7 @@ def generate_launch_description():
             name='tactile_camera_node',
             output='screen',
             parameters=[{
-                'device_index': 0,
-                'device_path': '',
+                'device_path': 'usb-046d_Brio_100_2515ZBA0WRC8-video-index0',
                 'width': 1280,
                 'height': 720,
                 'fps': 30,
@@ -49,14 +48,14 @@ def generate_launch_description():
                 'left_edge_extreme_ratio': 0.20,
             }],
         ),
-        # 3. 라이다 장애물 탐지 노드
-        Node(
-            package='control',
-            executable='lidar_warning_node',
-            name='lidar_warning_node',
-            condition=IfCondition(LaunchConfiguration('enable_lidar')),
-            output='screen'
-        ),
+        # # 3. 라이다 장애물 탐지 노드
+        # Node(
+        #     package='control',
+        #     executable='lidar_warning_node',
+        #     name='lidar_warning_node',
+        #     condition=IfCondition(LaunchConfiguration('enable_lidar')),
+        #     output='screen'
+        # ),
 
         # 4. 하드웨어 액추에이터 노드
         Node(

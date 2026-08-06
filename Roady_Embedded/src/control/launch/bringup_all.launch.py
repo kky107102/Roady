@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -15,6 +16,7 @@ def generate_launch_description():
     model_path = LaunchConfiguration('obstacle_model_path')
     camera_device_path = LaunchConfiguration('obstacle_camera_device_path')
     lidar_params = LaunchConfiguration('lidar_params_file')
+    enable_lidar = LaunchConfiguration('enable_lidar')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -24,15 +26,18 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'obstacle_camera_device_path',
-            default_value=(
-                '/dev/v4l/by-id/'
-                'usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0'
-            ),
-            description='Obstacle camera device path; empty uses device_index 1',
+            default_value='usb-HBVCAM_Camera_USB_Camera_HB202400001-video-index0',
+            description='Obstacle camera name under /dev/v4l/by-id',
         ),
         DeclareLaunchArgument(
             'lidar_params_file',
             default_value=os.path.join(lidar_share, 'params', 'X4-Pro.yaml'),
+        ),
+
+        DeclareLaunchArgument(
+            'enable_lidar',
+            default_value='true',
+            description='Start LiDAR driver and obstacle detector',
         ),
 
         # Tactile camera/tracing, motor, and main controller.
@@ -52,7 +57,6 @@ def generate_launch_description():
             name='obstacle_camera_node',
             output='screen',
             parameters=[{
-                'device_index': 1,
                 'device_path': camera_device_path,
                 'width': 1280,
                 'height': 720,
@@ -76,6 +80,7 @@ def generate_launch_description():
             package='ydlidar_ros2_driver',
             executable='ydlidar_ros2_driver_node',
             name='ydlidar_ros2_driver_node',
+            condition=IfCondition(enable_lidar),
             output='screen',
             emulate_tty=True,
             parameters=[lidar_params],
@@ -84,6 +89,7 @@ def generate_launch_description():
             package='control',
             executable='lidar_warning_node',
             name='lidar_warning_node',
+            condition=IfCondition(enable_lidar),
             output='screen',
             parameters=[{
                 'scan_topic': '/scan',
