@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ROADY AI Server Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "damaged",
+    "damage_score",
+    "damage_type",
+    "repair_required",
+    "repair_priority",
+    "confidence_score",
+    "analysis_detail"
+  ],
+  "properties": {
+    "damaged": { "type": "boolean" },
+    "damage_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+    "damage_type": { "type": "null" },
+    "repair_required": { "type": "boolean" },
+    "repair_priority": {
+      "type": ["string", "null"],
+      "enum": ["LOW", "NORMAL", "HIGH", "URGENT", null]
+    },
+    "confidence_score": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "analysis_detail": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "model",
+        "aggregation",
+        "damage_ratio",
+        "damage_ratio_percent",
+        "estimated_severity",
+        "estimated_severity_label",
+        "review_required",
+        "review_reasons",
+        "advisory_only",
+        "regions",
+        "quality",
+        "images",
+        "inference_ms"
+      ]
+    }
+  }
+}

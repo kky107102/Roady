@@ -1,0 +1,5 @@
+services:
+  ai:
+    gpus: all
+    environment:
+      ROADY_AI_DEVICE: "0"
