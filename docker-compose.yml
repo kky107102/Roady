@@ -68,22 +68,14 @@ services:
     env_file:
       - ./Roady_BE/.env
     environment:
-<<<<<<< Updated upstream
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-roadbuddy}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-=======
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/roadbuddy?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
->>>>>>> Stashed changes
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       MQTT_BROKER_IP: mqtt
       MQTT_BROKER_PORT: 1883
-<<<<<<< Updated upstream
       ROADY_AI_IMAGE_ANALYSIS_ENDPOINT_URL: http://ai:8000/analyze
       ROADY_AI_IMAGE_ANALYSIS_WORKER_ENABLED: ${ROADY_AI_IMAGE_ANALYSIS_WORKER_ENABLED:-true}
       ROADY_CORS_ALLOWED_ORIGINS: ${ROADY_CORS_ALLOWED_ORIGINS:-https://i15a404.p.ssafy.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost,http://127.0.0.1}
-=======
-      ROADY_CORS_ALLOWED_ORIGINS: ${ROADY_CORS_ALLOWED_ORIGINS:-https://i15a404.p.ssafy.io,http://localhost,http://127.0.0.1}
->>>>>>> Stashed changes
     ports:
       - "8081:8080"
     depends_on:
@@ -101,11 +93,7 @@ services:
     build:
       context: ./Roady_FE
       args:
-<<<<<<< Updated upstream
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
-=======
-        VITE_API_BASE_URL: /api
->>>>>>> Stashed changes
     container_name: roady-frontend
     ports:
       - "${FRONTEND_PORT:-3000}:80"
