@@ -17,14 +17,19 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 const props = defineProps<{ data: TimeSeriesResponse }>()
 
-const COLORS = {
-  total: '#5B7C9D',
-  completed: '#4F9D69',
-  totalHover: '#466987',
-  completedHover: '#3D8154',
-  grid: '#E8EDF2',
-  text: '#6B7A8D',
+function cssColor(token: string, fallback: string): string {
+  if (typeof document === 'undefined') return fallback
+  return getComputedStyle(document.documentElement).getPropertyValue(token).trim() || fallback
 }
+
+const colors = computed(() => ({
+  total: cssColor('--roady-chart-total', '#5b7c9d'),
+  completed: cssColor('--roady-chart-completed', '#4f9d69'),
+  totalHover: cssColor('--roady-chart-total-hover', '#466987'),
+  completedHover: cssColor('--roady-chart-completed-hover', '#3d8154'),
+  grid: cssColor('--roady-chart-grid', '#e8edf2'),
+  text: cssColor('--roady-chart-text', '#6b7a8d'),
+}))
 
 const chartData = computed<ChartData<'bar'>>(() => ({
   labels: props.data.items.map((item) => item.period),
@@ -32,15 +37,15 @@ const chartData = computed<ChartData<'bar'>>(() => ({
     {
       label: '전체 탐지',
       data: props.data.items.map((item) => item.totalCount),
-      backgroundColor: COLORS.total,
-      hoverBackgroundColor: COLORS.totalHover,
+      backgroundColor: colors.value.total,
+      hoverBackgroundColor: colors.value.totalHover,
       borderRadius: 2,
     },
     {
       label: '보수 완료',
       data: props.data.items.map((item) => item.repairCompletedCount),
-      backgroundColor: COLORS.completed,
-      hoverBackgroundColor: COLORS.completedHover,
+      backgroundColor: colors.value.completed,
+      hoverBackgroundColor: colors.value.completedHover,
       borderRadius: 2,
     },
   ],
@@ -58,7 +63,7 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
         boxHeight: 10,
         borderRadius: 2,
         useBorderRadius: true,
-        color: COLORS.text,
+        color: colors.value.text,
         font: { size: 12 },
         padding: 16,
       },
@@ -74,14 +79,14 @@ const chartOptions = computed<ChartOptions<'bar'>>(() => ({
   scales: {
     x: {
       grid: { display: false },
-      ticks: { color: COLORS.text, font: { size: 12 } },
+      ticks: { color: colors.value.text, font: { size: 12 } },
       border: { display: false },
     },
     y: {
       beginAtZero: true,
-      grid: { color: COLORS.grid },
+      grid: { color: colors.value.grid },
       ticks: {
-        color: COLORS.text,
+        color: colors.value.text,
         font: { size: 12 },
         precision: 0,
         callback: (value) => `${value}건`,

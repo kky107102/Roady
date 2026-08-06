@@ -1,7 +1,7 @@
 import http from './http'
 import type { UserSummary } from '@/types/auth'
 
-export interface UserListQuery {
+interface UserListQuery {
   role?: UserSummary['role']
   active?: boolean
 }

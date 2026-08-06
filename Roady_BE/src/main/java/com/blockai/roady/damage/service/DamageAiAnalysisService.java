@@ -2,6 +2,7 @@ package com.blockai.roady.damage.service;
 
 import com.blockai.roady.damage.domain.DamageAiAnalysisResult;
 import com.blockai.roady.damage.domain.DamageAiAnalysisStatus;
+import com.blockai.roady.damage.domain.DamageStatus;
 import com.blockai.roady.damage.mapper.DamageAiAnalysisResultMapper;
 import com.blockai.roady.damage.mapper.DamageMapper;
 import com.blockai.roady.damage.queue.DamageAnalysisQueue;
@@ -39,10 +40,49 @@ public class DamageAiAnalysisService {
         result.setDamageId(damageId);
         result.setAnalysisStatus(DamageAiAnalysisStatus.QUEUED);
         analysisResultMapper.insert(result);
+        updateDamageStatus(damageId, DamageStatus.AI_ANALYZING);
 
         queue.enqueue(new DamageAnalysisQueueMessage(result.getId(), damageId));
 
         return getAnalysisResult(result.getId());
+    }
+
+    @Transactional
+    public void markProcessing(Long analysisResultId) {
+        if (analysisResultMapper.markProcessing(analysisResultId) != 1) {
+            throw new IllegalArgumentException("Damage AI analysis result not found.");
+        }
+    }
+
+    @Transactional
+    public void markSucceeded(
+            Long analysisResultId,
+            Long damageId,
+            ParsedAiImageAnalysisResult parsedResult,
+            String rawResult
+    ) {
+        int updatedRows = analysisResultMapper.markSucceeded(
+                analysisResultId,
+                parsedResult.damaged(),
+                parsedResult.damageScore(),
+                parsedResult.damageType(),
+                parsedResult.repairRequired(),
+                parsedResult.repairPriority(),
+                parsedResult.confidenceScore(),
+                rawResult
+        );
+        if (updatedRows != 1) {
+            throw new IllegalArgumentException("Damage AI analysis result not found.");
+        }
+        updateDamageStatus(damageId, DamageStatus.AI_ANALYZED);
+    }
+
+    @Transactional
+    public void markFailed(Long analysisResultId, Long damageId, String rawResult) {
+        if (analysisResultMapper.markFailed(analysisResultId, rawResult) != 1) {
+            throw new IllegalArgumentException("Damage AI analysis result not found.");
+        }
+        updateDamageStatus(damageId, DamageStatus.COLLECTED);
     }
 
     @Transactional(readOnly = true)
@@ -57,5 +97,11 @@ public class DamageAiAnalysisService {
             throw new IllegalArgumentException("Damage not found.");
         }
         return analysisResultMapper.findByDamageId(damageId);
+    }
+
+    private void updateDamageStatus(Long damageId, DamageStatus status) {
+        if (damageMapper.updateStatus(damageId, status.name()) != 1) {
+            throw new IllegalArgumentException("Damage not found.");
+        }
     }
 }

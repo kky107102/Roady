@@ -16,11 +16,93 @@ export function todayLocalStr(): string {
   return localYMD(new Date())
 }
 
+interface DateTimeFormatOptions {
+  includeYear?: boolean
+  invalidValue?: 'input' | 'empty'
+}
+
+/** API 날짜·시간을 화면에서 사용하는 한국어 형식으로 변환한다. */
+export function formatKoreanDateTime(
+  value: string | null | undefined,
+  { includeYear = true, invalidValue = 'input' }: DateTimeFormatOptions = {},
+): string {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return invalidValue === 'input' ? value : '-'
+
+  return date.toLocaleString('ko-KR', {
+    ...(includeYear ? { year: 'numeric' as const } : {}),
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+}
+
+export function formatShortKoreanDateTime(value: string | null | undefined): string {
+  return formatKoreanDateTime(value, { includeYear: false })
+}
+
+export function formatKoreanDateTimeOrDash(value: string | null | undefined): string {
+  return formatKoreanDateTime(value, { invalidValue: 'empty' })
+}
+
 /** 로컬 타임존 기준 오늘로부터 offsetDays일 전 날짜를 YYYY-MM-DD 형식으로 반환 */
 export function localDateOffset(offsetDays: number): string {
   const d = new Date()
   d.setDate(d.getDate() - offsetDays)
   return localYMD(d)
+}
+
+export const DATE_RANGE_PRESETS = [
+  { label: '오늘', offset: 0 },
+  { label: '7일', offset: 6 },
+  { label: '30일', offset: 29 },
+] as const
+
+export const DEFAULT_DATE_RANGE_PRESET = 1
+export const DATE_RANGE_ORDER_ERROR = '시작일은 종료일보다 이전이어야 합니다.'
+export const ALL_DATE_RANGE_QUERY_VALUE = 'all'
+
+export function validateDateRange(from: string, to: string): string {
+  return from && to && from > to ? DATE_RANGE_ORDER_ERROR : ''
+}
+
+export function dateRangeForPreset(index: number): { from: string; to: string } {
+  const preset = DATE_RANGE_PRESETS[index] ?? DATE_RANGE_PRESETS[DEFAULT_DATE_RANGE_PRESET]
+  return { from: localDateOffset(preset.offset), to: todayLocalStr() }
+}
+
+function firstQueryString(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+export function dateRangeFromQuery(
+  query: { from?: unknown; to?: unknown; range?: unknown },
+  fallback = dateRangeForPreset(DEFAULT_DATE_RANGE_PRESET),
+): { from: string; to: string } {
+  if (firstQueryString(query.range) === ALL_DATE_RANGE_QUERY_VALUE) return { from: '', to: '' }
+  return {
+    from: firstQueryString(query.from) || fallback.from,
+    to: firstQueryString(query.to) || fallback.to,
+  }
+}
+
+export function dateRangeToQuery(from: string, to: string): Record<string, string> {
+  if (!from && !to) return { range: ALL_DATE_RANGE_QUERY_VALUE }
+  return {
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+  }
+}
+
+export function matchingDateRangePreset(from: string, to: string): number | null {
+  if (!from || !to || to !== todayLocalStr()) return null
+  const index = DATE_RANGE_PRESETS.findIndex((preset) => from === localDateOffset(preset.offset))
+  return index >= 0 ? index : null
 }
 
 /**

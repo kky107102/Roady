@@ -232,7 +232,10 @@ describe('RepairDetailView', () => {
 
     const noRepairBtn = wrapper.findAll('button').find((b) => b.text() === '보수 불필요 처리')
     await noRepairBtn!.trigger('click')
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper
+      .get('[role="alertdialog"]')
+      .findAll('button')
+      .find((b) => b.text() === '보수 불필요 처리')
     await confirmBtn!.trigger('click')
     await flushPromises()
 
@@ -313,7 +316,7 @@ describe('RepairDetailView', () => {
     await wrapper.find('[data-testid="modal-confirm"]').trigger('click')
 
     expect(wrapper.find('[data-testid="request-modal"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('해당 사건을 보수 요청 처리하시겠습니까?')
+    expect(wrapper.text()).toContain('보수 요청을 전송할까요?')
   })
 
   it('2차 확인 취소 시 다이얼로그가 닫힌다', async () => {
@@ -587,7 +590,7 @@ describe('RepairDetailView', () => {
     const cancelBtn = wrapper.findAll('button').find((b) => b.text() === '요청 취소')
     await cancelBtn!.trigger('click')
 
-    expect(wrapper.text()).toContain('보수 요청을 취소하시겠습니까?')
+    expect(wrapper.text()).toContain('보수 요청을 취소할까요?')
   })
 
   it('취소 확인 시 repairsApi.cancelRequest를 호출한다', async () => {
@@ -600,7 +603,10 @@ describe('RepairDetailView', () => {
     const cancelBtn = wrapper.findAll('button').find((b) => b.text() === '요청 취소')
     await cancelBtn!.trigger('click')
 
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper
+      .get('[role="alertdialog"]')
+      .findAll('button')
+      .find((b) => b.text() === '요청 취소')
     await confirmBtn!.trigger('click')
     await flushPromises()
 
@@ -617,7 +623,10 @@ describe('RepairDetailView', () => {
     const cancelBtn = wrapper.findAll('button').find((b) => b.text() === '요청 취소')
     await cancelBtn!.trigger('click')
 
-    const confirmBtn = wrapper.findAll('button').find((b) => b.text() === '확인')
+    const confirmBtn = wrapper
+      .get('[role="alertdialog"]')
+      .findAll('button')
+      .find((b) => b.text() === '요청 취소')
     await confirmBtn!.trigger('click')
     await flushPromises()
 

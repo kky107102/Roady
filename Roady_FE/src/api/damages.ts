@@ -19,7 +19,7 @@ export interface DamageListQuery {
   size?: number
 }
 
-export interface DamageMapMarkerQuery extends MapBounds {
+interface DamageMapMarkerQuery extends MapBounds {
   from?: string
   to?: string
   status?: DamageStatus

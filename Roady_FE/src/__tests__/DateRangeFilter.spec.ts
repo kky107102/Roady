@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import DateRangeFilter from '@/components/common/DateRangeFilter.vue'
 
 describe('DateRangeFilter', () => {
-  it('선택된 기간 프리셋을 다시 누르면 선택과 날짜 범위를 해제한다', async () => {
+  it('선택된 기간 프리셋을 다시 누르면 기간 선택을 해제한다', async () => {
     const wrapper = mount(DateRangeFilter, {
       props: {
         from: '2026-07-28',

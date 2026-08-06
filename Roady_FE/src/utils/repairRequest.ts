@@ -1,7 +1,7 @@
 import type { DamageDetail } from '@/types/damage'
 import type { BadgeType } from '@/components/common/StatusBadge.vue'
 
-export const PRIORITY_LABELS: Readonly<Record<string, string>> = {
+const PRIORITY_LABELS: Readonly<Record<string, string>> = {
   URGENT: '긴급',
   HIGH: '높음',
   NORMAL: '보통',
@@ -9,7 +9,7 @@ export const PRIORITY_LABELS: Readonly<Record<string, string>> = {
   LOW: '낮음',
 }
 
-export const PRIORITY_BADGE_TYPES: Readonly<Record<string, BadgeType>> = {
+const PRIORITY_BADGE_TYPES: Readonly<Record<string, BadgeType>> = {
   URGENT: 'danger',
   HIGH: 'warning',
   NORMAL: 'info',
@@ -17,7 +17,7 @@ export const PRIORITY_BADGE_TYPES: Readonly<Record<string, BadgeType>> = {
   LOW: 'neutral',
 }
 
-export const DAMAGE_TYPE_LABELS: Readonly<Record<string, string>> = {
+const DAMAGE_TYPE_LABELS: Readonly<Record<string, string>> = {
   LARGE_MISSING: '큰 결손',
   SMALL_MISSING: '작은 결손',
   MISSING: '큰 결손',
@@ -26,6 +26,22 @@ export const DAMAGE_TYPE_LABELS: Readonly<Record<string, string>> = {
   CRACK: '균열',
   OTHER: '기타',
 }
+
+export const REPAIR_PRIORITY_OPTIONS = ['URGENT', 'HIGH', 'NORMAL', 'LOW'].map((value) => ({
+  value,
+  label: PRIORITY_LABELS[value] ?? value,
+}))
+
+export const REPAIR_DAMAGE_TYPE_OPTIONS = [
+  'LARGE_MISSING',
+  'SMALL_MISSING',
+  'WEAR',
+  'CRACK',
+  'OTHER',
+].map((value) => ({
+  value,
+  label: DAMAGE_TYPE_LABELS[value] ?? value,
+}))
 
 export function formatCaseId(id: number, createdAt: string): string {
   const year = new Date(createdAt).getFullYear()

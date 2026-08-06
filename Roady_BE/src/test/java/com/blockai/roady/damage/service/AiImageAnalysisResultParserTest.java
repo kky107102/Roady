@@ -54,6 +54,32 @@ class AiImageAnalysisResultParserTest {
     }
 
     @Test
+    void parseReadsFastApiContractAndIgnoresAnalysisDetail() {
+        ParsedAiImageAnalysisResult result = parser.parse("""
+                {
+                  "damaged": true,
+                  "damage_score": 45,
+                  "damage_type": null,
+                  "repair_required": true,
+                  "repair_priority": "NORMAL",
+                  "confidence_score": 0.8432,
+                  "analysis_status": "COMPLETED",
+                  "analysis_detail": {
+                    "model": {"name": "yolo26s_seg_v1_best.pt"},
+                    "images": [{"damage_ratio_percent": 8.5}]
+                  }
+                }
+                """);
+
+        assertThat(result.damaged()).isTrue();
+        assertThat(result.damageScore()).isEqualTo(45);
+        assertThat(result.damageType()).isNull();
+        assertThat(result.repairRequired()).isTrue();
+        assertThat(result.repairPriority()).isEqualTo("NORMAL");
+        assertThat(result.confidenceScore()).isEqualByComparingTo(new BigDecimal("0.8432"));
+    }
+
+    @Test
     void parseNormalizesLegacyAiDamageTypes() {
         ParsedAiImageAnalysisResult missing = parser.parse("""
                 {

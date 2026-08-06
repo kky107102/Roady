@@ -70,7 +70,7 @@ function handleChange(event: Event) {
   position: absolute;
   top: 1.2rem;
   right: 1.2rem;
-  z-index: 600;
+  z-index: var(--roady-z-map-control);
   display: flex;
   align-items: center;
   gap: 0.6rem;

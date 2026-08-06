@@ -89,4 +89,29 @@ const assignedRegionName = computed(() => auth.user?.assignedRegionName?.trim() 
   font-weight: var(--krds-font-weight-bold);
   line-height: 1.4;
 }
+
+@media (max-width: 560px) {
+  .app-header {
+    height: 5.6rem;
+    gap: 1.2rem;
+    padding-inline: 1.6rem;
+  }
+
+  .page-title {
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--krds-mobile-font-size-heading-small);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .assigned-region {
+    flex-shrink: 0;
+    min-height: 4rem;
+  }
+
+  .assigned-region__name {
+    max-width: 8rem;
+  }
+}
 </style>

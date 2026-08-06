@@ -46,13 +46,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class DamageControllerTest {
 
     private DamageService damageService;
+    private DamageAiAnalysisService aiAnalysisService;
     private RobotService robotService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         damageService = mock(DamageService.class);
-        DamageAiAnalysisService aiAnalysisService = mock(DamageAiAnalysisService.class);
+        aiAnalysisService = mock(DamageAiAnalysisService.class);
         robotService = mock(RobotService.class);
         DamageController controller = new DamageController(damageService, aiAnalysisService, robotService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
@@ -114,6 +115,30 @@ class DamageControllerTest {
                 capturedAt
         ));
         when(damageService.getImageMetadata(1L)).thenReturn(List.of());
+        when(damageService.getSummary(1L)).thenReturn(new DamageSummary(
+                1L,
+                10L,
+                2L,
+                null,
+                "tactile block crack",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("37.5665000"),
+                new BigDecimal("126.9780000"),
+                capturedAt,
+                "AI_ANALYZING",
+                null,
+                null,
+                null,
+                1L,
+                capturedAt,
+                capturedAt
+        ));
 
         mockMvc.perform(multipart("/api/damages")
                         .file(image)
@@ -125,9 +150,12 @@ class DamageControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.robotId").value(10))
-                .andExpect(jsonPath("$.reportedBy").value(2));
+                .andExpect(jsonPath("$.reportedBy").value(2))
+                .andExpect(jsonPath("$.currentStatus").value("AI_ANALYZING"));
 
         verify(robotService).get(10L);
+        verify(aiAnalysisService).createAndEnqueue(1L);
+        verify(damageService).getSummary(1L);
     }
 
     @Test

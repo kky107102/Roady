@@ -4,8 +4,11 @@ import {
   formatBattery,
   formatCoordinate,
   formatDateTime,
+  isMovingAndConnected,
+  matchesRobotStatus,
   operationBadge,
 } from '@/utils/robotDisplay'
+import type { Robot } from '@/types/robot'
 
 describe('robotDisplay', () => {
   it('formats missing latest-status values safely', () => {
@@ -22,5 +25,18 @@ describe('robotDisplay', () => {
     expect(connectionBadge('DISCONNECTED')).toEqual({ label: '연결 끊김', type: 'danger' })
     expect(formatBattery(73)).toBe('73%')
     expect(formatCoordinate(37.1234567)).toBe('37.123457')
+  })
+
+  it('대시보드와 목록에서 동일한 최신 연결·운행 상태를 사용한다', () => {
+    const robot = {
+      latestStatus: { operationStatus: 'MOVING', connectionStatus: 'CONNECTED' },
+    } as Robot
+
+    expect(isMovingAndConnected(robot)).toBe(true)
+    expect(matchesRobotStatus(robot, 'MOVING', 'CONNECTED')).toBe(true)
+
+    robot.latestStatus!.connectionStatus = 'DISCONNECTED'
+    expect(isMovingAndConnected(robot)).toBe(false)
+    expect(matchesRobotStatus(robot, 'MOVING', 'CONNECTED')).toBe(false)
   })
 })

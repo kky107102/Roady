@@ -45,6 +45,10 @@ describe('RecentDamageList', () => {
     await router.push('/')
 
     const wrapper = mount(RecentDamageList, {
+      props: {
+        from: '2026-08-01',
+        to: '2026-08-05',
+      },
       global: {
         plugins: [router],
         stubs: {
@@ -58,7 +62,21 @@ describe('RecentDamageList', () => {
 
     const detailLink = wrapper.get('a[aria-label="탐지 사건 10 상세보기"]')
     expect(detailLink.attributes('href')).toBe('/damages?review=pending&damageId=10')
-    expect(mockDamagesApi.list).toHaveBeenCalledWith({ status: 'AI_ANALYZED', size: 5 })
+    expect(mockDamagesApi.list).toHaveBeenCalledWith({
+      status: 'AI_ANALYZED',
+      size: 5,
+      from: '2026-08-01T00:00:00',
+      to: '2026-08-06T00:00:00',
+    })
+
+    await wrapper.setProps({ from: '2026-07-01', to: '2026-07-31' })
+    await flushPromises()
+    expect(mockDamagesApi.list).toHaveBeenLastCalledWith({
+      status: 'AI_ANALYZED',
+      size: 5,
+      from: '2026-07-01T00:00:00',
+      to: '2026-08-01T00:00:00',
+    })
     expect(wrapper.text()).toContain('높음')
     expect(wrapper.text()).not.toContain('AI 판독')
     expect(wrapper.text()).not.toContain('AI 분석완료')

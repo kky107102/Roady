@@ -90,7 +90,7 @@ const icons: Record<ToastType, string> = {
   position: fixed;
   top: 13.6rem;
   right: 2.4rem;
-  z-index: 9000;
+  z-index: var(--roady-z-toast);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -126,7 +126,7 @@ const icons: Record<ToastType, string> = {
   padding: 1.4rem 1.6rem;
   border: 0.1rem solid rgb(15 23 42 / 10%);
   border-left-width: 0.4rem;
-  border-radius: 0.6rem;
+  border-radius: var(--roady-radius-control);
   background: var(--roady-surface-default);
   box-shadow:
     0 0.8rem 2.4rem rgb(15 23 42 / 18%),

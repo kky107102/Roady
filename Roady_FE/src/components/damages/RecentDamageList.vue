@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { damagesApi } from '@/api/damages'
 import type { DamageListItem } from '@/types/damage'
@@ -8,77 +8,89 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { reviewTabForDamage } from '@/utils/damageReview'
 import { formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
+import {
+  formatShortKoreanDateTime as formatDateTime,
+  toApiFromDateTime,
+  toApiToDateTime,
+} from '@/utils/localDate'
 
-function formatDateTime(str: string | null): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return str
-  return d.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
-}
+const props = defineProps<{
+  from?: string
+  to?: string
+  regionCode?: string
+}>()
 
 const items = ref<DamageListItem[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+let loadSequence = 0
 
 async function load() {
+  const sequence = ++loadSequence
   loading.value = true
   error.value = null
   try {
-    const res = await damagesApi.list({ status: 'AI_ANALYZED', size: 5 })
-    items.value = res.content
+    const res = await damagesApi.list({
+      status: 'AI_ANALYZED',
+      size: 5,
+      ...(props.from ? { from: toApiFromDateTime(props.from) } : {}),
+      ...(props.to ? { to: toApiToDateTime(props.to) } : {}),
+      ...(props.regionCode ? { regionCode: props.regionCode } : {}),
+    })
+    if (sequence === loadSequence) items.value = res.content
   } catch {
-    error.value = '목록을 불러오지 못했습니다.'
+    if (sequence === loadSequence) error.value = '목록을 불러오지 못했습니다.'
   } finally {
-    loading.value = false
+    if (sequence === loadSequence) loading.value = false
   }
 }
 
-onMounted(load)
+watch(() => [props.from, props.to, props.regionCode], load, { immediate: true })
 </script>
 
 <template>
   <div class="recent-damage-list">
-    <div v-if="loading" class="rdl-loading">
-      <LoadingSpinner label="최근 탐지 불러오는 중" />
+    <div class="rdl-content">
+      <div v-if="loading" class="rdl-loading">
+        <LoadingSpinner label="최근 탐지 불러오는 중" />
+      </div>
+
+      <div v-else-if="error" class="rdl-error" role="alert">
+        {{ error }}
+      </div>
+
+      <EmptyState
+        v-else-if="items.length === 0"
+        class="rdl-empty"
+        title="탐지된 사건이 없습니다"
+      />
+
+      <template v-else>
+        <ul class="rdl-items" role="list">
+          <li v-for="item in items" :key="item.id">
+            <RouterLink
+              :to="{
+                name: 'damages',
+                query: { review: reviewTabForDamage(item), damageId: String(item.id) },
+              }"
+              class="rdl-item"
+              :aria-label="`탐지 사건 ${item.id} 상세보기`"
+            >
+              <div class="rdl-item-content">
+                <p class="rdl-item-desc">{{ item.description ?? '설명 없음' }}</p>
+                <time class="rdl-item-time" :datetime="item.capturedAt ?? item.createdAt">
+                  {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
+                </time>
+              </div>
+              <StatusBadge
+                :type="priorityBadgeType(item.repairPriority)"
+                :label="formatPriorityLabel(item.repairPriority, '판단 보류')"
+              />
+            </RouterLink>
+          </li>
+        </ul>
+      </template>
     </div>
-
-    <div v-else-if="error" class="rdl-error" role="alert">
-      {{ error }}
-    </div>
-
-    <EmptyState v-else-if="items.length === 0" title="탐지된 사건이 없습니다" />
-
-    <template v-else>
-      <ul class="rdl-items" role="list">
-        <li v-for="item in items" :key="item.id">
-          <RouterLink
-            :to="{
-              name: 'damages',
-              query: { review: reviewTabForDamage(item), damageId: String(item.id) },
-            }"
-            class="rdl-item"
-            :aria-label="`탐지 사건 ${item.id} 상세보기`"
-          >
-            <div class="rdl-item-content">
-              <p class="rdl-item-desc">{{ item.description ?? '설명 없음' }}</p>
-              <time class="rdl-item-time" :datetime="item.capturedAt ?? item.createdAt">
-                {{ formatDateTime(item.capturedAt ?? item.createdAt) }}
-              </time>
-            </div>
-            <StatusBadge
-              :type="priorityBadgeType(item.repairPriority)"
-              :label="formatPriorityLabel(item.repairPriority, '판단 보류')"
-            />
-          </RouterLink>
-        </li>
-      </ul>
-    </template>
 
     <div class="rdl-footer">
       <RouterLink :to="{ name: 'damages', query: { review: 'pending' } }" class="rdl-view-all">
@@ -90,23 +102,40 @@ onMounted(load)
 
 <style scoped>
 .recent-damage-list {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.rdl-content {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  gap: 0;
   min-height: 0;
 }
 
 .rdl-loading {
   display: flex;
+  flex: 1;
+  align-items: center;
   justify-content: center;
   padding: 2rem 0;
 }
 
 .rdl-error {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
   color: var(--roady-status-danger);
   font-size: var(--krds-pc-font-size-body-small);
   padding: 1rem 0;
+}
+
+.rdl-empty {
+  flex: 1;
+  justify-content: center;
+  padding-block: 2rem;
 }
 
 .rdl-items {

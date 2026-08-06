@@ -18,10 +18,9 @@ class TactileCameraNode(Node):
     def __init__(self):
         super().__init__("tactile_camera_node")
 
-        self.declare_parameter("device_index", 2)
         self.declare_parameter(
             "device_path",
-            "/dev/v4l/by-id/usb-046d_Brio_100_2515ZBA0WRC8-video-index0",
+            "usb-046d_Brio_100_2515ZBA0WRC8-video-index0",
         )
         self.declare_parameter("backend", "v4l2")
         self.declare_parameter("pixel_format", "MJPG")
@@ -41,13 +40,16 @@ class TactileCameraNode(Node):
         pixel_format = self.get_parameter("pixel_format").value
         topic = str(self.get_parameter("topic").value)
         device_path = str(self.get_parameter("device_path").value)
+        if not device_path:
+            raise ValueError(
+                "device_path must contain a camera name from /dev/v4l/by-id"
+            )
 
         self._frame_id = str(self.get_parameter("frame_id").value)
         self._worker = CameraWorker(
             CameraConfig(
                 name="tactile_camera",
-                device_index=int(self.get_parameter("device_index").value),
-                device_path=device_path or None,
+                device_path=device_path,
                 backend=str(backend),
                 pixel_format=str(pixel_format) if pixel_format else None,
                 width=int(width) if width else None,
@@ -79,9 +81,8 @@ class TactileCameraNode(Node):
             stats_interval if stats_interval > 0 else 2.0,
             self._log_fps_stats,
         )
-        device = device_path or f"index {self.get_parameter('device_index').value}"
         self.get_logger().info(
-            f"Tactile camera ({device}) publishing on {topic}"
+            f"Tactile camera ({device_path}) publishing on {topic}"
         )
 
     def destroy_node(self):

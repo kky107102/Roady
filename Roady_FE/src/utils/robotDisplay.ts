@@ -1,4 +1,5 @@
 import type {
+  Robot,
   RobotConnectionStatus,
   RobotOperationStatus,
 } from '@/types/robot'
@@ -16,6 +17,22 @@ export const operationLabels: Record<RobotOperationStatus, string> = {
 export const connectionLabels: Record<RobotConnectionStatus, string> = {
   CONNECTED: '연결됨',
   DISCONNECTED: '연결 끊김',
+}
+
+export function matchesRobotStatus(
+  robot: Robot,
+  operation: RobotOperationStatus | 'ALL',
+  connection: RobotConnectionStatus | 'ALL',
+): boolean {
+  const latestStatus = robot.latestStatus
+  return (
+    (operation === 'ALL' || latestStatus?.operationStatus === operation) &&
+    (connection === 'ALL' || latestStatus?.connectionStatus === connection)
+  )
+}
+
+export function isMovingAndConnected(robot: Robot): boolean {
+  return matchesRobotStatus(robot, 'MOVING', 'CONNECTED')
 }
 
 export function operationBadge(status: RobotOperationStatus | null | undefined): {

@@ -1,4 +1,5 @@
 import type { DamageListItem } from '@/types/damage'
+import type { BadgeType } from '@/components/common/StatusBadge.vue'
 
 export type RepairStatusFilter = 'requested' | 'in_progress' | 'completed'
 export type RepairSort = 'priority' | 'latest' | 'oldest'
@@ -8,6 +9,27 @@ export const REPAIR_STATUS_FILTERS: readonly RepairStatusFilter[] = [
   'in_progress',
   'completed',
 ] as const
+
+export const REPAIR_FILTER_LABELS: Readonly<Record<RepairStatusFilter, string>> = {
+  requested: '요청 전',
+  in_progress: '요청 완료',
+  completed: '보수 완료',
+}
+
+const REPAIR_STATUS_INFO: Readonly<Record<string, { label: string; type: BadgeType }>> = {
+  REQUESTED: { label: REPAIR_FILTER_LABELS.requested, type: 'warning' },
+  REPAIR_IN_PROGRESS: { label: REPAIR_FILTER_LABELS.in_progress, type: 'info' },
+  REPAIR_COMPLETED: { label: REPAIR_FILTER_LABELS.completed, type: 'success' },
+  CANCELED: { label: '취소', type: 'neutral' },
+}
+
+export function repairStatusInfo(status: string | null | undefined): {
+  label: string
+  type: BadgeType
+} {
+  if (!status) return { label: '상태 없음', type: 'neutral' }
+  return REPAIR_STATUS_INFO[status] ?? { label: status, type: 'neutral' }
+}
 
 export const REPAIR_SORT_OPTIONS: { value: RepairSort; label: string }[] = [
   { value: 'priority', label: '우선순위 높은 순' },
@@ -75,7 +97,7 @@ export function parseStatusesParam(
 ): RepairStatusFilter[] {
   if (param == null) return [...REPAIR_STATUS_FILTERS]
   const raw = Array.isArray(param) ? param.join(',') : param
-  if (raw.trim() === '') return []
+  if (raw.trim() === '') return [...REPAIR_STATUS_FILTERS]
   const parsed = raw
     .split(',')
     .map((s) => STATUS_TO_FILTER[s.trim()])
@@ -83,10 +105,8 @@ export function parseStatusesParam(
   return parsed.length > 0 ? parsed : [...REPAIR_STATUS_FILTERS]
 }
 
-export function statusesToParam(
-  statuses: RepairStatusFilter[],
-): string | undefined {
-  if (statuses.length === REPAIR_STATUS_FILTERS.length) return undefined
+export function statusesToParam(statuses: RepairStatusFilter[]): string | undefined {
+  if (statuses.length === 0 || statuses.length === REPAIR_STATUS_FILTERS.length) return undefined
   return statuses.map((s) => FILTER_TO_STATUS[s]).join(',')
 }
 

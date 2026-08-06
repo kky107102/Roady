@@ -7,7 +7,7 @@ import type {
   RobotOperationStatus,
 } from '@/types/robot'
 
-export type RobotLocationStreamStatus =
+type RobotLocationStreamStatus =
   | 'idle'
   | 'connecting'
   | 'connected'

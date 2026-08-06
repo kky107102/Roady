@@ -2,12 +2,13 @@
 import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import type { DamageListItem } from '@/types/damage'
-import type { BadgeType } from '@/components/common/StatusBadge.vue'
 import StatusBadge from '@/components/common/StatusBadge.vue'
 import RepairStatusBadge from './RepairStatusBadge.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ErrorState from '@/components/common/ErrorState.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import { formatCaseId, formatPriorityLabel, priorityBadgeType } from '@/utils/repairRequest'
+import { formatKoreanDateTimeOrDash as formatDateTime } from '@/utils/localDate'
 
 const props = defineProps<{
   items: DamageListItem[]
@@ -20,51 +21,6 @@ const props = defineProps<{
 const emit = defineEmits<{ retry: [] }>()
 
 const route = useRoute()
-
-const PRIORITY_LABELS: Record<string, string> = {
-  URGENT: '긴급',
-  HIGH: '높음',
-  NORMAL: '보통',
-  MEDIUM: '보통',
-  LOW: '낮음',
-}
-
-const PRIORITY_BADGE_TYPES: Record<string, BadgeType> = {
-  URGENT: 'danger',
-  HIGH: 'warning',
-  NORMAL: 'info',
-  MEDIUM: 'info',
-  LOW: 'neutral',
-}
-
-function formatCaseId(id: number, createdAt: string): string {
-  const year = new Date(createdAt).getFullYear()
-  return `RD-${year}-${String(id).padStart(6, '0')}`
-}
-
-function formatDateTime(str: string | null | undefined): string {
-  if (!str) return '-'
-  const d = new Date(str)
-  if (isNaN(d.getTime())) return '-'
-  return new Intl.DateTimeFormat('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(d)
-}
-
-function priorityLabel(priority: string | null | undefined): string {
-  if (!priority) return '미지정'
-  return PRIORITY_LABELS[priority] ?? priority
-}
-
-function priorityType(priority: string | null | undefined): BadgeType {
-  if (!priority) return 'neutral'
-  return PRIORITY_BADGE_TYPES[priority] ?? 'neutral'
-}
 
 function detailLinkTo(item: DamageListItem) {
   return {
@@ -82,6 +38,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
     <table class="repair-table" aria-label="보수 관리 사건 목록">
       <thead>
         <tr>
+          <th class="col-number" scope="col">번호</th>
           <th class="col-priority" scope="col">우선순위</th>
           <th class="col-case-id" scope="col">사건번호</th>
           <th class="col-name" scope="col">사건명</th>
@@ -92,7 +49,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
       <tbody>
         <!-- 로딩 -->
         <tr v-if="loading" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <LoadingSpinner label="목록 불러오는 중" />
             </div>
@@ -101,7 +58,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 
         <!-- 오류 -->
         <tr v-else-if="error" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <ErrorState :message="error" @retry="emit('retry')" />
             </div>
@@ -110,7 +67,7 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 
         <!-- 빈 결과 -->
         <tr v-else-if="showEmpty" class="state-row">
-          <td colspan="5">
+          <td colspan="6">
             <div class="state-cell">
               <EmptyState
                 :title="emptyTitle ?? '조회된 사건이 없습니다'"
@@ -121,11 +78,12 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
         </tr>
 
         <!-- 데이터 행 -->
-        <tr v-else v-for="item in items" :key="item.id" class="data-row">
+        <tr v-else v-for="(item, index) in items" :key="item.id" class="data-row">
+          <td class="col-number">{{ index + 1 }}</td>
           <td class="col-priority">
             <StatusBadge
-              :type="priorityType(item.processingPriority)"
-              :label="priorityLabel(item.processingPriority)"
+              :type="priorityBadgeType(item.processingPriority)"
+              :label="formatPriorityLabel(item.processingPriority, '미지정')"
             />
           </td>
           <td class="col-case-id">
@@ -203,6 +161,13 @@ const showEmpty = computed(() => !props.loading && !props.error && props.items.l
 }
 
 /* ── 컬럼 너비 ── */
+.col-number {
+  width: 64px;
+  color: var(--roady-text-tertiary);
+  text-align: center !important;
+  white-space: nowrap;
+}
+
 .col-priority {
   width: 96px;
   flex-shrink: 0;
