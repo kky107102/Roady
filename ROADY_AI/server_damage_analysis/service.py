@@ -25,6 +25,13 @@ PRIORITY_BY_SEVERITY = {
     "severe": "HIGH",
 }
 
+SCORE_FLOOR_BY_SEVERITY = {
+    "normal": 0,
+    "minor": 1,
+    "moderate": 31,
+    "severe": 71,
+}
+
 MISSING_LARGE_THRESHOLD_PERCENT = 15.0
 
 SEVERITY_LABELS = {
@@ -227,11 +234,22 @@ class DamageAnalysisService:
             else round(max(0.0, min(float(raw_ratio_percent), 100.0)), 2)
         )
         ratio = None if ratio_percent is None else round(ratio_percent / 100, 6)
-        score = None if ratio_percent is None else calculate_damage_score(ratio_percent)
         raw_severity = summary.get("estimated_severity", analysis.get("estimated_severity"))
         severity = None if raw_severity is None else str(raw_severity)
         if severity is not None and severity not in PRIORITY_BY_SEVERITY:
             raise RuntimeError(f"Unknown estimated severity: {severity}")
+        provisional_score = (
+            None if ratio_percent is None else calculate_damage_score(ratio_percent)
+        )
+        damage_detected = self._damage_detected(
+            payload,
+            summary,
+            analysis,
+            provisional_score,
+        )
+        score = provisional_score
+        if score is None and damage_detected is True and severity is not None:
+            score = SCORE_FLOOR_BY_SEVERITY[severity]
 
         raw_confidence = payload.get("regions", {}).get("damage", {}).get("confidence")
         if raw_confidence is None:
@@ -250,7 +268,7 @@ class DamageAnalysisService:
             damage_ratio_percent=ratio_percent,
             severity=severity,
             confidence_score=confidence,
-            damage_detected=self._damage_detected(payload, summary, analysis, score),
+            damage_detected=damage_detected,
         )
 
     @staticmethod
@@ -295,7 +313,7 @@ class DamageAnalysisService:
             .get("ratio_percent")
         )
         if ratio is None:
-            return None
+            return "LARGE_MISSING"
         return (
             "LARGE_MISSING"
             if float(ratio) >= MISSING_LARGE_THRESHOLD_PERCENT

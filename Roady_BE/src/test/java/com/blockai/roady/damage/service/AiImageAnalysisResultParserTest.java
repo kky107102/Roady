@@ -130,6 +130,33 @@ class AiImageAnalysisResultParserTest {
     }
 
     @Test
+    void parseReadsConservativeDecisionWhenMissingRatioIsUnavailable() {
+        ParsedAiImageAnalysisResult result = parser.parse("""
+                {
+                  "damaged": true,
+                  "damage_score": 31,
+                  "damage_type": "LARGE_MISSING",
+                  "repair_required": true,
+                  "repair_priority": "NORMAL",
+                  "confidence_score": 0.0879,
+                  "analysis_detail": {
+                    "schema_version": "2.0",
+                    "damage_ratio_percent": null,
+                    "estimated_severity": "moderate",
+                    "review_required": true
+                  }
+                }
+                """);
+
+        assertThat(result.damaged()).isTrue();
+        assertThat(result.damageScore()).isEqualTo(31);
+        assertThat(result.damageType()).isEqualTo("LARGE_MISSING");
+        assertThat(result.repairRequired()).isTrue();
+        assertThat(result.repairPriority()).isEqualTo("NORMAL");
+        assertThat(result.confidenceScore()).isEqualByComparingTo(new BigDecimal("0.0879"));
+    }
+
+    @Test
     void parsePreservesV2UnknownDecisionAsNull() {
         ParsedAiImageAnalysisResult result = parser.parse("""
                 {

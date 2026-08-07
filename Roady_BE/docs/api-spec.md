@@ -1769,7 +1769,7 @@ curl -X POST "http://localhost:8000/analyze" \
 | --- | --- | --- |
 | `missing` | 결손 비율 15% 미만 | `SMALL_MISSING` |
 | `missing` | 결손 비율 15% 이상 | `LARGE_MISSING` |
-| `missing` | 결손 비율 계산 불가 | `null` |
+| `missing` | 결손 비율 계산 불가 | 보수적 기본값 `LARGE_MISSING` |
 | `crack` | 유효 균열 마스크 탐지 | `CRACK` |
 | `wear` | 유효 마모 마스크 탐지 | `WEAR` |
 
@@ -1783,7 +1783,8 @@ curl -X POST "http://localhost:8000/analyze" \
 | 15% 이상 | 71~100 선형 변환 | `severe` | `true` | `HIGH` |
 
 파손을 탐지했지만 비율 계산 기준 영역을 만들 수 없으면 `damaged=true`를 유지하고
-`damage_score`, `repair_required`, `repair_priority`, 심각도와 비율은 `null`로 반환한다.
+비율만 `null`로 유지한다. 판정값은 `damage_score=31`, `damage_type=LARGE_MISSING`,
+`estimated_severity=moderate`, `repair_required=true`, `repair_priority=NORMAL`을 적용한다.
 
 #### Error
 

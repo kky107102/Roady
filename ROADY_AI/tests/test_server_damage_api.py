@@ -83,7 +83,7 @@ def test_analyze_rejects_invalid_damage_id(tmp_path: Path):
     assert response.json()["detail"] == "damageId must be a positive integer."
 
 
-def test_analyze_keeps_not_estimable_missing_values_null(tmp_path: Path):
+def test_analyze_applies_conservative_defaults_when_missing_ratio_is_unavailable(tmp_path: Path):
     app = build_test_app(tmp_path, [v2_unknown_missing_payload()])
 
     with TestClient(app) as client:
@@ -96,10 +96,12 @@ def test_analyze_keeps_not_estimable_missing_values_null(tmp_path: Path):
     assert response.status_code == 200
     body = response.json()
     assert body["damaged"] is True
-    assert body["damage_score"] is None
-    assert body["repair_required"] is None
+    assert body["damage_score"] == 31
+    assert body["damage_type"] == "LARGE_MISSING"
+    assert body["repair_required"] is True
+    assert body["repair_priority"] == "NORMAL"
     assert body["analysis_detail"]["damage_ratio"] is None
-    assert body["analysis_detail"]["estimated_severity"] is None
+    assert body["analysis_detail"]["estimated_severity"] == "moderate"
 
 
 def test_analyze_passes_image_metadata_to_model(tmp_path: Path):

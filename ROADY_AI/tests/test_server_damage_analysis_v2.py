@@ -129,7 +129,7 @@ def test_missing_ratio_is_null_when_expected_region_is_unavailable():
     assert unit["damage_types"]["missing"]["ratio_percent"] is None
     assert unit["damage_types"]["missing"]["ratio_status"] == "not_estimable"
     assert unit["analysis"]["total_damage_ratio_percent"] is None
-    assert unit["analysis"]["estimated_severity"] is None
+    assert unit["analysis"]["estimated_severity"] == "moderate"
     assert unit["analysis"]["repair_priority"] == "inspection_required"
     assert unit["analysis"]["review_required"]
     assert "RATIO_NEAR_THRESHOLD" not in {
@@ -263,7 +263,7 @@ def test_summary_uses_worst_unit_and_excludes_not_estimable_from_mean():
     )
 
     assert payload["summary"]["worst_unit_id"] == "block_group_2"
-    assert payload["summary"]["estimated_severity"] is None
+    assert payload["summary"]["estimated_severity"] == "moderate"
     assert payload["summary"]["mean_damage_ratio_percent"] == 2.0
     assert payload["summary"]["not_estimable_unit_count"] == 1
     assert payload["summary"]["review_required"]

@@ -349,13 +349,13 @@ class ServerDamageAnalyzer:
                 "damage_detected": any(value["detected"] for value in damage_types.values()),
                 "total_damage_ratio_percent": None if total_ratio is None else round(total_ratio, 4),
                 "ratio_status": total_status,
-                "estimated_severity": None if missing_unknown else decision.severity,
-                "repair_priority": "inspection_required" if missing_unknown else decision.repair_priority,
-                "repair_priority_label": "담당자 검토 필요" if missing_unknown else decision.repair_priority_label,
+                "estimated_severity": decision.severity,
+                "repair_priority": decision.repair_priority,
+                "repair_priority_label": decision.repair_priority_label,
                 "severity_reason": (
                     {
                         "dominant_damage_type": "missing",
-                        "rule": "missing_ratio_not_estimable",
+                        "rule": "missing_ratio_not_estimable_default_severity",
                         "measured_ratio_percent": None,
                         "policy_version": self.policy["policy"]["version"],
                     }
@@ -412,12 +412,12 @@ class ServerDamageAnalyzer:
                 "damage_detected": True,
                 "total_damage_ratio_percent": damage_types["missing"]["ratio_percent"],
                 "ratio_status": damage_types["missing"]["ratio_status"],
-                "estimated_severity": None,
-                "repair_priority": "inspection_required",
-                "repair_priority_label": "담당자 검토 필요",
+                "estimated_severity": decision.severity,
+                "repair_priority": decision.repair_priority,
+                "repair_priority_label": decision.repair_priority_label,
                 "severity_reason": {
                     "dominant_damage_type": "missing",
-                    "rule": "missing_ratio_not_estimable",
+                    "rule": "missing_ratio_not_estimable_default_severity",
                     "measured_ratio_percent": None,
                     "policy_version": self.policy["policy"]["version"],
                 },
@@ -447,9 +447,9 @@ class ServerDamageAnalyzer:
             summary_reasons = _merge_review_reasons(units)
             summary = {
                 "damage_detected": any(unit["analysis"]["damage_detected"] for unit in units),
-                "estimated_severity": None if uncertain_units else worst["analysis"]["estimated_severity"],
-                "repair_priority": "inspection_required" if uncertain_units else worst["analysis"]["repair_priority"],
-                "repair_priority_label": "담당자 검토 필요" if uncertain_units else worst["analysis"]["repair_priority_label"],
+                "estimated_severity": worst["analysis"]["estimated_severity"],
+                "repair_priority": worst["analysis"]["repair_priority"],
+                "repair_priority_label": worst["analysis"]["repair_priority_label"],
                 "worst_unit_id": worst["local_unit_id"],
                 "dominant_damage_type": worst["analysis"]["severity_reason"]["dominant_damage_type"],
                 "max_damage_ratio_percent": max(estimable) if estimable else None,

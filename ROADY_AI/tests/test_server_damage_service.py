@@ -95,18 +95,19 @@ def test_service_returns_review_contract_without_tactile_block():
     assert response.analysis_detail.review_required is True
 
 
-def test_service_preserves_unknown_missing_as_null_instead_of_zero():
+def test_service_applies_conservative_defaults_to_unknown_missing():
     service = make_service(FakeAnalyzer([v2_unknown_missing_payload()]))
 
     response = service.analyze_images([input_image("unknown-missing.jpg")])
 
     assert response.damaged is True
-    assert response.damage_score is None
-    assert response.repair_required is None
-    assert response.repair_priority is None
+    assert response.damage_score == 31
+    assert response.damage_type == "LARGE_MISSING"
+    assert response.repair_required is True
+    assert response.repair_priority == "NORMAL"
     assert response.analysis_detail.damage_ratio is None
     assert response.analysis_detail.damage_ratio_percent is None
-    assert response.analysis_detail.estimated_severity is None
+    assert response.analysis_detail.estimated_severity == "moderate"
     assert response.analysis_detail.review_required is True
     assert response.analysis_detail.schema_version == "2.0"
 
@@ -265,6 +266,7 @@ def v2_unknown_missing_payload() -> dict:
         },
         "units": [
             {
+                "local_unit_id": "block_group_1",
                 "damage_types": {
                     "missing": {"detected": True, "confidence": 0.82},
                     "crack": {"detected": False, "confidence": None},
@@ -274,8 +276,10 @@ def v2_unknown_missing_payload() -> dict:
         ],
         "summary": {
             "damage_detected": True,
-            "estimated_severity": None,
+            "estimated_severity": "moderate",
             "repair_priority": "inspection_required",
+            "worst_unit_id": "block_group_1",
+            "dominant_damage_type": "missing",
             "max_damage_ratio_percent": None,
             "review_required": True,
             "review_reasons": reasons,
@@ -284,7 +288,7 @@ def v2_unknown_missing_payload() -> dict:
         "analysis": {
             "damage_detected": True,
             "damage_ratio_percent": None,
-            "estimated_severity": None,
+            "estimated_severity": "moderate",
             "review_required": True,
             "review_reasons": reasons,
             "advisory_only": True,

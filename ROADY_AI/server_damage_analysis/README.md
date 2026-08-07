@@ -15,7 +15,7 @@ Jira: `S15P11A404-168`
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
 분할하고, 개별 점자블록 대비 결손 면적 비율을 계산할 수 있을 때 15% 기준으로
 `SMALL_MISSING`과 `LARGE_MISSING`을 API 변환 단계에서 구분합니다. 기준 영역을 신뢰할 수 없으면
-크기를 확정하지 않고 판단 보류합니다.
+보수적으로 `LARGE_MISSING`, `damage_score=31`, `moderate` 판정을 적용하고 비율만 `null`로 유지합니다.
 
 Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear` 중 신뢰 가능한 근거를
 확정하지 못한 경우에는 `EDGE_SERVER_DISAGREEMENT` 사유와 함께 `review_required=true`로
@@ -36,7 +36,7 @@ Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear`
 
 - 균열과 마모: `type_mask ∩ tactile_unit_mask`
 - 결손: tactile 교집합을 사용하지 않습니다. 주변 개별 블록의 크기와 간격이 안정적인 경우에만 `expected_block_region`을 사용합니다.
-- expected region을 신뢰할 수 없으면 결손 비율과 심각도는 `null`, 상태는 `not_estimable`입니다. 0%나 임의 등급으로 바꾸지 않고 보수 우선순위를 `inspection_required`로 전환합니다.
+- expected region을 신뢰할 수 없으면 결손 비율은 `null`, 상태는 `not_estimable`로 유지합니다. 파손 판정은 보류하지 않고 결손 유형의 최소 심각도 `moderate`를 적용합니다.
 
 | 비율 상태 | 의미 |
 |---|---|
@@ -115,27 +115,27 @@ snake_case를 모두 허용하며 메타데이터가 없으면 기존 Spring 요
 }
 ```
 
-Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 계산 불가 결손은 `damaged=true`이지만 `damage_score`, `repair_required`, 비율, 심각도가 `null`일 수 있습니다. 백엔드 필드는 nullable 타입을 사용하며 이를 0 또는 `false`로 치환하면 안 됩니다.
+Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 계산 불가 결손도 `damaged=true`, `damage_score=31`, `damage_type=LARGE_MISSING`, `repair_required=true`, `repair_priority=NORMAL`로 저장하며 비율만 `null`로 유지합니다.
 
 `damaged`는 `damage_score > 0`이 아니라 v2 `summary.damage_detected`를 사용합니다. `missing`,
 `crack`, `wear` 중 하나라도 유효하게 탐지되면 점수가 0이어도 `true`입니다. 모델 클래스 계약이
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
-`SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환하며, 결손 크기를 계산할 수
-없으면 `null`입니다.
+`SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
+없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
 
 ```json
 {
   "damaged": true,
-  "damage_score": null,
-  "damage_type": null,
-  "repair_required": null,
-  "repair_priority": null,
+  "damage_score": 31,
+  "damage_type": "LARGE_MISSING",
+  "repair_required": true,
+  "repair_priority": "NORMAL",
   "confidence_score": 0.82,
   "analysis_detail": {
     "schema_version": "2.0",
     "damage_ratio": null,
     "damage_ratio_percent": null,
-    "estimated_severity": null,
+    "estimated_severity": "moderate",
     "review_required": true,
     "advisory_only": true
   }
