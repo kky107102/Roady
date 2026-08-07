@@ -1634,9 +1634,10 @@ Spring 워커 전용 내부 API다. 프론트엔드와 로봇은 이 API를 직�
 | --- | --- | --- | --- | --- |
 | `damageId` | string | 예 | 양의 정수 형식 | Spring 파손 ID |
 | `images` | file[] | 예 | 1~50개, 파일당 최대 20MB, 요청 전체 최대 200MB | 저장된 파손 이미지 목록 |
-| `latitude` | string | 아니오 | 빈 문자열 허용 | 촬영 위도. v1 분석에는 사용하지 않음 |
-| `longitude` | string | 아니오 | 빈 문자열 허용 | 촬영 경도. v1 분석에는 사용하지 않음 |
-| `capturedAt` | string | 아니오 | 빈 문자열 허용 | 촬영 일시. v1 분석에는 사용하지 않음 |
+| `analysisMetadata` | JSON string | 아니오 | 이미지 한 장은 객체, 여러 장은 이미지와 개수가 같은 배열 | ROI 및 Edge 분석 메타데이터 |
+| `latitude` | string | 아니오 | 빈 문자열 허용 | 촬영 위도. v2 분석에는 사용하지 않음 |
+| `longitude` | string | 아니오 | 빈 문자열 허용 | 촬영 경도. v2 분석에는 사용하지 않음 |
+| `capturedAt` | string | 아니오 | 빈 문자열 허용 | 촬영 일시. v2 분석에는 사용하지 않음 |
 
 ```bash
 curl -X POST "http://localhost:8000/analyze" \
@@ -1644,9 +1645,14 @@ curl -X POST "http://localhost:8000/analyze" \
   -F "latitude=37.5665000" \
   -F "longitude=126.9780000" \
   -F "capturedAt=2026-08-06T13:50:00" \
-  -F "images=@damage-1.jpg" \
-  -F "images=@damage-2.jpg"
+  -F 'analysisMetadata={"originalImage":"original.jpg","analysisRoi":"damage-roi.jpg","roiSource":"tactile_block","roiFallbackUsed":false,"frameQualityVerified":true,"edgeDamageCandidateDetected":true}' \
+  -F "images=@damage-roi.jpg"
 ```
+
+`analysisMetadata`는 camelCase와 snake_case를 모두 허용한다. 주요 필드는 `originalImage`,
+`analysisRoi`, `roiSource`, `roiFallbackUsed`, `frameQualityVerified`,
+`edgeDamageCandidateDetected`다. 생략하면 기존 Spring 요청과 호환되지만 품질 미검증 ROI로
+분석되어 검토 사유가 추가될 수 있다.
 
 #### Response `200 OK`
 
@@ -1655,45 +1661,70 @@ curl -X POST "http://localhost:8000/analyze" \
 ```json
 {
   "damaged": true,
-  "damage_score": 45,
-  "damage_type": null,
-  "repair_required": true,
-  "repair_priority": "NORMAL",
-  "confidence_score": 0.8432,
+  "damage_score": 0,
+  "damage_type": "CRACK",
+  "repair_required": false,
+  "repair_priority": null,
+  "confidence_score": 0.7139,
   "analysis_detail": {
-    "schema_version": "1.0",
+    "schema_version": "2.0",
     "model": {
-      "name": "yolo26s-seg-server-v1",
-      "weights": "yolo26s_seg_v1_best.pt",
-      "weights_sha256": "97bf493309ebc45135b21b686235b5a421eeed6346596877498b2d9f9de0966f",
+      "name": "yolo26s_seg_multiclass_v2_best",
+      "weights": "yolo26s_seg_multiclass_v2_best.pt",
+      "weights_sha256": "fc4446630f2f16cbb6cffa7308bf026633d3f99d1b1e71a5353d033267c5cd07",
       "classes": {
         "0": "tactile_block",
-        "1": "damage"
+        "1": "missing",
+        "2": "crack",
+        "3": "wear"
       }
     },
     "aggregation": {
-      "image_count": 2,
-      "selected_image_index": 1,
+      "image_count": 1,
+      "selected_image_index": 0,
       "strategy": "max_damage_score"
     },
-    "damage_ratio": 0.0859,
-    "damage_ratio_percent": 8.59,
-    "estimated_severity": "moderate",
-    "estimated_severity_label": "보통 추정",
+    "damage_ratio": 0.0012,
+    "damage_ratio_percent": 0.12,
+    "estimated_severity": "normal",
+    "estimated_severity_label": "정상 추정",
     "review_required": true,
     "review_reasons": [
-      "damage_mask_quality_below_target"
+      {
+        "code": "MODEL_QUALITY_GATE_NOT_MET",
+        "message": "현재 모델의 검증 성능이 자동 판정 기준을 충족하지 못했습니다."
+      }
     ],
     "advisory_only": true,
     "regions": {
       "tactile_block": {
-        "confidence": 0.91,
-        "pixels": 125000
+        "polygons": [],
+        "pixels": 73071
       },
       "damage": {
-        "confidence": 0.8432,
-        "pixels": 10738
+        "bbox_xyxy": [528, 49, 581, 137],
+        "polygons": [],
+        "pixels": 89
       }
+    },
+    "units": [
+      {
+        "local_unit_id": "block_1",
+        "analysis_unit": "block",
+        "damage_types": {
+          "missing": {"detected": false, "confidence": null, "ratio_percent": 0.0},
+          "crack": {"detected": true, "confidence": 0.7139, "ratio_percent": 0.12},
+          "wear": {"detected": false, "confidence": null, "ratio_percent": 0.0}
+        }
+      }
+    ],
+    "summary": {
+      "damage_detected": true,
+      "estimated_severity": "normal",
+      "dominant_damage_type": "crack",
+      "max_damage_ratio_percent": 0.12,
+      "review_required": true,
+      "advisory_only": true
     },
     "quality": {
       "positive_damage_dice": 0.083,
@@ -1704,43 +1735,44 @@ curl -X POST "http://localhost:8000/analyze" \
     "images": [
       {
         "index": 0,
-        "filename": "damage-1.jpg",
-        "damaged": false,
-        "damage_score": 0,
-        "damage_ratio": 0.0,
-        "damage_ratio_percent": 0.0,
-        "estimated_severity": "normal",
-        "confidence_score": null,
-        "review_required": true
-      },
-      {
-        "index": 1,
-        "filename": "damage-2.jpg",
+        "filename": "damage-roi.jpg",
         "damaged": true,
-        "damage_score": 45,
-        "damage_ratio": 0.0859,
-        "damage_ratio_percent": 8.59,
-        "estimated_severity": "moderate",
-        "confidence_score": 0.8432,
+        "damage_score": 0,
+        "damage_ratio": 0.0012,
+        "damage_ratio_percent": 0.12,
+        "estimated_severity": "normal",
+        "confidence_score": 0.7139,
         "review_required": true
       }
     ],
-    "inference_ms": 72.4
+    "inference_ms": 722.43
   }
 }
 ```
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| `damaged` | boolean | `damage_score > 0` 여부 |
-| `damage_score` | number | 파손 비율을 0~100으로 변환한 점수 |
-| `damage_type` | null | 현재 모델은 파손 유형을 분류하지 않으므로 항상 `null` |
-| `repair_required` | boolean | 심각도 `moderate`, `severe`이면 `true` |
+| `damaged` | boolean, null | v2 `summary.damage_detected`. 판단 자체가 불가능하면 `null` |
+| `damage_score` | number, null | 계산 가능한 대표 파손 비율을 0~100으로 변환한 점수 |
+| `damage_type` | string, null | `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` |
+| `repair_required` | boolean, null | 심각도 `moderate`, `severe`이면 `true`. 심각도 계산 불가는 `null` |
 | `repair_priority` | string, null | `LOW`, `NORMAL`, `HIGH`. 정상은 `null`이며 v1은 `URGENT`를 자동 결정하지 않음 |
 | `confidence_score` | number, null | 대표 이미지의 파손 마스크 confidence. 파손이 없으면 `null` |
-| `analysis_detail` | object | 모델, 집계, 영역, 품질, 검토 사유, 이미지별 분석 결과 |
+| `analysis_detail` | object | 모델, `units`, `summary`, 영역, 품질, 구조화된 검토 사유, 이미지별 결과 |
 
 여러 이미지가 전달되면 `damage_score`, 파손 비율, confidence 순으로 가장 큰 이미지를 대표 결과로 선택한다.
+
+`damaged`는 `damage_score > 0`과 독립적이다. `missing`, `crack`, `wear` 중 유효한 유형
+마스크가 하나라도 있으면 점수가 0이어도 `damaged=true`다. 모델 클래스 계약이 잘못되어 판단할
+수 없으면 `damaged=null`이다.
+
+| 모델 대표 유형 | 조건 | `damage_type` |
+| --- | --- | --- |
+| `missing` | 결손 비율 15% 미만 | `SMALL_MISSING` |
+| `missing` | 결손 비율 15% 이상 | `LARGE_MISSING` |
+| `missing` | 결손 비율 계산 불가 | `null` |
+| `crack` | 유효 균열 마스크 탐지 | `CRACK` |
+| `wear` | 유효 마모 마스크 탐지 | `WEAR` |
 
 #### 파손 점수 및 보수 정책
 
@@ -1751,15 +1783,21 @@ curl -X POST "http://localhost:8000/analyze" \
 | 5% 이상 15% 미만 | 31~70 선형 변환 | `moderate` | `true` | `NORMAL` |
 | 15% 이상 | 71~100 선형 변환 | `severe` | `true` | `HIGH` |
 
+파손을 탐지했지만 비율 계산 기준 영역을 만들 수 없으면 `damaged=true`를 유지하고
+`damage_score`, `repair_required`, `repair_priority`, 심각도와 비율은 `null`로 반환한다.
+
 #### Error
 
 | 상태 코드 | 발생 상황 | Spring 처리 |
 | --- | --- | --- |
 | `413` | 개별 이미지 또는 전체 요청 용량 초과 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
 | `415` | 빈 파일 또는 디코딩할 수 없는 이미지 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
-| `422` | 잘못된 `damageId`, 이미지 개수 오류, 점자블록 미검출 등 분석 입력 오류 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
+| `422` | 잘못된 `damageId`, 이미지 개수 오류, 잘못된 `analysisMetadata` | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
 | `500` | 모델 추론 중 내부 오류 | 분석 결과 `FAILED`, 오류 원문 저장, Dead Letter Queue 등록 |
 | `503` | 모델 로딩이 완료되지 않은 상태에서 readiness 또는 모델 정보 요청 | Compose health check 실패 및 Spring 시작 대기 |
+
+점자블록 미탐지나 모델·Edge 판정 불일치는 HTTP 오류가 아니다. `200 OK`와 함께
+`review_required=true`, 구조화된 `review_reasons`로 반환한다.
 
 ### 10.3 내부 AI 서버 상태 API
 

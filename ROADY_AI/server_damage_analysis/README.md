@@ -14,7 +14,7 @@ Jira: `S15P11A404-168`
 
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
 분할하고, 개별 점자블록 대비 결손 면적 비율을 계산할 수 있을 때 15% 기준으로
-`missing_small`과 `missing_large`를 후처리에서 구분합니다. 기준 영역을 신뢰할 수 없으면
+`SMALL_MISSING`과 `LARGE_MISSING`을 API 변환 단계에서 구분합니다. 기준 영역을 신뢰할 수 없으면
 크기를 확정하지 않고 판단 보류합니다.
 
 Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear` 중 신뢰 가능한 근거를
@@ -70,7 +70,7 @@ Edge 이벤트 JSON:
 python -m ROADY_AI.server_damage_analysis.analyze_image \
   --model /path/to/4class_best.pt \
   --event-json /path/to/pending/damage_event.json \
-  --output output --device cpu --imgsz 1024
+  --output output --device cpu --imgsz 768
 ```
 
 개별 ROI:
@@ -81,7 +81,7 @@ python -m ROADY_AI.server_damage_analysis.analyze_image \
   --image analysis_roi.jpg \
   --input-metadata input_metadata.json \
   --policy ROADY_AI/server_damage_analysis/severity_policy.yaml \
-  --output output --device cpu --imgsz 1024
+  --output output --device cpu --imgsz 768
 ```
 
 출력은 `analysis.json`, ROI 사본, Overlay, 통합 damage mask입니다. `units`와 `summary`가 v2 기준 응답이며 `regions`와 최상위 `analysis`는 deprecated 호환 필드입니다.
@@ -100,7 +100,28 @@ uvicorn ROADY_AI.server_damage_analysis.api:app \
 - `GET /health/ready`: 모델 로딩 완료 확인
 - `GET /model-info`: 실제 모델 파일명, SHA-256, 클래스 매핑 확인
 
+`POST /analyze`는 기존 `damageId`, `images` 필드와 함께 선택적인 `analysisMetadata` JSON을 받습니다.
+이미지가 한 장이면 객체 하나, 여러 장이면 이미지 순서와 개수가 같은 배열을 전달합니다. camelCase와
+snake_case를 모두 허용하며 메타데이터가 없으면 기존 Spring 요청과 동일하게 품질 미검증 ROI로 처리합니다.
+
+```json
+{
+  "originalImage": "event_001_original.jpg",
+  "analysisRoi": "event_001_analysis_roi.jpg",
+  "roiSource": "tactile_block",
+  "roiFallbackUsed": false,
+  "frameQualityVerified": true,
+  "edgeDamageCandidateDetected": true
+}
+```
+
 Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 계산 불가 결손은 `damaged=true`이지만 `damage_score`, `repair_required`, 비율, 심각도가 `null`일 수 있습니다. 백엔드 필드는 nullable 타입을 사용하며 이를 0 또는 `false`로 치환하면 안 됩니다.
+
+`damaged`는 `damage_score > 0`이 아니라 v2 `summary.damage_detected`를 사용합니다. `missing`,
+`crack`, `wear` 중 하나라도 유효하게 탐지되면 점수가 0이어도 `true`입니다. 모델 클래스 계약이
+유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
+`SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환하며, 결손 크기를 계산할 수
+없으면 `null`입니다.
 
 ```json
 {
