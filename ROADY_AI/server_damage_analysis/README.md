@@ -153,6 +153,12 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
 없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
 
+`damaged=true`이면 보류 상태가 되지 않도록 `repair_required=true`와 비어 있지 않은
+`repair_priority`를 반환합니다. 보수 우선순위는 픽셀 기반 `damage_score`에 따라 1~30은
+`LOW`, 31~70은 `NORMAL`, 71~100은 `HIGH`로 결정합니다. 모델이 비율 기반 심각도를
+확정하지 못하더라도 이 서비스 판정은 적용하며, 원본 모델 판단과 검토 사유는
+`analysis_detail.summary`에 그대로 보존합니다. `URGENT`는 자동 판정하지 않습니다.
+
 ```json
 {
   "damaged": true,

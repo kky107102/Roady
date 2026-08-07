@@ -1724,8 +1724,8 @@ curl -X POST "http://localhost:8000/analyze" \
   "damaged": true,
   "damage_score": 1,
   "damage_type": "CRACK",
-  "repair_required": false,
-  "repair_priority": null,
+  "repair_required": true,
+  "repair_priority": "LOW",
   "confidence_score": 0.7139,
   "analysis_detail": {
     "schema_version": "2.0",
@@ -1747,8 +1747,8 @@ curl -X POST "http://localhost:8000/analyze" \
     },
     "damage_ratio": 0.0012,
     "damage_ratio_percent": 0.12,
-    "estimated_severity": "normal",
-    "estimated_severity_label": "정상 추정",
+    "estimated_severity": "minor",
+    "estimated_severity_label": "경미 추정",
     "review_required": true,
     "review_reasons": [
       {
@@ -1801,7 +1801,7 @@ curl -X POST "http://localhost:8000/analyze" \
         "damage_score": 1,
         "damage_ratio": 0.0012,
         "damage_ratio_percent": 0.12,
-        "estimated_severity": "normal",
+        "estimated_severity": "minor",
         "confidence_score": 0.7139,
         "review_required": true
       }
@@ -1816,8 +1816,8 @@ curl -X POST "http://localhost:8000/analyze" \
 | `damaged` | boolean, null | v2 `summary.damage_detected`. 판단 자체가 불가능하면 `null` |
 | `damage_score` | number, null | 대표 이미지의 통합 파손 마스크 픽셀 수를 0~100으로 변환한 점수 |
 | `damage_type` | string, null | `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` |
-| `repair_required` | boolean, null | 심각도 `moderate`, `severe`이면 `true`. 심각도 계산 불가는 `null` |
-| `repair_priority` | string, null | `LOW`, `NORMAL`, `HIGH`. 정상은 `null`이며 현재 v2 정책은 `URGENT`를 자동 결정하지 않음 |
+| `repair_required` | boolean, null | `damaged=true`이면 `true`, `damaged=false`이면 `false`. 파손 판단 자체가 불가능한 경우만 `null` |
+| `repair_priority` | string, null | `damaged=true`이면 점수에 따라 `LOW`, `NORMAL`, `HIGH`. 파손이 없거나 판단 불가이면 `null`. `URGENT`는 자동 결정하지 않음 |
 | `confidence_score` | number, null | 대표 이미지의 파손 마스크 confidence. 파손이 없으면 `null` |
 | `analysis_detail` | object | 모델, `units`, `summary`, 영역, 품질, 구조화된 검토 사유, 이미지별 결과 |
 
@@ -1829,7 +1829,9 @@ curl -X POST "http://localhost:8000/analyze" \
 
 `damaged`는 `damage_score > 0`과 독립적이다. `missing`, `crack`, `wear` 중 유효한 유형
 마스크가 하나라도 있으면 `damaged=true`다. 모델 클래스 계약이 잘못되어 판단할
-수 없으면 `damaged=null`이다.
+수 없으면 `damaged=null`이다. `damaged=true`인 결과는 검토 필요 여부와 관계없이
+`repair_required=true`와 비어 있지 않은 `repair_priority`를 반환하므로 보수 우선순위가
+`보류`로 표시되지 않는다.
 
 | 모델 대표 유형 | 조건 | `damage_type` |
 | --- | --- | --- |
@@ -1852,8 +1854,11 @@ curl -X POST "http://localhost:8000/analyze" \
 점수는 점자블록 픽셀 수와 파손 비율을 사용하지 않고 `missing ∪ crack ∪ wear` 통합 마스크의
 픽셀 수만 사용한다. 기본 구간은 AI 서버 환경변수 `ROADY_AI_SCORE_MINOR_MAX_PIXELS=10000`,
 `ROADY_AI_SCORE_MODERATE_MAX_PIXELS=50000`, `ROADY_AI_SCORE_MAX_PIXELS=100000`으로 변경할 수 있다.
-심각도와 `repair_required`, `repair_priority`는 모델 정책 결과를 그대로 사용하므로 점수 구간과
-별개다. 비율 계산 기준 영역이 없어도 파손 픽셀 수가 있으면 점수는 계산된다.
+비율 계산 기준 영역이 없어도 파손 픽셀 수가 있으면 점수는 계산된다. `damaged=true`일 때
+서비스 심각도와 보수 우선순위는 점수 1~30=`minor`/`LOW`, 31~70=`moderate`/`NORMAL`,
+71~100=`severe`/`HIGH`로 결정한다. 점수까지 계산할 수 없는 양성 판정은 보수적으로
+`moderate`/`NORMAL`을 사용한다. 모델 원본 심각도와 검토 사유는 `analysis_detail.summary`에
+보존하며 `URGENT`는 자동 판정하지 않는다.
 
 #### Error
 
