@@ -102,6 +102,7 @@ class SafetyFusionNode(Node):
         reason = "lidar_obstacle" if self._lidar_detected else state.reason
         self._stop_publisher.publish(Bool(data=stop_required))
         status = {
+            "state": "STOP" if stop_required else "RELEASE",
             "stop_required": stop_required,
             "reason": reason,
             "lidar_detected": self._lidar_detected,

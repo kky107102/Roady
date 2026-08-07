@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+import json
+import time
 import cv2
 import numpy as np
 import rclpy
@@ -23,9 +25,18 @@ class TactileTracerNode(Node):
         )
 
         self.declare_parameter('image_topic', '/camera/tactile/image_raw')
+        self.declare_parameter('damage_detection_topic', '/damage/detections')
+        self.declare_parameter('damage_overlay_timeout_sec', 0.3)
         self.declare_parameter('target_edge_x_px', 750)
         self.declare_parameter('roi_top_ratio', 0.55)
         image_topic = str(self.get_parameter('image_topic').value)
+        damage_detection_topic = str(
+            self.get_parameter('damage_detection_topic').value
+        )
+        self.damage_overlay_timeout_sec = max(
+            0.0,
+            float(self.get_parameter('damage_overlay_timeout_sec').value),
+        )
         self.target_edge_x_px = int(
             self.get_parameter('target_edge_x_px').value
         )
@@ -45,6 +56,14 @@ class TactileTracerNode(Node):
             self.tracking_state_callback,
             10,
         )
+        self.damage_detection_sub = self.create_subscription(
+            String,
+            damage_detection_topic,
+            self.damage_detection_callback,
+            10,
+        )
+        self.latest_damage_detections = []
+        self.last_damage_detection_time = 0.0
 
         # 동적 ROI 적용 위한 이전 프레임 정보
         self.prev_bbox = None
@@ -62,6 +81,7 @@ class TactileTracerNode(Node):
         block_type, offset, _, leftmost_x, debug_frame = (
             self.analyze_tactile_block(frame)
         )
+        self.draw_damage_overlay(debug_frame)
 
         # 1. 블록 타입 발행 (STRAIGHT / CORNER / UNKNOWN)
         type_msg = String()
@@ -87,6 +107,56 @@ class TactileTracerNode(Node):
 
     def tracking_state_callback(self, msg: String):
         self.tracking_state = msg.data
+
+    def damage_detection_callback(self, msg: String):
+        try:
+            payload = json.loads(msg.data)
+            detections = payload.get('detections', [])
+            self.latest_damage_detections = [
+                detection
+                for detection in detections
+                if (
+                    isinstance(detection, dict)
+                    and len(detection.get('xyxy', [])) == 4
+                )
+            ]
+            self.last_damage_detection_time = time.monotonic()
+        except (json.JSONDecodeError, TypeError, ValueError):
+            self.get_logger().warn(
+                '파손 탐지 결과 메시지를 해석할 수 없습니다.',
+                throttle_duration_sec=2.0,
+            )
+
+    def draw_damage_overlay(self, debug_frame):
+        if (
+            time.monotonic() - self.last_damage_detection_time
+            > self.damage_overlay_timeout_sec
+        ):
+            return
+
+        height, width = debug_frame.shape[:2]
+        for detection in self.latest_damage_detections:
+            try:
+                x1, y1, x2, y2 = (
+                    int(round(float(value))) for value in detection['xyxy']
+                )
+                confidence = float(detection.get('confidence', 0.0))
+            except (TypeError, ValueError):
+                continue
+            x1 = max(0, min(width - 1, x1))
+            y1 = max(0, min(height - 1, y1))
+            x2 = max(0, min(width - 1, x2))
+            y2 = max(0, min(height - 1, y2))
+            cv2.rectangle(debug_frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
+            cv2.putText(
+                debug_frame,
+                f'DAMAGE {confidence:.2f}',
+                (x1, max(24, y1 - 8)),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2,
+            )
 
     def image_message_to_bgr(self, msg: Image):
         """sensor_msgs/Image를 OpenCV BGR 영상으로 변환한다."""

@@ -155,7 +155,7 @@ class PersonDamagePipelineTestNode(Node):
         )
         try:
             event = self._repository.save_event(
-                images=[ready.original_image, ready.tactile_roi],
+                images=[ready.original_image],
                 location=location,
                 robot_id=1,
                 description="TEST: person through damage pipeline",
