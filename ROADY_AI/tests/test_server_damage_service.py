@@ -158,9 +158,19 @@ def test_service_keeps_unknown_model_decision_null():
 class FakeAnalyzer:
     def __init__(self, payloads: list[dict]):
         self.payloads = iter(payloads)
+        self.received_metadata: list[dict | None] = []
 
-    def predict(self, image, *, imgsz, device, image_quality_ok=True):
+    def predict(
+        self,
+        image,
+        *,
+        imgsz,
+        device,
+        image_quality_ok=True,
+        input_metadata=None,
+    ):
         del image, imgsz, device, image_quality_ok
+        self.received_metadata.append(input_metadata)
         return next(self.payloads), np.zeros((2, 2, 3)), np.zeros((2, 2))
 
 

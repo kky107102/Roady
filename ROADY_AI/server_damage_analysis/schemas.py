@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 Severity = Literal["normal", "minor", "moderate", "severe"]
@@ -15,6 +15,57 @@ class ReviewReason(BaseModel):
 
     code: str
     message: str
+
+
+class AnalysisInputMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    original_image: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("originalImage", "original_image"),
+    )
+    analysis_roi: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("analysisRoi", "analysis_roi"),
+    )
+    roi_source: str = Field(
+        default="unknown",
+        validation_alias=AliasChoices("roiSource", "roi_source"),
+    )
+    roi_fallback_used: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("roiFallbackUsed", "roi_fallback_used"),
+    )
+    frame_quality_verified: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("frameQualityVerified", "frame_quality_verified"),
+    )
+    edge_damage_candidate_detected: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "edgeDamageCandidateDetected",
+            "edge_damage_candidate_detected",
+        ),
+    )
+    analysis_unit_hint: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("analysisUnitHint", "analysis_unit_hint"),
+    )
+    tactile_detection_count: int | None = Field(
+        default=None,
+        ge=0,
+        validation_alias=AliasChoices(
+            "tactileDetectionCount",
+            "tactile_detection_count",
+        ),
+    )
+    frame_selection_status: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "frameSelectionStatus",
+            "frame_selection_status",
+        ),
+    )
 
 
 class ModelDetail(BaseModel):

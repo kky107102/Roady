@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import cv2
@@ -101,7 +102,79 @@ def test_analyze_keeps_not_estimable_missing_values_null(tmp_path: Path):
     assert body["analysis_detail"]["estimated_severity"] is None
 
 
-def build_test_app(tmp_path: Path, payloads: list[dict]):
+def test_analyze_passes_image_metadata_to_model(tmp_path: Path):
+    analyzer = FakeAnalyzer([payload(0.0, None)])
+    app = build_test_app(tmp_path, analyzer=analyzer)
+    metadata = {
+        "originalImage": "original.jpg",
+        "roiSource": "tactile_block",
+        "roiFallbackUsed": False,
+        "frameQualityVerified": True,
+        "edgeDamageCandidateDetected": True,
+        "tactileDetectionCount": 2,
+    }
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/analyze",
+            data={
+                "damageId": "42",
+                "analysisMetadata": json.dumps(metadata),
+            },
+            files=[("images", ("roi.jpg", jpeg_bytes(), "image/jpeg"))],
+        )
+
+    assert response.status_code == 200
+    assert analyzer.received_metadata == [
+        {
+            "original_image": "original.jpg",
+            "analysis_roi": "roi.jpg",
+            "roi_source": "tactile_block",
+            "roi_fallback_used": False,
+            "frame_quality_verified": True,
+            "edge_damage_candidate_detected": True,
+            "tactile_detection_count": 2,
+        }
+    ]
+
+
+def test_analyze_rejects_invalid_analysis_metadata_json(tmp_path: Path):
+    app = build_test_app(tmp_path, [payload(0.0, None)])
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/analyze",
+            data={"damageId": "42", "analysisMetadata": "not-json"},
+            files=[("images", ("roi.jpg", jpeg_bytes(), "image/jpeg"))],
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "analysisMetadata must be valid JSON."
+
+
+def test_analyze_rejects_metadata_count_mismatch(tmp_path: Path):
+    app = build_test_app(tmp_path, [payload(0.0, None), payload(0.0, None)])
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/analyze",
+            data={"damageId": "42", "analysisMetadata": "{}"},
+            files=[
+                ("images", ("roi-1.jpg", jpeg_bytes(), "image/jpeg")),
+                ("images", ("roi-2.jpg", jpeg_bytes(), "image/jpeg")),
+            ],
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "analysisMetadata count must match images count."
+
+
+def build_test_app(
+    tmp_path: Path,
+    payloads: list[dict] | None = None,
+    *,
+    analyzer: FakeAnalyzer | None = None,
+):
     model_path = tmp_path / "model.pt"
     sha_path = tmp_path / "model.sha256"
     model_path.write_bytes(b"fake-model")
@@ -112,7 +185,8 @@ def build_test_app(tmp_path: Path, payloads: list[dict]):
         verify_model_hash=False,
         warmup_enabled=False,
     )
-    return create_app(settings, analyzer_factory=lambda _: FakeAnalyzer(payloads))
+    selected_analyzer = analyzer or FakeAnalyzer(payloads or [])
+    return create_app(settings, analyzer_factory=lambda _: selected_analyzer)
 
 
 def jpeg_bytes() -> bytes:

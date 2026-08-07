@@ -43,6 +43,7 @@ class Analyzer(Protocol):
         imgsz: int,
         device: str | int,
         image_quality_ok: bool = True,
+        input_metadata: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], np.ndarray, np.ndarray]: ...
 
 
@@ -54,6 +55,7 @@ class AnalysisInputError(ValueError):
 class InputImage:
     filename: str
     image: np.ndarray
+    input_metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -210,6 +212,7 @@ class DamageAnalysisService:
             item.image,
             imgsz=self.imgsz,
             device=self.device,
+            input_metadata=item.input_metadata,
         )
         analysis = payload["analysis"]
         summary = payload.get("summary", analysis)
