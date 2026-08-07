@@ -11,7 +11,7 @@ class ImageUploadNode(Node):
     def __init__(self):
         super().__init__("image_upload_node")
 
-        self.declare_parameter("base_url", "http://localhost:8080")
+        self.declare_parameter("base_url", "https://i15a404.p.ssafy.io")
         self.declare_parameter("access_token", "")
         self.declare_parameter("storage_dir", "data/damage_events")
         self.declare_parameter("upload_interval_sec", 10.0)
@@ -34,8 +34,14 @@ class ImageUploadNode(Node):
         for event_path in self._repository.list_pending_events():
             event = self._repository.load_event_file(event_path)
 
-            image_paths = self._repository.resolve_image_paths(event)
-            if not image_paths or not all(path.exists() for path in image_paths):
+            local_image_paths = self._repository.resolve_image_paths(event)
+            upload_image_paths = self._repository.resolve_upload_image_paths(event)
+            if (
+                not local_image_paths
+                or not all(path.exists() for path in local_image_paths)
+                or not upload_image_paths
+                or not all(path.exists() for path in upload_image_paths)
+            ):
                 self.get_logger().warn(f"Skipping event without image: {event_path}")
                 continue
 
@@ -46,7 +52,7 @@ class ImageUploadNode(Node):
                     latitude=float(event["latitude"]),
                     longitude=float(event["longitude"]),
                     captured_at=str(event["capturedAt"]),
-                    image_paths=image_paths,
+                    image_paths=upload_image_paths,
                 )
             except Exception as exc:
                 self.get_logger().warn(f"Failed to upload {event_path.name}: {exc}")

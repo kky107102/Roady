@@ -28,6 +28,7 @@ class DamageEvent:
     captured_at: str
     image_paths: tuple[str, ...]
     metadata: dict[str, Any] | None = None
+    upload_image_paths: Optional[tuple[str, ...]] = None
 
 
 class DamageRepository:
@@ -48,6 +49,7 @@ class DamageRepository:
         description: str = "도로 균열 감지",
         captured_at: Optional[datetime] = None,
         metadata: dict[str, Any] | None = None,
+        upload_image_indices: Optional[Sequence[int]] = None,
     ) -> DamageEvent:
         if not 1 <= len(images) <= 3:
             raise ValueError("an event must contain between 1 and 3 images")
@@ -61,6 +63,13 @@ class DamageRepository:
             raise ValueError("latitude must be between -90 and 90")
         if not -180.0 <= location.longitude <= 180.0:
             raise ValueError("longitude must be between -180 and 180")
+        if upload_image_indices is not None:
+            if not upload_image_indices:
+                raise ValueError("at least one upload image must be selected")
+            if len(set(upload_image_indices)) != len(upload_image_indices):
+                raise ValueError("upload image indices must be unique")
+            if any(index < 0 or index >= len(images) for index in upload_image_indices):
+                raise ValueError("upload image index is out of range")
 
         now = captured_at or datetime.now().astimezone()
         if now.tzinfo is None:
@@ -86,6 +95,11 @@ class DamageRepository:
             captured_at=now.replace(tzinfo=None).isoformat(timespec="seconds"),
             image_paths=tuple(path.name for path in image_paths),
             metadata=metadata,
+            upload_image_paths=(
+                tuple(image_paths[index].name for index in upload_image_indices)
+                if upload_image_indices is not None
+                else None
+            ),
         )
         try:
             self._write_json_atomically(event_path, self.to_dict(event))
@@ -104,6 +118,13 @@ class DamageRepository:
 
     def resolve_image_paths(self, event: dict) -> list[Path]:
         return [self._resolve_image_name(name) for name in event.get("images", [])]
+
+    def resolve_upload_image_paths(self, event: dict) -> list[Path]:
+        # Production events store [representative original, expanded ROI].
+        # Upload only the first image so queued events created under an older
+        # upload policy also send the original camera frame rather than the ROI.
+        image_paths = self.resolve_image_paths(event)
+        return image_paths[:1]
 
     def delete_event(self, event_path: str | Path) -> None:
         path = Path(event_path)
@@ -130,6 +151,8 @@ class DamageRepository:
         }
         if event.metadata is not None:
             payload["metadata"] = event.metadata
+        if event.upload_image_paths is not None:
+            payload["uploadImages"] = list(event.upload_image_paths)
         return payload
 
     @staticmethod
