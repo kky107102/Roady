@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -9,6 +11,20 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+
+
+def _default_damage_model_path():
+    relative_path = Path(
+        'artifacts/tactile_damage_candidate/'
+        'tactile_damage_candidate_yolo26n_best.engine'
+    )
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / relative_path
+        if candidate.is_file():
+            return str(candidate)
+    return str(relative_path)
+
 
 
 def generate_launch_description():
@@ -17,6 +33,7 @@ def generate_launch_description():
         executable='main_control_node',
         name='main_control_node',
         output='screen',
+        condition=IfCondition(LaunchConfiguration('start_drive')),
         parameters=[{
             'drive_speed': 0.4,
             'reverse_speed': 0.4,
@@ -64,6 +81,31 @@ def generate_launch_description():
                 'Shut down the complete launch when main control exits'
             ),
         ),
+        DeclareLaunchArgument(
+            'start_damage_detection',
+            default_value='true',
+            description='Start damage detection on the tactile camera stream',
+        ),
+        DeclareLaunchArgument(
+            'damage_model_path',
+            default_value=_default_damage_model_path(),
+            description='TensorRT engine used by damage_detection_node',
+        ),
+        DeclareLaunchArgument(
+            'damage_process_every_n_frames',
+            default_value='6',
+            description='Run damage inference every N tactile-camera frames',
+        ),
+        DeclareLaunchArgument(
+            'start_line_tracking',
+            default_value='true',
+            description='Start tactile_tracer_node',
+        ),
+        DeclareLaunchArgument(
+            'start_drive',
+            default_value='true',
+            description='Start motor_node and main_control_node',
+        ),
         # 1. 점자블록 인식용 카메라 노드
         Node(
             package='hardware',
@@ -86,10 +128,44 @@ def generate_launch_description():
             executable='tactile_tracer_node',
             name='tactile_tracer_node',
             output='screen',
+            condition=IfCondition(LaunchConfiguration('start_line_tracking')),
             parameters=[{
                 'image_topic': '/camera/tactile/image_raw',
+                'damage_detection_topic': '/damage/detections',
+                'damage_overlay_timeout_sec': 0.3,
                 'target_edge_x_px': 750,
                 'roi_top_ratio': 0.55,
+            }],
+        ),
+        # 3. 촉각 카메라 파손 탐지 노드
+        Node(
+            package='perception',
+            executable='damage_detection_node',
+            name='damage_detection_node',
+            output='screen',
+            condition=IfCondition(
+                LaunchConfiguration('start_damage_detection')
+            ),
+            parameters=[{
+                'image_topic': '/camera/tactile/image_raw',
+                'detection_topic': '/damage/detections',
+                'location_topic': '/location/fix',
+                'detect_model_path': LaunchConfiguration('damage_model_path'),
+                'inference_device': '0',
+                'inference_image_size': 768,
+                'detection_threshold': 0.15,
+                'process_every_n_frames': ParameterValue(
+                    LaunchConfiguration('damage_process_every_n_frames'),
+                    value_type=int,
+                ),
+                'publish_annotated': False,
+                'detection_only_mode': False,
+                'confirm_count': 3,
+                'confirm_window_sec': 2.0,
+                'min_confirm_duration_sec': 0.4,
+                'min_observation_interval_sec': 0.1,
+                'candidate_timeout_sec': 1.2,
+                'reported_track_cooldown_sec': 5.0,
             }],
         ),
         # # 3. 라이다 장애물 탐지 노드
@@ -106,7 +182,8 @@ def generate_launch_description():
             package='control',
             executable='motor_node',
             name='motor_node',
-            output='screen'
+            output='screen',
+            condition=IfCondition(LaunchConfiguration('start_drive')),
         ),
         # 5. 자율주행 판단 및 자동 출발 메인 노드
         main_control_node,
