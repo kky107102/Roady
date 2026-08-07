@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool
 
 from communication.clients.http_client import DamageHttpClient
 from storage.damage_repository import DamageRepository
@@ -16,6 +18,7 @@ class ImageUploadNode(Node):
         self.declare_parameter("storage_dir", "data/damage_events")
         self.declare_parameter("upload_interval_sec", 10.0)
         self.declare_parameter("upload_enabled", False)
+        self.declare_parameter("arrival_topic", "/driving/finished")
 
         self._repository = DamageRepository(str(self.get_parameter("storage_dir").value))
         self._client = DamageHttpClient(
@@ -23,12 +26,40 @@ class ImageUploadNode(Node):
             access_token=str(self.get_parameter("access_token").value) or None,
         )
 
+        self._arrival_active = False
+        arrival_qos = QoSProfile(depth=1)
+        arrival_qos.reliability = ReliabilityPolicy.RELIABLE
+        arrival_qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
+        self._arrival_subscription = self.create_subscription(
+            Bool,
+            str(self.get_parameter("arrival_topic").value),
+            self._on_arrival,
+            arrival_qos,
+        )
+
         interval = float(self.get_parameter("upload_interval_sec").value)
         self._timer = self.create_timer(max(interval, 1.0), self._upload_pending_events)
-        self.get_logger().info("Image upload node ready. Set upload_enabled:=true to send events.")
+        self.get_logger().info(
+            "Image upload node ready. Pending events will be uploaded after "
+            f"arrival on {self.get_parameter('arrival_topic').value}."
+        )
+
+    def _on_arrival(self, msg: Bool) -> None:
+        if not msg.data:
+            self._arrival_active = False
+            return
+        if self._arrival_active:
+            return
+
+        self._arrival_active = True
+        self.get_logger().info("Station arrival received; uploading pending events.")
+        self._upload_pending_events()
 
     def _upload_pending_events(self) -> None:
-        if not bool(self.get_parameter("upload_enabled").value):
+        if (
+            not self._arrival_active
+            or not bool(self.get_parameter("upload_enabled").value)
+        ):
             return
 
         for event_path in self._repository.list_pending_events():

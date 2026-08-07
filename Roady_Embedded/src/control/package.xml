@@ -12,6 +12,7 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <exec_depend>hardware</exec_depend>
+  <exec_depend>communication</exec_depend>
   <exec_depend>perception</exec_depend>
   <exec_depend>ydlidar_ros2_driver</exec_depend>
   <exec_depend>ament_index_python</exec_depend>

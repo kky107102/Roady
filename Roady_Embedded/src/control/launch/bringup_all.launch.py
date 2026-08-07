@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -24,6 +25,10 @@ def generate_launch_description():
     )
     start_line_tracking = LaunchConfiguration('start_line_tracking')
     start_drive = LaunchConfiguration('start_drive')
+    start_image_upload = LaunchConfiguration('start_image_upload')
+    upload_enabled = LaunchConfiguration('upload_enabled')
+    upload_base_url = LaunchConfiguration('upload_base_url')
+    upload_access_token = LaunchConfiguration('upload_access_token')
     obstacle_roi_left_ratio = LaunchConfiguration('obstacle_roi_left_ratio')
     obstacle_roi_top_ratio = LaunchConfiguration('obstacle_roi_top_ratio')
     obstacle_roi_right_ratio = LaunchConfiguration('obstacle_roi_right_ratio')
@@ -83,6 +88,26 @@ def generate_launch_description():
             default_value='true',
             description='Start motor_node and main_control_node',
         ),
+        DeclareLaunchArgument(
+            'start_image_upload',
+            default_value='true',
+            description='Start arrival-triggered damage event uploader',
+        ),
+        DeclareLaunchArgument(
+            'upload_enabled',
+            default_value='false',
+            description='Allow pending damage events to be sent over HTTP',
+        ),
+        DeclareLaunchArgument(
+            'upload_base_url',
+            default_value='https://i15a404.p.ssafy.io',
+            description='Damage event API base URL',
+        ),
+        DeclareLaunchArgument(
+            'upload_access_token',
+            default_value='',
+            description='Optional bearer token for the damage event API',
+        ),
         DeclareLaunchArgument('obstacle_roi_left_ratio', default_value='0.40'),
         DeclareLaunchArgument('obstacle_roi_top_ratio', default_value='0.05'),
         DeclareLaunchArgument('obstacle_roi_right_ratio', default_value='0.60'),
@@ -117,7 +142,10 @@ def generate_launch_description():
             launch_arguments={
                 'obstacle_stop_topic': '/emergency_stop',
                 'enable_lidar': 'false',
-                'shutdown_on_main_exit': 'true',
+                # Keep the launch alive after arrival so the HTTP uploader can
+                # finish sending queued events. The controller publishes zero
+                # velocity before it exits.
+                'shutdown_on_main_exit': 'false',
                 'start_damage_detection': start_damage_detection,
                 'damage_model_path': damage_model_path,
                 'damage_process_every_n_frames': (
@@ -193,6 +221,23 @@ def generate_launch_description():
                 'lidar_detection_topic': '/obstacle/lidar_detected',
                 'stop_topic': '/emergency_stop',
                 'stop_on_camera_timeout': True,
+            }],
+        ),
+        Node(
+            package='communication',
+            executable='image_upload_node',
+            name='image_upload_node',
+            condition=IfCondition(start_image_upload),
+            output='screen',
+            parameters=[{
+                'arrival_topic': '/driving/finished',
+                'upload_enabled': ParameterValue(
+                    upload_enabled,
+                    value_type=bool,
+                ),
+                'base_url': upload_base_url,
+                'access_token': upload_access_token,
+                'storage_dir': 'data/damage_events',
             }],
         ),
     ])
