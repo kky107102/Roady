@@ -35,7 +35,6 @@
 
   <rect width="2500" height="1550" fill="#f7f9fc"/>
   <text x="50" y="52" class="title">Roady 백엔드 구현 ERD</text>
-  <text x="50" y="82" class="subtitle">현재 schema.sql 기준 · 파손 데이터, 로봇 관제, AI 분석 결과, 보수 요청 이력</text>
   <line x1="50" y1="105" x2="2450" y2="105" stroke="#d9e2ec" stroke-width="2"/>
 
   <!-- Relationship layer is drawn before table cards. Solid lines are required FK relations;
@@ -236,14 +235,6 @@
     <text class="field" x="18" y="214">before_status / after_status</text><text class="field-type" x="400" y="214">VARCHAR(30)</text>
     <text class="field" x="18" y="240">note</text><text class="field-type" x="400" y="240">VARCHAR(1000) NULL</text>
     <text class="field" x="18" y="266">requested_at</text><text class="field-type" x="400" y="266">DATETIME(6)</text>
-  </g>
-
-  <g transform="translate(1700 1120)">
-    <rect class="note" width="700" height="150"/>
-    <text class="note-title" x="22" y="32">후속 설계안</text>
-    <text class="note-text" x="22" y="62">repair_assignments는 현재 schema.sql과 구현 ERD에 포함하지 않습니다.</text>
-    <text class="note-text" x="22" y="87">현재 보수 담당자·완료 정보는 damages에 저장하고,</text>
-    <text class="note-text" x="22" y="112">요청·수정·완료·취소 이력은 repair_request_histories에 누적합니다.</text>
   </g>
 
   <g transform="translate(50 1450)">
