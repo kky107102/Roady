@@ -130,11 +130,11 @@ class AiImageAnalysisResultParserTest {
     }
 
     @Test
-    void parseReadsConservativeDecisionWhenMissingRatioIsUnavailable() {
+    void parseReadsPixelBasedScoreWhenMissingRatioIsUnavailable() {
         ParsedAiImageAnalysisResult result = parser.parse("""
                 {
                   "damaged": true,
-                  "damage_score": 31,
+                  "damage_score": 40,
                   "damage_type": "LARGE_MISSING",
                   "repair_required": true,
                   "repair_priority": "NORMAL",
@@ -149,7 +149,7 @@ class AiImageAnalysisResultParserTest {
                 """);
 
         assertThat(result.damaged()).isTrue();
-        assertThat(result.damageScore()).isEqualTo(31);
+        assertThat(result.damageScore()).isEqualTo(40);
         assertThat(result.damageType()).isEqualTo("LARGE_MISSING");
         assertThat(result.repairRequired()).isTrue();
         assertThat(result.repairPriority()).isEqualTo("NORMAL");

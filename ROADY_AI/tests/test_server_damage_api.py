@@ -17,7 +17,10 @@ from ROADY_AI.tests.test_server_damage_service import (
 
 
 def test_analyze_accepts_spring_multipart_contract(tmp_path: Path):
-    app = build_test_app(tmp_path, [payload(0.0859, 0.84321)])
+    app = build_test_app(
+        tmp_path,
+        [payload(0.0859, 0.84321, damage_pixels=19_260)],
+    )
 
     with TestClient(app) as client:
         response = client.post(
@@ -34,7 +37,7 @@ def test_analyze_accepts_spring_multipart_contract(tmp_path: Path):
     assert response.status_code == 200
     body = response.json()
     assert body["damaged"] is True
-    assert body["damage_score"] == 45
+    assert body["damage_score"] == 40
     assert body["damage_type"] is None
     assert body["repair_required"] is True
     assert body["repair_priority"] == "NORMAL"
@@ -83,7 +86,7 @@ def test_analyze_rejects_invalid_damage_id(tmp_path: Path):
     assert response.json()["detail"] == "damageId must be a positive integer."
 
 
-def test_analyze_applies_conservative_defaults_when_missing_ratio_is_unavailable(tmp_path: Path):
+def test_analyze_scores_missing_from_pixels_when_ratio_is_unavailable(tmp_path: Path):
     app = build_test_app(tmp_path, [v2_unknown_missing_payload()])
 
     with TestClient(app) as client:
@@ -96,7 +99,7 @@ def test_analyze_applies_conservative_defaults_when_missing_ratio_is_unavailable
     assert response.status_code == 200
     body = response.json()
     assert body["damaged"] is True
-    assert body["damage_score"] == 31
+    assert body["damage_score"] == 40
     assert body["damage_type"] == "LARGE_MISSING"
     assert body["repair_required"] is True
     assert body["repair_priority"] == "NORMAL"

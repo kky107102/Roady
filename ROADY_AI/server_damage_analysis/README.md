@@ -15,7 +15,8 @@ Jira: `S15P11A404-168`
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
 분할하고, 개별 점자블록 대비 결손 면적 비율을 계산할 수 있을 때 15% 기준으로
 `SMALL_MISSING`과 `LARGE_MISSING`을 API 변환 단계에서 구분합니다. 기준 영역을 신뢰할 수 없으면
-보수적으로 `LARGE_MISSING`, `damage_score=31`, `moderate` 판정을 적용하고 비율만 `null`로 유지합니다.
+보수적으로 `LARGE_MISSING`, `moderate` 판정을 적용하고 비율만 `null`로 유지합니다. `damage_score`는
+비율이나 점자블록 검출 여부와 무관하게 통합 파손 마스크의 픽셀 수로 계산합니다.
 
 Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear` 중 신뢰 가능한 근거를
 확정하지 못한 경우에는 `EDGE_SERVER_DISAGREEMENT` 사유와 함께 `review_required=true`로
@@ -115,10 +116,21 @@ snake_case를 모두 허용하며 메타데이터가 없으면 기존 Spring 요
 }
 ```
 
-Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 계산 불가 결손도 `damaged=true`, `damage_score=31`, `damage_type=LARGE_MISSING`, `repair_required=true`, `repair_priority=NORMAL`로 저장하며 비율만 `null`로 유지합니다.
+Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 비율 계산이 불가능해도 `regions.damage.pixels`가 있으면 픽셀 수로 `damage_score`를 계산합니다.
+
+| 통합 파손 마스크 픽셀 수 | `damage_score` |
+| ---: | ---: |
+| 0 | 0 |
+| 1~10,000 | 1~30 선형 변환 |
+| 10,001~50,000 | 31~70 선형 변환 |
+| 50,001~100,000 | 71~100 선형 변환 |
+| 100,000 초과 | 100 |
+
+구간은 `ROADY_AI_SCORE_MINOR_MAX_PIXELS`, `ROADY_AI_SCORE_MODERATE_MAX_PIXELS`,
+`ROADY_AI_SCORE_MAX_PIXELS` 환경변수로 조정할 수 있습니다. 세 값은 반드시 오름차순이어야 합니다.
 
 `damaged`는 `damage_score > 0`이 아니라 v2 `summary.damage_detected`를 사용합니다. `missing`,
-`crack`, `wear` 중 하나라도 유효하게 탐지되면 점수가 0이어도 `true`입니다. 모델 클래스 계약이
+`crack`, `wear` 중 하나라도 유효하게 탐지되면 `true`입니다. 모델 클래스 계약이
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
 없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
@@ -126,7 +138,7 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 ```json
 {
   "damaged": true,
-  "damage_score": 31,
+  "damage_score": 40,
   "damage_type": "LARGE_MISSING",
   "repair_required": true,
   "repair_priority": "NORMAL",

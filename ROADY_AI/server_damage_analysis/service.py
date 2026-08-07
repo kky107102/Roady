@@ -25,12 +25,9 @@ PRIORITY_BY_SEVERITY = {
     "severe": "HIGH",
 }
 
-SCORE_FLOOR_BY_SEVERITY = {
-    "normal": 0,
-    "minor": 1,
-    "moderate": 31,
-    "severe": 71,
-}
+DEFAULT_MINOR_MAX_PIXELS = 10_000
+DEFAULT_MODERATE_MAX_PIXELS = 50_000
+DEFAULT_MAX_SCORE_PIXELS = 100_000
 
 MISSING_LARGE_THRESHOLD_PERCENT = 15.0
 
@@ -70,6 +67,7 @@ class _AnalyzedImage:
     index: int
     filename: str
     payload: dict[str, Any]
+    damage_pixels: int | None
     damage_score: int | None
     damage_ratio: float | None
     damage_ratio_percent: float | None
@@ -82,16 +80,37 @@ class _AnalyzedImage:
         return self.damage_detected
 
 
-def calculate_damage_score(damage_ratio_percent: float) -> int:
-    """Map the model's damaged-area ratio to the ERD severity score bands."""
-    percent = max(0.0, min(float(damage_ratio_percent), 100.0))
-    if percent < 0.5:
+def calculate_damage_score(
+    damage_pixels: int,
+    *,
+    minor_max_pixels: int = DEFAULT_MINOR_MAX_PIXELS,
+    moderate_max_pixels: int = DEFAULT_MODERATE_MAX_PIXELS,
+    max_score_pixels: int = DEFAULT_MAX_SCORE_PIXELS,
+) -> int:
+    """Map the integrated damage-mask pixel count to a 0-100 score."""
+    if not 1 < minor_max_pixels < moderate_max_pixels < max_score_pixels:
+        raise ValueError(
+            "Damage score pixel thresholds must start above 1 and be strictly increasing."
+        )
+
+    pixels = max(0, int(damage_pixels))
+    if pixels == 0:
         return 0
-    if percent < 5.0:
-        return round(1 + ((percent - 0.5) / 4.5) * 29)
-    if percent < 15.0:
-        return round(31 + ((percent - 5.0) / 10.0) * 39)
-    return round(71 + ((percent - 15.0) / 85.0) * 29)
+    if pixels <= minor_max_pixels:
+        return round(1 + ((pixels - 1) / (minor_max_pixels - 1)) * 29)
+    if pixels <= moderate_max_pixels:
+        return round(
+            31
+            + ((pixels - minor_max_pixels) / (moderate_max_pixels - minor_max_pixels))
+            * 39
+        )
+    if pixels <= max_score_pixels:
+        return round(
+            71
+            + ((pixels - moderate_max_pixels) / (max_score_pixels - moderate_max_pixels))
+            * 29
+        )
+    return 100
 
 
 def read_and_verify_sha256(
@@ -130,12 +149,22 @@ class DamageAnalysisService:
         model_sha256: str,
         imgsz: int,
         device: str,
+        score_minor_max_pixels: int = DEFAULT_MINOR_MAX_PIXELS,
+        score_moderate_max_pixels: int = DEFAULT_MODERATE_MAX_PIXELS,
+        score_max_pixels: int = DEFAULT_MAX_SCORE_PIXELS,
     ) -> None:
         self.analyzer = analyzer
         self.model_path = model_path
         self.model_sha256 = model_sha256
         self.imgsz = imgsz
         self.device = device
+        if not 1 < score_minor_max_pixels < score_moderate_max_pixels < score_max_pixels:
+            raise ValueError(
+                "Damage score pixel thresholds must start above 1 and be strictly increasing."
+            )
+        self.score_minor_max_pixels = score_minor_max_pixels
+        self.score_moderate_max_pixels = score_moderate_max_pixels
+        self.score_max_pixels = score_max_pixels
 
     def analyze_images(self, images: Sequence[InputImage]) -> DamageAnalysisResponse:
         if not images:
@@ -147,6 +176,7 @@ class DamageAnalysisService:
             analyzed,
             key=lambda item: (
                 item.damage_score if item.damage_score is not None else -1,
+                item.damage_pixels if item.damage_pixels is not None else -1,
                 item.damage_ratio if item.damage_ratio is not None else -1.0,
                 item.confidence_score if item.confidence_score is not None else -1.0,
             ),
@@ -238,8 +268,16 @@ class DamageAnalysisService:
         severity = None if raw_severity is None else str(raw_severity)
         if severity is not None and severity not in PRIORITY_BY_SEVERITY:
             raise RuntimeError(f"Unknown estimated severity: {severity}")
+        damage_pixels = self._damage_pixels(payload)
         provisional_score = (
-            None if ratio_percent is None else calculate_damage_score(ratio_percent)
+            None
+            if damage_pixels is None
+            else calculate_damage_score(
+                damage_pixels,
+                minor_max_pixels=self.score_minor_max_pixels,
+                moderate_max_pixels=self.score_moderate_max_pixels,
+                max_score_pixels=self.score_max_pixels,
+            )
         )
         damage_detected = self._damage_detected(
             payload,
@@ -247,10 +285,6 @@ class DamageAnalysisService:
             analysis,
             provisional_score,
         )
-        score = provisional_score
-        if score is None and damage_detected is True and severity is not None:
-            score = SCORE_FLOOR_BY_SEVERITY[severity]
-
         raw_confidence = payload.get("regions", {}).get("damage", {}).get("confidence")
         if raw_confidence is None:
             raw_confidence = self._maximum_damage_confidence(payload)
@@ -263,7 +297,8 @@ class DamageAnalysisService:
             index=index,
             filename=item.filename,
             payload=payload,
-            damage_score=score,
+            damage_pixels=damage_pixels,
+            damage_score=provisional_score,
             damage_ratio=ratio,
             damage_ratio_percent=ratio_percent,
             severity=severity,
@@ -282,6 +317,16 @@ class DamageAnalysisService:
             return bool(score and score > 0)
         value = summary.get("damage_detected", analysis.get("damage_detected"))
         return value if isinstance(value, bool) else None
+
+    @staticmethod
+    def _damage_pixels(payload: dict[str, Any]) -> int | None:
+        value = payload.get("regions", {}).get("damage", {}).get("pixels")
+        if value is None:
+            return None
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError(f"Invalid damage pixel count: {value}") from exc
 
     @staticmethod
     def _damage_type(payload: dict[str, Any]) -> str | None:

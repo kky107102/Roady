@@ -54,6 +54,9 @@ def create_app(
             model_sha256=model_sha256,
             imgsz=app_settings.imgsz,
             device=app_settings.device,
+            score_minor_max_pixels=app_settings.score_minor_max_pixels,
+            score_moderate_max_pixels=app_settings.score_moderate_max_pixels,
+            score_max_pixels=app_settings.score_max_pixels,
         )
         if app_settings.warmup_enabled:
             await run_in_threadpool(service.warmup)

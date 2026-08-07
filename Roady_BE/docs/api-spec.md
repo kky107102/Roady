@@ -1748,7 +1748,7 @@ curl -X POST "http://localhost:8000/analyze" \
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
 | `damaged` | boolean, null | v2 `summary.damage_detected`. 판단 자체가 불가능하면 `null` |
-| `damage_score` | number, null | 계산 가능한 대표 파손 비율을 0~100으로 변환한 점수 |
+| `damage_score` | number, null | 대표 이미지의 통합 파손 마스크 픽셀 수를 0~100으로 변환한 점수 |
 | `damage_type` | string, null | `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` |
 | `repair_required` | boolean, null | 심각도 `moderate`, `severe`이면 `true`. 심각도 계산 불가는 `null` |
 | `repair_priority` | string, null | `LOW`, `NORMAL`, `HIGH`. 정상은 `null`이며 v1은 `URGENT`를 자동 결정하지 않음 |
@@ -1759,10 +1759,10 @@ curl -X POST "http://localhost:8000/analyze" \
 미달하더라도 이미지별 `damaged`, `damage_score`, `damage_type` 판정을 그대로 반환하며,
 품질 지표만으로 `review_required`를 활성화하지 않는다.
 
-여러 이미지가 전달되면 `damage_score`, 파손 비율, confidence 순으로 가장 큰 이미지를 대표 결과로 선택한다.
+여러 이미지가 전달되면 `damage_score`, 파손 픽셀 수, 파손 비율, confidence 순으로 가장 큰 이미지를 대표 결과로 선택한다.
 
 `damaged`는 `damage_score > 0`과 독립적이다. `missing`, `crack`, `wear` 중 유효한 유형
-마스크가 하나라도 있으면 점수가 0이어도 `damaged=true`다. 모델 클래스 계약이 잘못되어 판단할
+마스크가 하나라도 있으면 `damaged=true`다. 모델 클래스 계약이 잘못되어 판단할
 수 없으면 `damaged=null`이다.
 
 | 모델 대표 유형 | 조건 | `damage_type` |
@@ -1773,18 +1773,21 @@ curl -X POST "http://localhost:8000/analyze" \
 | `crack` | 유효 균열 마스크 탐지 | `CRACK` |
 | `wear` | 유효 마모 마스크 탐지 | `WEAR` |
 
-#### 파손 점수 및 보수 정책
+#### 파손 점수 정책
 
-| 파손 비율 | `damage_score` | 심각도 | `repair_required` | `repair_priority` |
-| --- | ---: | --- | --- | --- |
-| 0.5% 미만 | 0 | `normal` | `false` | `null` |
-| 0.5% 이상 5% 미만 | 1~30 선형 변환 | `minor` | `false` | `LOW` |
-| 5% 이상 15% 미만 | 31~70 선형 변환 | `moderate` | `true` | `NORMAL` |
-| 15% 이상 | 71~100 선형 변환 | `severe` | `true` | `HIGH` |
+| `regions.damage.pixels` | `damage_score` |
+| ---: | ---: |
+| 0 | 0 |
+| 1~10,000 | 1~30 선형 변환 |
+| 10,001~50,000 | 31~70 선형 변환 |
+| 50,001~100,000 | 71~100 선형 변환 |
+| 100,000 초과 | 100 |
 
-파손을 탐지했지만 비율 계산 기준 영역을 만들 수 없으면 `damaged=true`를 유지하고
-비율만 `null`로 유지한다. 판정값은 `damage_score=31`, `damage_type=LARGE_MISSING`,
-`estimated_severity=moderate`, `repair_required=true`, `repair_priority=NORMAL`을 적용한다.
+점수는 점자블록 픽셀 수와 파손 비율을 사용하지 않고 `missing ∪ crack ∪ wear` 통합 마스크의
+픽셀 수만 사용한다. 기본 구간은 AI 서버 환경변수 `ROADY_AI_SCORE_MINOR_MAX_PIXELS=10000`,
+`ROADY_AI_SCORE_MODERATE_MAX_PIXELS=50000`, `ROADY_AI_SCORE_MAX_PIXELS=100000`으로 변경할 수 있다.
+심각도와 `repair_required`, `repair_priority`는 모델 정책 결과를 그대로 사용하므로 점수 구간과
+별개다. 비율 계산 기준 영역이 없어도 파손 픽셀 수가 있으면 점수는 계산된다.
 
 #### Error
 
