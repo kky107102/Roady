@@ -7,6 +7,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 Severity = Literal["normal", "minor", "moderate", "severe"]
 RepairPriority = Literal["LOW", "NORMAL", "HIGH", "URGENT"]
+DamageType = Literal["SMALL_MISSING", "LARGE_MISSING", "CRACK", "WEAR"]
+
+
+class ReviewReason(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    message: str
 
 
 class ModelDetail(BaseModel):
@@ -31,7 +39,7 @@ class ImageAnalysisSummary(BaseModel):
 
     index: int = Field(ge=0)
     filename: str
-    damaged: bool
+    damaged: bool | None
     damage_score: int | None = Field(default=None, ge=0, le=100)
     damage_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
     damage_ratio_percent: float | None = Field(default=None, ge=0.0, le=100.0)
@@ -51,7 +59,7 @@ class AnalysisDetail(BaseModel):
     estimated_severity: Severity | None = None
     estimated_severity_label: str | None = None
     review_required: bool
-    review_reasons: list[str]
+    review_reasons: list[ReviewReason]
     advisory_only: bool
     regions: dict[str, Any]
     units: list[dict[str, Any]]
@@ -64,9 +72,9 @@ class AnalysisDetail(BaseModel):
 class DamageAnalysisResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    damaged: bool
+    damaged: bool | None
     damage_score: int | None = Field(default=None, ge=0, le=100)
-    damage_type: None = None
+    damage_type: DamageType | None = None
     repair_required: bool | None
     repair_priority: RepairPriority | None
     confidence_score: float | None = Field(default=None, ge=0.0, le=1.0)

@@ -14,6 +14,7 @@ from .schemas import (
     DamageAnalysisResponse,
     ImageAnalysisSummary,
     ModelDetail,
+    ReviewReason,
 )
 
 
@@ -23,6 +24,8 @@ PRIORITY_BY_SEVERITY = {
     "moderate": "NORMAL",
     "severe": "HIGH",
 }
+
+MISSING_LARGE_THRESHOLD_PERCENT = 15.0
 
 SEVERITY_LABELS = {
     "normal": "정상 추정",
@@ -63,10 +66,10 @@ class _AnalyzedImage:
     damage_ratio_percent: float | None
     severity: str | None
     confidence_score: float | None
-    damage_detected: bool
+    damage_detected: bool | None
 
     @property
-    def damaged(self) -> bool:
+    def damaged(self) -> bool | None:
         return self.damage_detected
 
 
@@ -142,17 +145,21 @@ class DamageAnalysisService:
         elapsed_ms = round((time.perf_counter() - started_at) * 1000, 2)
 
         analysis = selected.payload["analysis"]
+        summary = selected.payload.get("summary", analysis)
         model = selected.payload["model"]
         repair_required = (
             None
             if selected.severity is None
             else selected.severity in {"moderate", "severe"}
         )
+        severity_label = analysis.get("estimated_severity_label")
+        if severity_label is None and selected.severity is not None:
+            severity_label = SEVERITY_LABELS[selected.severity]
 
         return DamageAnalysisResponse(
             damaged=selected.damaged,
             damage_score=selected.damage_score,
-            damage_type=None,
+            damage_type=self._damage_type(selected.payload),
             repair_required=repair_required,
             repair_priority=(
                 None
@@ -160,7 +167,7 @@ class DamageAnalysisService:
                 else PRIORITY_BY_SEVERITY[selected.severity]
             ),
             confidence_score=(
-                selected.confidence_score if selected.damaged else None
+                selected.confidence_score if selected.damaged is True else None
             ),
             analysis_detail=AnalysisDetail(
                 model=ModelDetail(
@@ -176,15 +183,12 @@ class DamageAnalysisService:
                 damage_ratio=selected.damage_ratio,
                 damage_ratio_percent=selected.damage_ratio_percent,
                 estimated_severity=selected.severity,
-                estimated_severity_label=str(
-                    analysis.get(
-                        "estimated_severity_label",
-                        None if selected.severity is None else SEVERITY_LABELS[selected.severity],
-                    )
+                estimated_severity_label=(
+                    None if severity_label is None else str(severity_label)
                 ),
-                review_required=bool(analysis.get("review_required", False)),
-                review_reasons=[str(reason) for reason in analysis.get("review_reasons", [])],
-                advisory_only=bool(analysis.get("advisory_only", True)),
+                review_required=bool(summary.get("review_required", False)),
+                review_reasons=self._review_reasons(summary),
+                advisory_only=bool(summary.get("advisory_only", True)),
                 regions=selected.payload["regions"],
                 units=list(selected.payload.get("units", [])),
                 summary=dict(selected.payload.get("summary", analysis)),
@@ -243,12 +247,70 @@ class DamageAnalysisService:
             damage_ratio_percent=ratio_percent,
             severity=severity,
             confidence_score=confidence,
-            damage_detected=(
-                bool(summary.get("damage_detected", analysis.get("damage_detected", False)))
-                if str(payload.get("schema_version", "1.0")) == "2.0"
-                else bool(score and score > 0)
-            ),
+            damage_detected=self._damage_detected(payload, summary, analysis, score),
         )
+
+    @staticmethod
+    def _damage_detected(
+        payload: dict[str, Any],
+        summary: dict[str, Any],
+        analysis: dict[str, Any],
+        score: int | None,
+    ) -> bool | None:
+        if str(payload.get("schema_version", "1.0")) != "2.0":
+            return bool(score and score > 0)
+        value = summary.get("damage_detected", analysis.get("damage_detected"))
+        return value if isinstance(value, bool) else None
+
+    @staticmethod
+    def _damage_type(payload: dict[str, Any]) -> str | None:
+        if str(payload.get("schema_version", "1.0")) != "2.0":
+            return None
+        summary = payload.get("summary", {})
+        dominant = summary.get("dominant_damage_type")
+        if dominant == "crack":
+            return "CRACK"
+        if dominant == "wear":
+            return "WEAR"
+        if dominant != "missing":
+            return None
+
+        worst_unit_id = summary.get("worst_unit_id")
+        unit = next(
+            (
+                item
+                for item in payload.get("units", [])
+                if item.get("local_unit_id") == worst_unit_id
+            ),
+            None,
+        )
+        if unit is None:
+            return None
+        ratio = (
+            unit.get("damage_types", {})
+            .get("missing", {})
+            .get("ratio_percent")
+        )
+        if ratio is None:
+            return None
+        return (
+            "LARGE_MISSING"
+            if float(ratio) >= MISSING_LARGE_THRESHOLD_PERCENT
+            else "SMALL_MISSING"
+        )
+
+    @staticmethod
+    def _review_reasons(summary: dict[str, Any]) -> list[ReviewReason]:
+        normalized: list[ReviewReason] = []
+        for reason in summary.get("review_reasons", []):
+            if isinstance(reason, dict):
+                code = str(reason.get("code", "UNKNOWN"))
+                message = str(reason.get("message", code))
+            else:
+                code = str(reason)
+                message = code
+            normalized.append(ReviewReason(code=code, message=message))
+        return normalized
 
     @staticmethod
     def _model_classes(model: dict[str, Any]) -> dict[str, str]:
@@ -281,6 +343,8 @@ class DamageAnalysisService:
             damage_ratio=item.damage_ratio,
             damage_ratio_percent=item.damage_ratio_percent,
             estimated_severity=item.severity,
-            confidence_score=item.confidence_score if item.damaged else None,
-            review_required=bool(analysis.get("review_required", False)),
+            confidence_score=item.confidence_score if item.damaged is True else None,
+            review_required=bool(
+                item.payload.get("summary", analysis).get("review_required", False)
+            ),
         )

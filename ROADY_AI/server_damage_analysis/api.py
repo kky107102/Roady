@@ -69,7 +69,7 @@ def create_app(
 
     app = FastAPI(
         title="ROADY AI Server",
-        version="1.0.0",
+        version="2.0.0",
         lifespan=lifespan,
     )
 

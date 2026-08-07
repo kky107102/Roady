@@ -111,6 +111,50 @@ def test_service_preserves_unknown_missing_as_null_instead_of_zero():
     assert response.analysis_detail.schema_version == "2.0"
 
 
+@pytest.mark.parametrize(
+    ("dominant", "ratio_percent", "expected_type"),
+    [
+        ("missing", 14.99, "SMALL_MISSING"),
+        ("missing", 15.0, "LARGE_MISSING"),
+        ("crack", 0.12, "CRACK"),
+        ("wear", 3.0, "WEAR"),
+    ],
+)
+def test_service_maps_v2_dominant_damage_type(
+    dominant: str,
+    ratio_percent: float,
+    expected_type: str,
+):
+    service = make_service(FakeAnalyzer([v2_payload(dominant, ratio_percent)]))
+
+    response = service.analyze_images([input_image("v2-damage.jpg")])
+
+    assert response.damaged is True
+    assert response.damage_type == expected_type
+
+
+def test_service_uses_v2_detection_even_when_damage_score_is_zero():
+    service = make_service(FakeAnalyzer([v2_payload("crack", 0.12)]))
+
+    response = service.analyze_images([input_image("small-crack.jpg")])
+
+    assert response.damaged is True
+    assert response.damage_score == 0
+    assert response.damage_type == "CRACK"
+
+
+def test_service_keeps_unknown_model_decision_null():
+    payload_value = v2_payload("crack", 1.0)
+    payload_value["summary"]["damage_detected"] = None
+    payload_value["analysis"]["damage_detected"] = None
+    service = make_service(FakeAnalyzer([payload_value]))
+
+    response = service.analyze_images([input_image("invalid-model.jpg")])
+
+    assert response.damaged is None
+    assert response.confidence_score is None
+
+
 class FakeAnalyzer:
     def __init__(self, payloads: list[dict]):
         self.payloads = iter(payloads)
@@ -231,6 +275,70 @@ def v2_unknown_missing_payload() -> dict:
             "damage_detected": True,
             "damage_ratio_percent": None,
             "estimated_severity": None,
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "quality": {},
+    }
+
+
+def v2_payload(
+    dominant: str,
+    ratio_percent: float,
+    confidence: float = 0.82,
+) -> dict:
+    if ratio_percent < 0.5:
+        severity = "normal"
+    elif ratio_percent < 5.0:
+        severity = "minor"
+    elif ratio_percent < 15.0:
+        severity = "moderate"
+    else:
+        severity = "severe"
+    damage_types = {
+        name: {
+            "detected": name == dominant,
+            "confidence": confidence if name == dominant else None,
+            "ratio_percent": ratio_percent if name == dominant else 0.0,
+        }
+        for name in ("missing", "crack", "wear")
+    }
+    reasons = [{"code": "MODEL_QUALITY_GATE_NOT_MET", "message": "review"}]
+    return {
+        "schema_version": "2.0",
+        "model": {
+            "name": "yolo26s_seg_multiclass_v2_best",
+            "task": "segmentation",
+            "class_names": ["tactile_block", "missing", "crack", "wear"],
+            "policy_version": "draft-1",
+            "class_mapping_valid": True,
+        },
+        "regions": {
+            "tactile_block": {"pixels": 1000, "polygons": []},
+            "damage": {"pixels": max(1, round(ratio_percent * 10)), "polygons": []},
+        },
+        "units": [
+            {
+                "local_unit_id": "block_1",
+                "damage_types": damage_types,
+            }
+        ],
+        "summary": {
+            "damage_detected": True,
+            "estimated_severity": severity,
+            "repair_priority": "inspection_required",
+            "worst_unit_id": "block_1",
+            "dominant_damage_type": dominant,
+            "max_damage_ratio_percent": ratio_percent,
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "analysis": {
+            "damage_detected": True,
+            "damage_ratio_percent": ratio_percent,
+            "estimated_severity": severity,
             "review_required": True,
             "review_reasons": reasons,
             "advisory_only": True,
