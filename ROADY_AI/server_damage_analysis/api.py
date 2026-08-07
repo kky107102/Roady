@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Annotated, Callable
@@ -9,10 +10,16 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import ValidationError
 
 from .analyzer import ServerDamageAnalyzer
 from .config import AppSettings
-from .schemas import DamageAnalysisResponse, HealthResponse, ModelInfoResponse
+from .schemas import (
+    AnalysisInputMetadata,
+    DamageAnalysisResponse,
+    HealthResponse,
+    ModelInfoResponse,
+)
 from .service import (
     AnalysisInputError,
     DamageAnalysisService,
@@ -47,6 +54,9 @@ def create_app(
             model_sha256=model_sha256,
             imgsz=app_settings.imgsz,
             device=app_settings.device,
+            score_minor_max_pixels=app_settings.score_minor_max_pixels,
+            score_moderate_max_pixels=app_settings.score_moderate_max_pixels,
+            score_max_pixels=app_settings.score_max_pixels,
         )
         if app_settings.warmup_enabled:
             await run_in_threadpool(service.warmup)
@@ -69,7 +79,7 @@ def create_app(
 
     app = FastAPI(
         title="ROADY AI Server",
-        version="1.0.0",
+        version="2.0.0",
         lifespan=lifespan,
     )
 
@@ -121,6 +131,10 @@ def create_app(
         latitude: Annotated[str | None, Form()] = None,
         longitude: Annotated[str | None, Form()] = None,
         captured_at: Annotated[str | None, Form(alias="capturedAt")] = None,
+        analysis_metadata: Annotated[
+            str | None,
+            Form(alias="analysisMetadata"),
+        ] = None,
     ) -> DamageAnalysisResponse:
         del latitude, longitude, captured_at
         try:
@@ -142,6 +156,7 @@ def create_app(
             )
 
         decoded_images = await _decode_uploads(images, app_settings)
+        decoded_images = _attach_input_metadata(decoded_images, analysis_metadata)
         service: DamageAnalysisService = app.state.service
         try:
             async with app.state.inference_semaphore:
@@ -201,6 +216,57 @@ async def _decode_uploads(
             )
         )
     return decoded
+
+
+def _attach_input_metadata(
+    images: list[InputImage],
+    raw_metadata: str | None,
+) -> list[InputImage]:
+    if raw_metadata is None or not raw_metadata.strip():
+        metadata_items: list[dict] = [{} for _ in images]
+    else:
+        try:
+            parsed = json.loads(raw_metadata)
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="analysisMetadata must be valid JSON.",
+            ) from exc
+        if isinstance(parsed, dict):
+            metadata_items = [parsed]
+        elif isinstance(parsed, list) and all(isinstance(item, dict) for item in parsed):
+            metadata_items = parsed
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="analysisMetadata must be a JSON object or an array of objects.",
+            )
+
+    if len(metadata_items) != len(images):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="analysisMetadata count must match images count.",
+        )
+
+    enriched: list[InputImage] = []
+    for image, raw_item in zip(images, metadata_items):
+        try:
+            metadata = AnalysisInputMetadata.model_validate(raw_item)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="analysisMetadata contains invalid fields.",
+            ) from exc
+        values = metadata.model_dump(exclude_none=True)
+        values.setdefault("analysis_roi", image.filename)
+        enriched.append(
+            InputImage(
+                filename=image.filename,
+                image=image.image,
+                input_metadata=values,
+            )
+        )
+    return enriched
 
 
 app = create_app()

@@ -14,8 +14,9 @@ Jira: `S15P11A404-168`
 
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
 분할하고, 개별 점자블록 대비 결손 면적 비율을 계산할 수 있을 때 15% 기준으로
-`missing_small`과 `missing_large`를 후처리에서 구분합니다. 기준 영역을 신뢰할 수 없으면
-크기를 확정하지 않고 판단 보류합니다.
+`SMALL_MISSING`과 `LARGE_MISSING`을 API 변환 단계에서 구분합니다. 기준 영역을 신뢰할 수 없으면
+보수적으로 `LARGE_MISSING`, `moderate` 판정을 적용하고 비율만 `null`로 유지합니다. `damage_score`는
+비율이나 점자블록 검출 여부와 무관하게 통합 파손 마스크의 픽셀 수로 계산합니다.
 
 Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear` 중 신뢰 가능한 근거를
 확정하지 못한 경우에는 `EDGE_SERVER_DISAGREEMENT` 사유와 함께 `review_required=true`로
@@ -36,7 +37,7 @@ Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear`
 
 - 균열과 마모: `type_mask ∩ tactile_unit_mask`
 - 결손: tactile 교집합을 사용하지 않습니다. 주변 개별 블록의 크기와 간격이 안정적인 경우에만 `expected_block_region`을 사용합니다.
-- expected region을 신뢰할 수 없으면 결손 비율과 심각도는 `null`, 상태는 `not_estimable`입니다. 0%나 임의 등급으로 바꾸지 않고 보수 우선순위를 `inspection_required`로 전환합니다.
+- expected region을 신뢰할 수 없으면 결손 비율은 `null`, 상태는 `not_estimable`로 유지합니다. 파손 판정은 보류하지 않고 결손 유형의 최소 심각도 `moderate`를 적용합니다.
 
 | 비율 상태 | 의미 |
 |---|---|
@@ -70,7 +71,7 @@ Edge 이벤트 JSON:
 python -m ROADY_AI.server_damage_analysis.analyze_image \
   --model /path/to/4class_best.pt \
   --event-json /path/to/pending/damage_event.json \
-  --output output --device cpu --imgsz 1024
+  --output output --device cpu --imgsz 768
 ```
 
 개별 ROI:
@@ -81,7 +82,7 @@ python -m ROADY_AI.server_damage_analysis.analyze_image \
   --image analysis_roi.jpg \
   --input-metadata input_metadata.json \
   --policy ROADY_AI/server_damage_analysis/severity_policy.yaml \
-  --output output --device cpu --imgsz 1024
+  --output output --device cpu --imgsz 768
 ```
 
 출력은 `analysis.json`, ROI 사본, Overlay, 통합 damage mask입니다. `units`와 `summary`가 v2 기준 응답이며 `regions`와 최상위 `analysis`는 deprecated 호환 필드입니다.
@@ -100,21 +101,53 @@ uvicorn ROADY_AI.server_damage_analysis.api:app \
 - `GET /health/ready`: 모델 로딩 완료 확인
 - `GET /model-info`: 실제 모델 파일명, SHA-256, 클래스 매핑 확인
 
-Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 계산 불가 결손은 `damaged=true`이지만 `damage_score`, `repair_required`, 비율, 심각도가 `null`일 수 있습니다. 백엔드 필드는 nullable 타입을 사용하며 이를 0 또는 `false`로 치환하면 안 됩니다.
+`POST /analyze`는 기존 `damageId`, `images` 필드와 함께 선택적인 `analysisMetadata` JSON을 받습니다.
+이미지가 한 장이면 객체 하나, 여러 장이면 이미지 순서와 개수가 같은 배열을 전달합니다. camelCase와
+snake_case를 모두 허용하며 메타데이터가 없으면 기존 Spring 요청과 동일하게 품질 미검증 ROI로 처리합니다.
+
+```json
+{
+  "originalImage": "event_001_original.jpg",
+  "analysisRoi": "event_001_analysis_roi.jpg",
+  "roiSource": "tactile_block",
+  "roiFallbackUsed": false,
+  "frameQualityVerified": true,
+  "edgeDamageCandidateDetected": true
+}
+```
+
+Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응답 전체를 `raw_result`에 보존합니다. 비율 계산이 불가능해도 `regions.damage.pixels`가 있으면 픽셀 수로 `damage_score`를 계산합니다.
+
+| 통합 파손 마스크 픽셀 수 | `damage_score` |
+| ---: | ---: |
+| 0 | 0 |
+| 1~10,000 | 1~30 선형 변환 |
+| 10,001~50,000 | 31~70 선형 변환 |
+| 50,001~100,000 | 71~100 선형 변환 |
+| 100,000 초과 | 100 |
+
+구간은 `ROADY_AI_SCORE_MINOR_MAX_PIXELS`, `ROADY_AI_SCORE_MODERATE_MAX_PIXELS`,
+`ROADY_AI_SCORE_MAX_PIXELS` 환경변수로 조정할 수 있습니다. 세 값은 반드시 오름차순이어야 합니다.
+
+`damaged`는 `damage_score > 0`이 아니라 v2 `summary.damage_detected`를 사용합니다. `missing`,
+`crack`, `wear` 중 하나라도 유효하게 탐지되면 `true`입니다. 모델 클래스 계약이
+유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
+`SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
+없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
 
 ```json
 {
   "damaged": true,
-  "damage_score": null,
-  "damage_type": null,
-  "repair_required": null,
-  "repair_priority": null,
+  "damage_score": 40,
+  "damage_type": "LARGE_MISSING",
+  "repair_required": true,
+  "repair_priority": "NORMAL",
   "confidence_score": 0.82,
   "analysis_detail": {
     "schema_version": "2.0",
     "damage_ratio": null,
     "damage_ratio_percent": null,
-    "estimated_severity": null,
+    "estimated_severity": "moderate",
     "review_required": true,
     "advisory_only": true
   }
@@ -138,7 +171,7 @@ CPU에서는 `ROADY_AI_DEVICE=cpu`를 사용합니다. GPU 서버는 시작 단�
 - Overlay는 tactile 외곽선과 missing/crack/wear mask, 분석 단위 ID, 비율, 심각도, 검토 여부를 표시합니다. 계산 불가 비율은 `ratio=?`입니다.
 - 기존 이미지 저장 흐름과 `regions.damage`, `analysis.damage_ratio_percent`는 유지하지만 deprecated입니다.
 - 저장소에는 4클래스 `yolo26s_seg_multiclass_v2_best.pt`가 포함되어 있습니다. 모델 메타데이터의 클래스 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
-- 모델 품질 게이트 미달 시 `MODEL_QUALITY_GATE_NOT_MET` 검토 사유가 추가됩니다.
+- `quality`는 모델 검증 성능을 보여주는 참고 정보이며 이미지별 판정이나 `review_required`를 변경하지 않습니다.
 
 ## 테스트
 

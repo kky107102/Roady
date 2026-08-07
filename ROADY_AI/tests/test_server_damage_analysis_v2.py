@@ -78,6 +78,22 @@ def test_crack_and_wear_are_clipped_to_tactile_unit():
     assert unit["damage_types"]["wear"]["ratio_percent"] == 0.0
 
 
+def test_model_quality_metrics_are_informational_and_do_not_require_review():
+    instance = analyzer()
+    instance.quality = ModelQuality()
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 60, 60)
+    result = fake_result([(0, 0.9, tactile)], shape)
+
+    payload, _, _ = instance.analyze_result(
+        result, input_metadata={"frame_quality_verified": True, "roi_source": "tactile_block"}
+    )
+
+    assert payload["summary"]["review_required"] is False
+    assert payload["summary"]["review_reasons"] == []
+    assert payload["quality"]["positive_damage_dice"] == ModelQuality().positive_damage_dice
+
+
 def test_missing_is_not_deleted_by_tactile_intersection_when_expected_region_is_valid():
     shape = (100, 120)
     tactile_masks = [rectangle(shape, x, 20, x + 20, 40) for x in (10, 40, 70)]
@@ -113,7 +129,7 @@ def test_missing_ratio_is_null_when_expected_region_is_unavailable():
     assert unit["damage_types"]["missing"]["ratio_percent"] is None
     assert unit["damage_types"]["missing"]["ratio_status"] == "not_estimable"
     assert unit["analysis"]["total_damage_ratio_percent"] is None
-    assert unit["analysis"]["estimated_severity"] is None
+    assert unit["analysis"]["estimated_severity"] == "moderate"
     assert unit["analysis"]["repair_priority"] == "inspection_required"
     assert unit["analysis"]["review_required"]
     assert "RATIO_NEAR_THRESHOLD" not in {
@@ -247,7 +263,7 @@ def test_summary_uses_worst_unit_and_excludes_not_estimable_from_mean():
     )
 
     assert payload["summary"]["worst_unit_id"] == "block_group_2"
-    assert payload["summary"]["estimated_severity"] is None
+    assert payload["summary"]["estimated_severity"] == "moderate"
     assert payload["summary"]["mean_damage_ratio_percent"] == 2.0
     assert payload["summary"]["not_estimable_unit_count"] == 1
     assert payload["summary"]["review_required"]
