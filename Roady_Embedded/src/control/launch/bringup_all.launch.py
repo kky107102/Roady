@@ -48,6 +48,7 @@ def generate_launch_description():
             launch_arguments={
                 'obstacle_stop_topic': '/emergency_stop',
                 'enable_lidar': 'false',
+                'shutdown_on_main_exit': 'true',
             }.items(),
         ),
 
@@ -94,7 +95,9 @@ def generate_launch_description():
             parameters=[{
                 'scan_topic': '/scan',
                 'warning_topic': '/obstacle/lidar_detected',
-                'stop_threshold': 0.50,
+                'min_detection_distance': 0.20,
+                'max_detection_distance': 0.50,
+                'detection_angle_deg': 10.0,
             }],
         ),
         Node(

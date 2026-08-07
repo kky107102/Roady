@@ -1,10 +1,51 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import (
+    DeclareLaunchArgument,
+    EmitEvent,
+    RegisterEventHandler,
+)
 from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+
 def generate_launch_description():
+    main_control_node = Node(
+        package='control',
+        executable='main_control_node',
+        name='main_control_node',
+        output='screen',
+        parameters=[{
+            'drive_speed': 0.4,
+            'reverse_speed': 0.4,
+            'kp': 0.004,
+            'max_steer': 0.75,
+            'left_steering_gain': 1.30,
+            'steering_deadband_px': 15.0,
+            'steering_filter_alpha': 0.35,
+            'offset_timeout': 1.0,
+            'steering_sign': -1.0,
+            'target_edge_x_px': 750.0,
+            'corner_align_tolerance_px': 8.0,
+            'corner_candidate_frames': 5,
+            'corner_vote_window': 15,
+            'corner_backup_duration': 1.5,
+            'corner_forward_duration': 1.0,
+            'offset_backup_duration': 1.5,
+            'offset_forward_duration': 1.0,
+            'corner_steer': 0.75,
+            'unknown_duration': 7.0,
+            'unknown_vote_required': 15,
+            'reacquire_yellow_ratio': 0.20,
+            'reacquire_confirm_frames': 5,
+        }],
+        remappings=[
+            ('/obstacle_warning', LaunchConfiguration('obstacle_stop_topic')),
+        ],
+    )
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'obstacle_stop_topic',
@@ -15,6 +56,13 @@ def generate_launch_description():
             'enable_lidar',
             default_value='false',
             description='Start the standalone LiDAR obstacle detector',
+        ),
+        DeclareLaunchArgument(
+            'shutdown_on_main_exit',
+            default_value='false',
+            description=(
+                'Shut down the complete launch when main control exits'
+            ),
         ),
         # 1. 점자블록 인식용 카메라 노드
         Node(
@@ -42,10 +90,6 @@ def generate_launch_description():
                 'image_topic': '/camera/tactile/image_raw',
                 'target_edge_x_px': 750,
                 'roi_top_ratio': 0.55,
-                'startup_full_roi_duration': 5.0,
-                'left_edge_limit_ratio': 0.50,
-                'left_edge_critical_ratio': 0.30,
-                'left_edge_extreme_ratio': 0.20,
             }],
         ),
         # # 3. 라이다 장애물 탐지 노드
@@ -65,37 +109,20 @@ def generate_launch_description():
             output='screen'
         ),
         # 5. 자율주행 판단 및 자동 출발 메인 노드
-        Node(
-            package='control',
-            executable='main_control_node',
-            name='main_control_node',
-            output='screen',
-            parameters=[{
-                'startup_delay': 5.0,
-                'startup_crawl_duration': 1.0,
-                'startup_crawl_speed': 0.5,
-                'drive_speed': 0.65,
-                'reverse_speed': 0.5,
-                'steering_speed_boost': 0.05,
-                'kp': 0.004,
-                'max_steer': 0.75,
-                'left_steering_gain': 1.30,
-                'steering_deadband_px': 8.0,
-                'steering_filter_alpha': 0.35,
-                'offset_timeout': 1.0,
-                'steering_sign': -1.0,
-                'backup_duration': 1.5,
-                'corner_turn_duration': 2.0,
-                'corner_steer': 0.75,
-                'corner_steering_sign': 1.0,
-                'left_edge_stop_duration': 0.5,
-                'left_edge_backup_duration': 1.0,
-                'left_edge_extreme_backup_multiplier': 2.0,
-                'left_edge_turn_duration': 1.0,
-                'left_edge_recovery_steer': 0.75,
-            }],
-            remappings=[
-                ('/obstacle_warning', LaunchConfiguration('obstacle_stop_topic')),
-            ],
+        main_control_node,
+        RegisterEventHandler(
+            OnProcessExit(
+                target_action=main_control_node,
+                on_exit=[
+                    EmitEvent(
+                        event=Shutdown(
+                            reason='Main controller finished driving'
+                        )
+                    )
+                ],
+            ),
+            condition=IfCondition(
+                LaunchConfiguration('shutdown_on_main_exit')
+            ),
         ),
     ])

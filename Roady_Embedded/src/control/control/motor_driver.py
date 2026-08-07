@@ -29,7 +29,7 @@ class MotorDriver:
 
         # ★ 서보 각도 범위 재설정
         self.SERVO_CENTER_ANGLE = 90  # 수학적 정중앙 90도
-        self.SERVO_MAX_DELTA = 35     # 조향 범위를 ±35도로 확대 (55도 ~ 125도)
+        self.SERVO_MAX_DELTA = 30     # 조향 범위: 중심 90도 기준 ±30도
 
         # 2. DC 모터 전용 PCA9685 (0x40)
         self.pca_motor = PCA9685(self.i2c, address=motor_address)
@@ -45,9 +45,7 @@ class MotorDriver:
             angle_ratio * self.SERVO_MAX_DELTA
         )
         
-        # 기존: max(80, min(120, target_angle))
-        # 수정: 좌회전 각도(80도 이하)까지 허용하도록 범위 확대 (55도~125도)
-        target_angle = max(55, min(125, target_angle))
+        target_angle = max(60, min(120, target_angle))
 
         try:
             self.kit.servo[self.STEERING_CHANNEL].angle = target_angle

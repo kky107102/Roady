@@ -3,27 +3,27 @@
   "label": "unnamed",
   "model": "artifacts/obstacle_lower_limb/best.engine",
   "camera_topic": "/camera/obstacle/image_raw",
-  "started_unix_sec": 1785978272.456225,
-  "started_at": "2026-08-06T10:04:32.456225+09:00",
-  "duration_sec": 177.10691475199928,
-  "frames": 3753,
-  "end_to_end_fps": 21.190589905850267,
+  "started_unix_sec": 1786089139.2342923,
+  "started_at": "2026-08-07T16:52:19.234292+09:00",
+  "duration_sec": 108.02732470400042,
+  "frames": 2622,
+  "end_to_end_fps": 24.271636895428024,
   "detections": {
-    "detected_frames": 727,
-    "detection_rate": 0.19371169730881962,
-    "mean_per_frame": 0.5504929389821476,
-    "max_per_frame": 8
+    "detected_frames": 1065,
+    "detection_rate": 0.4061784897025172,
+    "mean_per_frame": 1.0274599542334095,
+    "max_per_frame": 6
   },
   "latency_ms": {
-    "mean": 22.810291210238923,
-    "p50": 22.130880000077013,
-    "p95": 28.123967999817978,
-    "max": 317.0523199996751
+    "mean": 21.822485064858082,
+    "p50": 21.190176001255168,
+    "p95": 26.66035199945327,
+    "max": 170.9614720002719
   },
   "temperature_c": {
-    "samples": 3753,
-    "mean": 47.877198241406234,
-    "max": 49.718
+    "samples": 2622,
+    "mean": 51.652633867277245,
+    "max": 52.625
   },
   "configuration": {
     "engine_sha256": "61c16094510f46be95e8afad2dc463701c91862beffafd85a008a8112aaed21e",

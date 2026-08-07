@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import time
-
 import cv2
 import numpy as np
 import rclpy
@@ -19,53 +17,33 @@ class TactileTracerNode(Node):
         # 토픽 Publisher
         self.block_pub = self.create_publisher(String, '/tactile/block_type', 10)
         self.edge_offset_pub = self.create_publisher(Float32, '/tactile/edge_offset', 10)
+        self.leftmost_pub = self.create_publisher(Float32, '/tactile/leftmost_x', 10)
+        self.full_frame_ratio_pub = self.create_publisher(
+            Float32, '/tactile/full_frame_yellow_ratio', 10
+        )
 
         self.declare_parameter('image_topic', '/camera/tactile/image_raw')
         self.declare_parameter('target_edge_x_px', 750)
         self.declare_parameter('roi_top_ratio', 0.55)
-        self.declare_parameter('startup_full_roi_duration', 5.0)
-        self.declare_parameter('left_edge_limit_ratio', 0.50)
-        self.declare_parameter('left_edge_critical_ratio', 0.30)
-        self.declare_parameter('left_edge_extreme_ratio', 0.20)
         image_topic = str(self.get_parameter('image_topic').value)
         self.target_edge_x_px = int(
             self.get_parameter('target_edge_x_px').value
         )
         self.roi_top_ratio = float(self.get_parameter('roi_top_ratio').value)
         self.roi_top_ratio = max(0.05, min(self.roi_top_ratio, 0.75))
-        self.startup_full_roi_duration = max(
-            0.0,
-            float(self.get_parameter('startup_full_roi_duration').value),
-        )
-        self.startup_time = time.monotonic()
-        self.narrow_roi_activated = False
-        self.left_edge_limit_ratio = float(
-            self.get_parameter('left_edge_limit_ratio').value
-        )
-        self.left_edge_limit_ratio = max(
-            0.0,
-            min(self.left_edge_limit_ratio, 1.0),
-        )
-        self.left_edge_critical_ratio = float(
-            self.get_parameter('left_edge_critical_ratio').value
-        )
-        self.left_edge_critical_ratio = max(
-            0.0,
-            min(self.left_edge_critical_ratio, self.left_edge_limit_ratio),
-        )
-        self.left_edge_extreme_ratio = float(
-            self.get_parameter('left_edge_extreme_ratio').value
-        )
-        self.left_edge_extreme_ratio = max(
-            0.0,
-            min(self.left_edge_extreme_ratio, self.left_edge_critical_ratio),
-        )
+        self.tracking_state = 'UNKNOWN'
 
         self.image_sub = self.create_subscription(
             Image,
             image_topic,
             self.image_callback,
             qos_profile_sensor_data,
+        )
+        self.state_sub = self.create_subscription(
+            String,
+            '/tactile/tracking_state',
+            self.tracking_state_callback,
+            10,
         )
 
         # 동적 ROI 적용 위한 이전 프레임 정보
@@ -81,7 +59,9 @@ class TactileTracerNode(Node):
         if frame is None:
             return
 
-        block_type, offset, _, debug_frame = self.analyze_tactile_block(frame)
+        block_type, offset, _, leftmost_x, debug_frame = (
+            self.analyze_tactile_block(frame)
+        )
 
         # 1. 블록 타입 발행 (STRAIGHT / CORNER / UNKNOWN)
         type_msg = String()
@@ -93,9 +73,20 @@ class TactileTracerNode(Node):
         offset_msg.data = float(offset) if offset is not None else 999.0
         self.edge_offset_pub.publish(offset_msg)
 
+        leftmost_msg = Float32()
+        leftmost_msg.data = float(leftmost_x) if leftmost_x is not None else -1.0
+        self.leftmost_pub.publish(leftmost_msg)
+
+        ratio_msg = Float32()
+        ratio_msg.data = float(self.last_full_frame_yellow_ratio)
+        self.full_frame_ratio_pub.publish(ratio_msg)
+
         # 3. 실시간 디버그 모니터링 화면 출력
         cv2.imshow('Tactile Line Tracer Monitor', debug_frame)
         cv2.waitKey(1)
+
+    def tracking_state_callback(self, msg: String):
+        self.tracking_state = msg.data
 
     def image_message_to_bgr(self, msg: Image):
         """sensor_msgs/Image를 OpenCV BGR 영상으로 변환한다."""
@@ -133,9 +124,8 @@ class TactileTracerNode(Node):
 
         roi_mask = np.zeros((height, width), dtype=np.uint8)
 
-        # 최소 준비 시간이 지나고 유효 오프셋이 처음 계산될 때까지
-        # 전체 화면에서 블록을 탐색한다. 전환 후에는 하단 ROI를 유지한다.
-        full_frame_roi_active = not self.narrow_roi_activated
+        # STARTUP, UNKNOWN, 코너에서는 전체 화면, STRAIGHT에서는 하단 ROI를 쓴다.
+        full_frame_roi_active = self.tracking_state != 'STRAIGHT'
         roi_top_y = (
             0
             if full_frame_roi_active
@@ -158,6 +148,10 @@ class TactileTracerNode(Node):
 
         mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
 
+        # 코너 탈출 완료 여부는 높이 제한 없이 전체 화면의 노란색 점유율로 판단한다.
+        full_frame_area = max(1, height * width)
+        self.last_full_frame_yellow_ratio = cv2.countNonZero(mask) / full_frame_area
+
         # HSV 결과를 유지한 채 ROI를 적용한다. 기존 코드는 이 지점에서
         # yellow mask를 ROI mask로 덮어써 ROI 전체가 노란색으로 검출됐다.
         mask = cv2.bitwise_and(mask, roi_mask)
@@ -167,6 +161,10 @@ class TactileTracerNode(Node):
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9, 9))
         mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
         mask_closed = cv2.morphologyEx(mask_closed, cv2.MORPH_OPEN, kernel)
+        yellow_points = np.where(mask_closed > 0)
+        leftmost_x = (
+            int(yellow_points[1].min()) if len(yellow_points[1]) > 0 else None
+        )
 
         # ----------------------------------------------------
         # 2. 상태 표시에 사용할 ROI 내 노란색 비율
@@ -201,9 +199,6 @@ class TactileTracerNode(Node):
         # 차량을 점자블록에서 50cm 떨어뜨렸을 때 측정한 Left Edge X를
         # 목표점으로 사용한다. 해상도 밖의 입력은 유효 픽셀 범위로 제한한다.
         target_x = max(0, min(self.target_edge_x_px, width - 1))
-        left_edge_limit_x = int(width * self.left_edge_limit_ratio)
-        left_edge_critical_x = int(width * self.left_edge_critical_ratio)
-        left_edge_extreme_x = int(width * self.left_edge_extreme_ratio)
 
         if contours:
             c = max(contours, key=cv2.contourArea)
@@ -225,7 +220,6 @@ class TactileTracerNode(Node):
                     solidity < 0.86
                     and concavity_ratio > 0.018
                     and w > width * 0.28
-                    and h > height * 0.18
                 )
                 # 선택한 윤곽선만 별도 마스크로 만들어 주변의 다른 노란색이
                 # 오프셋 계산에 섞이지 않도록 한다.
@@ -277,19 +271,6 @@ class TactileTracerNode(Node):
                 if len(xs) > 0:
                     left_edge_x = int(xs.min())
                     offset = left_edge_x - target_x
-                    if left_edge_x < left_edge_extreme_x:
-                        block_type = 'LEFT_EDGE_EXTREME'
-                    elif left_edge_x < left_edge_critical_x:
-                        block_type = 'LEFT_EDGE_CRITICAL'
-                    elif left_edge_x < left_edge_limit_x:
-                        block_type = 'LEFT_EDGE_LIMIT'
-
-                    if (
-                        time.monotonic() - self.startup_time
-                        >= self.startup_full_roi_duration
-                    ):
-                        self.narrow_roi_activated = True
-
                 # [시각화] 검출된 점자블록 윤곽선 (초록색)
                 cv2.drawContours(
                     debug_frame,
@@ -369,34 +350,7 @@ class TactileTracerNode(Node):
             2,
         )
 
-        # F. 좌측 경계 복구 동작 진입 기준선
-        cv2.line(
-            debug_frame,
-            (left_edge_limit_x, 0),
-            (left_edge_limit_x, height),
-            (0, 0, 255),
-            2,
-        )
-
-        # 좌측 최대 조향 복구 진입 기준선
-        cv2.line(
-            debug_frame,
-            (left_edge_critical_x, 0),
-            (left_edge_critical_x, height),
-            (255, 0, 255),
-            2,
-        )
-
-        # 좌측 장시간 후진 및 최대 조향 복구 진입 기준선
-        cv2.line(
-            debug_frame,
-            (left_edge_extreme_x, 0),
-            (left_edge_extreme_x, height),
-            (255, 255, 255),
-            2,
-        )
-
-        # G. 좌측 모서리
+        # F. 좌측 모서리
         if left_edge_x is not None:
             cv2.circle(
                 debug_frame,
@@ -505,7 +459,7 @@ class TactileTracerNode(Node):
             2,
         )
 
-        return block_type, offset, top_yellow_pixel_count, debug_frame
+        return block_type, offset, top_yellow_pixel_count, leftmost_x, debug_frame
 
     def destroy_node(self):
         cv2.destroyAllWindows()
