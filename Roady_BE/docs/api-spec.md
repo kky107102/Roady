@@ -1688,13 +1688,8 @@ curl -X POST "http://localhost:8000/analyze" \
     "damage_ratio_percent": 0.12,
     "estimated_severity": "normal",
     "estimated_severity_label": "정상 추정",
-    "review_required": true,
-    "review_reasons": [
-      {
-        "code": "MODEL_QUALITY_GATE_NOT_MET",
-        "message": "현재 모델의 검증 성능이 자동 판정 기준을 충족하지 못했습니다."
-      }
-    ],
+    "review_required": false,
+    "review_reasons": [],
     "advisory_only": true,
     "regions": {
       "tactile_block": {
@@ -1759,6 +1754,10 @@ curl -X POST "http://localhost:8000/analyze" \
 | `repair_priority` | string, null | `LOW`, `NORMAL`, `HIGH`. 정상은 `null`이며 v1은 `URGENT`를 자동 결정하지 않음 |
 | `confidence_score` | number, null | 대표 이미지의 파손 마스크 confidence. 파손이 없으면 `null` |
 | `analysis_detail` | object | 모델, `units`, `summary`, 영역, 품질, 구조화된 검토 사유, 이미지별 결과 |
+
+`analysis_detail.quality`는 모델 전체 검증 성능을 나타내는 참고 정보다. 품질 지표가 목표값에
+미달하더라도 이미지별 `damaged`, `damage_score`, `damage_type` 판정을 그대로 반환하며,
+품질 지표만으로 `review_required`를 활성화하지 않는다.
 
 여러 이미지가 전달되면 `damage_score`, 파손 비율, confidence 순으로 가장 큰 이미지를 대표 결과로 선택한다.
 

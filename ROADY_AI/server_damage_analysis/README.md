@@ -159,7 +159,7 @@ CPU에서는 `ROADY_AI_DEVICE=cpu`를 사용합니다. GPU 서버는 시작 단�
 - Overlay는 tactile 외곽선과 missing/crack/wear mask, 분석 단위 ID, 비율, 심각도, 검토 여부를 표시합니다. 계산 불가 비율은 `ratio=?`입니다.
 - 기존 이미지 저장 흐름과 `regions.damage`, `analysis.damage_ratio_percent`는 유지하지만 deprecated입니다.
 - 저장소에는 4클래스 `yolo26s_seg_multiclass_v2_best.pt`가 포함되어 있습니다. 모델 메타데이터의 클래스 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
-- 모델 품질 게이트 미달 시 `MODEL_QUALITY_GATE_NOT_MET` 검토 사유가 추가됩니다.
+- `quality`는 모델 검증 성능을 보여주는 참고 정보이며 이미지별 판정이나 `review_required`를 변경하지 않습니다.
 
 ## 테스트
 

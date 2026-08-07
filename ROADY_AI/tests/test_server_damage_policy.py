@@ -14,12 +14,10 @@ def test_severity_boundaries():
     assert classify_severity(0.20, policy) == "severe"
 
 
-def test_v1_quality_requires_review():
+def test_v1_quality_metrics_do_not_require_review():
     reasons = decide_review(
         ratio=0.10, tactile_pixels=1000, tactile_confidence=0.9,
         damage_confidence=0.9, image_quality_ok=True,
         quality=ModelQuality(), policy=AnalysisPolicy(),
     )
-    assert "damage_mask_quality_below_target" in reasons
-    assert "damage_ratio_error_above_target" in reasons
-    assert "severity_quality_below_target" in reasons
+    assert reasons == []

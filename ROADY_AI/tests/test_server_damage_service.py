@@ -236,7 +236,7 @@ def payload(
             "repair_priority": "inspection_required",
             "repair_priority_label": "보수 확인 필요",
             "review_required": True,
-            "review_reasons": ["severity_quality_below_target"],
+            "review_reasons": ["severity_boundary_ambiguous"],
             "advisory_only": True,
         },
         "quality": {
@@ -314,7 +314,7 @@ def v2_payload(
         }
         for name in ("missing", "crack", "wear")
     }
-    reasons = [{"code": "MODEL_QUALITY_GATE_NOT_MET", "message": "review"}]
+    reasons = [{"code": "RATIO_NEAR_THRESHOLD", "message": "review"}]
     return {
         "schema_version": "2.0",
         "model": {

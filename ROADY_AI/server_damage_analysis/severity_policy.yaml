@@ -25,11 +25,6 @@ review:
   minimum_damage_confidence_for_auto: 0.70
   duplicate_mask_iou: 0.70
   minimum_tactile_pixels: 100
-  model_quality_gate:
-    minimum_positive_damage_dice: 0.70
-    maximum_ratio_mae_pp: 3.0
-    minimum_severity_macro_f1: 0.80
-
 analysis_units:
   block_aspect_ratio_min: 0.60
   block_aspect_ratio_max: 1.67

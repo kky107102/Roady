@@ -324,8 +324,6 @@ class ServerDamageAnalyzer:
                 "polygons": _polygons(valid),
             }
 
-        if self._model_quality_gate_failed():
-            reasons.append("MODEL_QUALITY_GATE_NOT_MET")
         ratios = [
             value["ratio_percent"]
             for value in damage_types.values()
@@ -382,8 +380,6 @@ class ServerDamageAnalyzer:
         reasons = ["TACTILE_BLOCK_NOT_DETECTED", "BLOCK_INSTANCE_UNRESOLVED"]
         if not estimable:
             reasons.extend(["EXPECTED_BLOCK_REGION_UNAVAILABLE", "MISSING_AREA_UNCERTAIN"])
-        if self._model_quality_gate_failed():
-            reasons.append("MODEL_QUALITY_GATE_NOT_MET")
         damage_types = {
             "missing": {
                 "detected": True,
@@ -576,14 +572,6 @@ class ServerDamageAnalyzer:
                 metadata.get("edge_damage_candidate_detected", False)
             ),
         }
-
-    def _model_quality_gate_failed(self) -> bool:
-        gate = self.policy["review"]["model_quality_gate"]
-        return (
-            self.quality.positive_damage_dice < float(gate["minimum_positive_damage_dice"])
-            or self.quality.ratio_mae_pp > float(gate["maximum_ratio_mae_pp"])
-            or self.quality.severity_macro_f1 < float(gate["minimum_severity_macro_f1"])
-        )
 
     def _ratio_near_threshold(self, ratio_percent: float) -> bool:
         margin = float(self.policy["review"]["boundary_margin_percent"])

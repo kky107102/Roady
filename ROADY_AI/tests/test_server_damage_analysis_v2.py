@@ -78,6 +78,22 @@ def test_crack_and_wear_are_clipped_to_tactile_unit():
     assert unit["damage_types"]["wear"]["ratio_percent"] == 0.0
 
 
+def test_model_quality_metrics_are_informational_and_do_not_require_review():
+    instance = analyzer()
+    instance.quality = ModelQuality()
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 60, 60)
+    result = fake_result([(0, 0.9, tactile)], shape)
+
+    payload, _, _ = instance.analyze_result(
+        result, input_metadata={"frame_quality_verified": True, "roi_source": "tactile_block"}
+    )
+
+    assert payload["summary"]["review_required"] is False
+    assert payload["summary"]["review_reasons"] == []
+    assert payload["quality"]["positive_damage_dice"] == ModelQuality().positive_damage_dice
+
+
 def test_missing_is_not_deleted_by_tactile_intersection_when_expected_region_is_valid():
     shape = (100, 120)
     tactile_masks = [rectangle(shape, x, 20, x + 20, 40) for x in (10, 40, 70)]
