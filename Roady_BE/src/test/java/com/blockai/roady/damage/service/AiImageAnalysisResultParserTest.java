@@ -97,6 +97,91 @@ class AiImageAnalysisResultParserTest {
     }
 
     @Test
+    void parseReadsV2DetectionIndependentlyFromDamageScore() {
+        ParsedAiImageAnalysisResult result = parser.parse("""
+                {
+                  "damaged": true,
+                  "damage_score": 0,
+                  "damage_type": "CRACK",
+                  "repair_required": false,
+                  "repair_priority": null,
+                  "confidence_score": 0.7139,
+                  "analysis_detail": {
+                    "schema_version": "2.0",
+                    "summary": {
+                      "damage_detected": true,
+                      "dominant_damage_type": "crack",
+                      "max_damage_ratio_percent": 0.12,
+                      "review_required": true,
+                      "review_reasons": [
+                        {"code": "MODEL_QUALITY_GATE_NOT_MET", "message": "검토 필요"}
+                      ]
+                    }
+                  }
+                }
+                """);
+
+        assertThat(result.damaged()).isTrue();
+        assertThat(result.damageScore()).isZero();
+        assertThat(result.damageType()).isEqualTo("CRACK");
+        assertThat(result.repairRequired()).isFalse();
+        assertThat(result.repairPriority()).isNull();
+        assertThat(result.confidenceScore()).isEqualByComparingTo(new BigDecimal("0.7139"));
+    }
+
+    @Test
+    void parseReadsPixelBasedScoreWhenMissingRatioIsUnavailable() {
+        ParsedAiImageAnalysisResult result = parser.parse("""
+                {
+                  "damaged": true,
+                  "damage_score": 40,
+                  "damage_type": "LARGE_MISSING",
+                  "repair_required": true,
+                  "repair_priority": "NORMAL",
+                  "confidence_score": 0.0879,
+                  "analysis_detail": {
+                    "schema_version": "2.0",
+                    "damage_ratio_percent": null,
+                    "estimated_severity": "moderate",
+                    "review_required": true
+                  }
+                }
+                """);
+
+        assertThat(result.damaged()).isTrue();
+        assertThat(result.damageScore()).isEqualTo(40);
+        assertThat(result.damageType()).isEqualTo("LARGE_MISSING");
+        assertThat(result.repairRequired()).isTrue();
+        assertThat(result.repairPriority()).isEqualTo("NORMAL");
+        assertThat(result.confidenceScore()).isEqualByComparingTo(new BigDecimal("0.0879"));
+    }
+
+    @Test
+    void parsePreservesV2UnknownDecisionAsNull() {
+        ParsedAiImageAnalysisResult result = parser.parse("""
+                {
+                  "damaged": null,
+                  "damage_score": null,
+                  "damage_type": null,
+                  "repair_required": null,
+                  "repair_priority": null,
+                  "confidence_score": null,
+                  "analysis_detail": {
+                    "schema_version": "2.0",
+                    "review_required": true
+                  }
+                }
+                """);
+
+        assertThat(result.damaged()).isNull();
+        assertThat(result.damageScore()).isNull();
+        assertThat(result.damageType()).isNull();
+        assertThat(result.repairRequired()).isNull();
+        assertThat(result.repairPriority()).isNull();
+        assertThat(result.confidenceScore()).isNull();
+    }
+
+    @Test
     void parseReturnsEmptyResultForInvalidJson() {
         ParsedAiImageAnalysisResult result = parser.parse("not-json");
 

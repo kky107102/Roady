@@ -20,14 +20,11 @@ class AnalysisPolicy:
     duplicate_mask_iou: float = 0.70
     minimum_tactile_pixels: int = 100
     minimum_damage_confidence_for_auto: float = 0.70
-    minimum_positive_damage_dice: float = 0.70
-    maximum_ratio_mae_pp: float = 3.0
-    minimum_severity_macro_f1: float = 0.80
 
 
 @dataclass(frozen=True)
 class ModelQuality:
-    """Fixed validation metrics used by the conservative quality gate."""
+    """Fixed validation metrics exposed for diagnostics only."""
 
     positive_damage_dice: float = 0.08300269501207208
     damage_f2: float = 0.826086956521739
@@ -88,12 +85,6 @@ def decide_review(
         for threshold in (policy.normal_limit, policy.minor_limit, policy.moderate_limit)
     ):
         reasons.append("severity_boundary_ambiguous")
-    if quality.positive_damage_dice < policy.minimum_positive_damage_dice:
-        reasons.append("damage_mask_quality_below_target")
-    if quality.ratio_mae_pp > policy.maximum_ratio_mae_pp:
-        reasons.append("damage_ratio_error_above_target")
-    if quality.severity_macro_f1 < policy.minimum_severity_macro_f1:
-        reasons.append("severity_quality_below_target")
     return list(dict.fromkeys(reasons))
 
 

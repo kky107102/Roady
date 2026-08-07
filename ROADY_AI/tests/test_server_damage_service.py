@@ -14,30 +14,34 @@ from ROADY_AI.server_damage_analysis.service import (
 
 
 @pytest.mark.parametrize(
-    ("percent", "expected"),
+    ("pixels", "expected"),
     [
-        (0.0, 0),
-        (0.49, 0),
-        (0.5, 1),
-        (4.99, 30),
-        (5.0, 31),
-        (8.59, 45),
-        (14.99, 70),
-        (15.0, 71),
-        (100.0, 100),
+        (0, 0),
+        (1, 1),
+        (5_000, 15),
+        (10_000, 30),
+        (10_001, 31),
+        (19_260, 40),
+        (50_000, 70),
+        (50_001, 71),
+        (75_000, 86),
+        (100_000, 100),
+        (100_001, 100),
     ],
 )
-def test_damage_score_matches_erd_severity_bands(percent: float, expected: int):
-    assert calculate_damage_score(percent) == expected
+def test_damage_score_uses_only_damage_mask_pixels(pixels: int, expected: int):
+    assert calculate_damage_score(pixels) == expected
 
 
 def test_service_maps_model_result_to_database_contract():
-    service = make_service(FakeAnalyzer([payload(0.0859, 0.84321)]))
+    service = make_service(
+        FakeAnalyzer([payload(0.0859, 0.84321, damage_pixels=19_260)])
+    )
 
     response = service.analyze_images([input_image("damage.jpg")])
 
     assert response.damaged is True
-    assert response.damage_score == 45
+    assert response.damage_score == 40
     assert response.damage_type is None
     assert response.repair_required is True
     assert response.repair_priority == "NORMAL"
@@ -52,8 +56,8 @@ def test_service_selects_highest_risk_image():
         FakeAnalyzer(
             [
                 payload(0.02, 0.91),
-                payload(0.20, 0.81),
-                payload(0.08, 0.95),
+                payload(0.20, 0.81, damage_pixels=80_000),
+                payload(0.08, 0.95, damage_pixels=30_000),
             ]
         )
     )
@@ -66,7 +70,7 @@ def test_service_selects_highest_risk_image():
         ]
     )
 
-    assert response.damage_score == 73
+    assert response.damage_score == 88
     assert response.repair_required is True
     assert response.repair_priority == "HIGH"
     assert response.confidence_score == 0.81
@@ -75,8 +79,8 @@ def test_service_selects_highest_risk_image():
     assert len(response.analysis_detail.images) == 3
 
 
-def test_service_returns_normal_contract_below_damage_threshold():
-    service = make_service(FakeAnalyzer([payload(0.004, 0.88)]))
+def test_service_returns_normal_contract_without_damage_pixels():
+    service = make_service(FakeAnalyzer([payload(0.004, 0.88, damage_pixels=0)]))
 
     response = service.analyze_images([input_image("normal.jpg")])
 
@@ -95,28 +99,83 @@ def test_service_returns_review_contract_without_tactile_block():
     assert response.analysis_detail.review_required is True
 
 
-def test_service_preserves_unknown_missing_as_null_instead_of_zero():
+def test_service_scores_unknown_missing_from_damage_pixels():
     service = make_service(FakeAnalyzer([v2_unknown_missing_payload()]))
 
     response = service.analyze_images([input_image("unknown-missing.jpg")])
 
     assert response.damaged is True
-    assert response.damage_score is None
-    assert response.repair_required is None
-    assert response.repair_priority is None
+    assert response.damage_score == 40
+    assert response.damage_type == "LARGE_MISSING"
+    assert response.repair_required is True
+    assert response.repair_priority == "NORMAL"
     assert response.analysis_detail.damage_ratio is None
     assert response.analysis_detail.damage_ratio_percent is None
-    assert response.analysis_detail.estimated_severity is None
+    assert response.analysis_detail.estimated_severity == "moderate"
     assert response.analysis_detail.review_required is True
     assert response.analysis_detail.schema_version == "2.0"
+
+
+@pytest.mark.parametrize(
+    ("dominant", "ratio_percent", "expected_type"),
+    [
+        ("missing", 14.99, "SMALL_MISSING"),
+        ("missing", 15.0, "LARGE_MISSING"),
+        ("crack", 0.12, "CRACK"),
+        ("wear", 3.0, "WEAR"),
+    ],
+)
+def test_service_maps_v2_dominant_damage_type(
+    dominant: str,
+    ratio_percent: float,
+    expected_type: str,
+):
+    service = make_service(FakeAnalyzer([v2_payload(dominant, ratio_percent)]))
+
+    response = service.analyze_images([input_image("v2-damage.jpg")])
+
+    assert response.damaged is True
+    assert response.damage_type == expected_type
+
+
+def test_service_uses_v2_detection_independently_from_damage_score():
+    service = make_service(FakeAnalyzer([v2_payload("crack", 0.12)]))
+
+    response = service.analyze_images([input_image("small-crack.jpg")])
+
+    assert response.damaged is True
+    assert response.damage_score == 1
+    assert response.damage_type == "CRACK"
+
+
+def test_service_keeps_unknown_model_decision_null():
+    payload_value = v2_payload("crack", 1.0)
+    payload_value["summary"]["damage_detected"] = None
+    payload_value["analysis"]["damage_detected"] = None
+    service = make_service(FakeAnalyzer([payload_value]))
+
+    response = service.analyze_images([input_image("invalid-model.jpg")])
+
+    assert response.damaged is None
+    assert response.confidence_score is None
 
 
 class FakeAnalyzer:
     def __init__(self, payloads: list[dict]):
         self.payloads = iter(payloads)
+        self.received_metadata: list[dict | None] = []
 
-    def predict(self, image, *, imgsz, device, image_quality_ok=True):
+    def predict(
+        self,
+        image,
+        *,
+        imgsz,
+        device,
+        image_quality_ok=True,
+        input_metadata=None,
+    ):
         del image, imgsz, device, image_quality_ok
+        self.received_metadata.append(input_metadata)
         return next(self.payloads), np.zeros((2, 2, 3)), np.zeros((2, 2))
 
 
@@ -139,6 +198,7 @@ def payload(
     confidence: float | None,
     *,
     tactile_pixels: int = 1000,
+    damage_pixels: int | None = None,
 ) -> dict:
     if ratio < 0.005:
         severity = "normal"
@@ -148,7 +208,9 @@ def payload(
         severity = "moderate"
     else:
         severity = "severe"
-    damage_pixels = round(tactile_pixels * ratio)
+    resolved_damage_pixels = (
+        round(tactile_pixels * ratio) if damage_pixels is None else damage_pixels
+    )
     return {
         "schema_version": "1.0",
         "model": {
@@ -164,17 +226,17 @@ def payload(
                 "pixels": tactile_pixels,
             },
             "damage": {
-                "bbox_xyxy": [1, 1, 2, 2] if damage_pixels else None,
+                "bbox_xyxy": [1, 1, 2, 2] if resolved_damage_pixels else None,
                 "polygons": [],
                 "confidence": confidence,
-                "pixels": damage_pixels,
-                "raw_pixels": damage_pixels,
+                "pixels": resolved_damage_pixels,
+                "raw_pixels": resolved_damage_pixels,
                 "outside_tactile_pixels": 0,
-                "merged_instance_count": 1 if damage_pixels else 0,
+                "merged_instance_count": 1 if resolved_damage_pixels else 0,
             },
         },
         "analysis": {
-            "damage_detected": damage_pixels > 0,
+            "damage_detected": resolved_damage_pixels > 0,
             "damage_ratio": ratio,
             "damage_ratio_percent": ratio * 100,
             "estimated_severity": severity,
@@ -182,7 +244,7 @@ def payload(
             "repair_priority": "inspection_required",
             "repair_priority_label": "보수 확인 필요",
             "review_required": True,
-            "review_reasons": ["severity_quality_below_target"],
+            "review_reasons": ["severity_boundary_ambiguous"],
             "advisory_only": True,
         },
         "quality": {
@@ -207,10 +269,11 @@ def v2_unknown_missing_payload() -> dict:
         },
         "regions": {
             "tactile_block": {"pixels": 1000, "polygons": []},
-            "damage": {"pixels": 100, "polygons": []},
+            "damage": {"pixels": 19_260, "polygons": []},
         },
         "units": [
             {
+                "local_unit_id": "block_group_1",
                 "damage_types": {
                     "missing": {"detected": True, "confidence": 0.82},
                     "crack": {"detected": False, "confidence": None},
@@ -220,8 +283,10 @@ def v2_unknown_missing_payload() -> dict:
         ],
         "summary": {
             "damage_detected": True,
-            "estimated_severity": None,
+            "estimated_severity": "moderate",
             "repair_priority": "inspection_required",
+            "worst_unit_id": "block_group_1",
+            "dominant_damage_type": "missing",
             "max_damage_ratio_percent": None,
             "review_required": True,
             "review_reasons": reasons,
@@ -230,7 +295,71 @@ def v2_unknown_missing_payload() -> dict:
         "analysis": {
             "damage_detected": True,
             "damage_ratio_percent": None,
-            "estimated_severity": None,
+            "estimated_severity": "moderate",
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "quality": {},
+    }
+
+
+def v2_payload(
+    dominant: str,
+    ratio_percent: float,
+    confidence: float = 0.82,
+) -> dict:
+    if ratio_percent < 0.5:
+        severity = "normal"
+    elif ratio_percent < 5.0:
+        severity = "minor"
+    elif ratio_percent < 15.0:
+        severity = "moderate"
+    else:
+        severity = "severe"
+    damage_types = {
+        name: {
+            "detected": name == dominant,
+            "confidence": confidence if name == dominant else None,
+            "ratio_percent": ratio_percent if name == dominant else 0.0,
+        }
+        for name in ("missing", "crack", "wear")
+    }
+    reasons = [{"code": "RATIO_NEAR_THRESHOLD", "message": "review"}]
+    return {
+        "schema_version": "2.0",
+        "model": {
+            "name": "yolo26s_seg_multiclass_v2_best",
+            "task": "segmentation",
+            "class_names": ["tactile_block", "missing", "crack", "wear"],
+            "policy_version": "draft-1",
+            "class_mapping_valid": True,
+        },
+        "regions": {
+            "tactile_block": {"pixels": 1000, "polygons": []},
+            "damage": {"pixels": max(1, round(ratio_percent * 10)), "polygons": []},
+        },
+        "units": [
+            {
+                "local_unit_id": "block_1",
+                "damage_types": damage_types,
+            }
+        ],
+        "summary": {
+            "damage_detected": True,
+            "estimated_severity": severity,
+            "repair_priority": "inspection_required",
+            "worst_unit_id": "block_1",
+            "dominant_damage_type": dominant,
+            "max_damage_ratio_percent": ratio_percent,
+            "review_required": True,
+            "review_reasons": reasons,
+            "advisory_only": True,
+        },
+        "analysis": {
+            "damage_detected": True,
+            "damage_ratio_percent": ratio_percent,
+            "estimated_severity": severity,
             "review_required": True,
             "review_reasons": reasons,
             "advisory_only": True,

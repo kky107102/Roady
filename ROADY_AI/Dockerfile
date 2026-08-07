@@ -30,6 +30,16 @@ RUN python -m pip install --no-cache-dir \
     && python -m pip install --no-cache-dir \
         -r /tmp/requirements/requirements-server.txt
 
+# Keep model/runtime settings after dependency installation so model swaps do
+# not invalidate the expensive PyTorch installation layer.
+ENV ROADY_AI_MODEL_PATH=/app/ROADY_AI/models/server/yolo26s_seg_multiclass_v2_best.pt \
+    ROADY_AI_MODEL_SHA256_PATH=/app/ROADY_AI/models/server/yolo26s_seg_multiclass_v2_best.sha256 \
+    ROADY_AI_DEVICE=0 \
+    ROADY_AI_IMGSZ=768 \
+    ROADY_AI_INFERENCE_CONCURRENCY=1 \
+    ROADY_AI_VERIFY_MODEL_HASH=true \
+    ROADY_AI_WARMUP_ENABLED=true
+
 COPY ROADY_AI /app/ROADY_AI
 
 RUN useradd --create-home --uid 10001 roady \

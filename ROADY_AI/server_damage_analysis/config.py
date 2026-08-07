@@ -27,6 +27,9 @@ class AppSettings:
     max_image_bytes: int = 20 * 1024 * 1024
     max_request_bytes: int = 200 * 1024 * 1024
     inference_concurrency: int = 1
+    score_minor_max_pixels: int = 10_000
+    score_moderate_max_pixels: int = 50_000
+    score_max_pixels: int = 100_000
     verify_model_hash: bool = True
     warmup_enabled: bool = True
 
@@ -62,6 +65,21 @@ class AppSettings:
                         cls.inference_concurrency,
                     )
                 ),
+            ),
+            score_minor_max_pixels=int(
+                os.getenv(
+                    "ROADY_AI_SCORE_MINOR_MAX_PIXELS",
+                    cls.score_minor_max_pixels,
+                )
+            ),
+            score_moderate_max_pixels=int(
+                os.getenv(
+                    "ROADY_AI_SCORE_MODERATE_MAX_PIXELS",
+                    cls.score_moderate_max_pixels,
+                )
+            ),
+            score_max_pixels=int(
+                os.getenv("ROADY_AI_SCORE_MAX_PIXELS", cls.score_max_pixels)
             ),
             verify_model_hash=_boolean_env("ROADY_AI_VERIFY_MODEL_HASH", True),
             warmup_enabled=_boolean_env("ROADY_AI_WARMUP_ENABLED", True),
