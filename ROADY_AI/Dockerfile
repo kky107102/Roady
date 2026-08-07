@@ -7,7 +7,14 @@ ARG PYTORCH_INDEX_URL=https://download.pytorch.org/whl/cu128
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    YOLO_CONFIG_DIR=/tmp/ultralytics
+    YOLO_CONFIG_DIR=/tmp/ultralytics \
+    ROADY_AI_MODEL_PATH=/app/ROADY_AI/models/server/yolo26s_seg_multiclass_v3_best.pt \
+    ROADY_AI_MODEL_SHA256_PATH=/app/ROADY_AI/models/server/yolo26s_seg_multiclass_v3_best.sha256 \
+    ROADY_AI_DEVICE=0 \
+    ROADY_AI_IMGSZ=768 \
+    ROADY_AI_INFERENCE_CONCURRENCY=1 \
+    ROADY_AI_VERIFY_MODEL_HASH=true \
+    ROADY_AI_WARMUP_ENABLED=true
 
 WORKDIR /app
 

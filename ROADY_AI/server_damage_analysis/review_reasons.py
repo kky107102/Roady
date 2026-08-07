@@ -15,6 +15,7 @@ REVIEW_MESSAGES = {
     "LOW_DAMAGE_CONFIDENCE": "파손 탐지 신뢰도가 자동 분석 기준보다 낮습니다.",
     "RATIO_NEAR_THRESHOLD": "파손 비율이 심각도 등급 경계에 가까워 담당자 확인이 필요합니다.",
     "EDGE_SERVER_DISAGREEMENT": "Edge에서 파손 후보가 탐지되었으나 서버에서 파손 유형을 확정하지 못했습니다.",
+    "OBSTRUCTION_SUSPECTED": "점자블록이 물체에 가려져 파손 여부와 파손 비율을 확정할 수 없습니다.",
 }
 
 

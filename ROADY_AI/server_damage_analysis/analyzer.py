@@ -22,6 +22,11 @@ from .review_reasons import review_reason_list
 
 REQUIRED_CLASSES = ("tactile_block", "missing", "crack", "wear")
 DAMAGE_CLASSES = ("missing", "crack", "wear")
+# Optional 5th class. When the model has it (5-class model), a confident
+# obstruction mask covering the ROI routes the whole ROI to OBSTRUCTION_SUSPECTED
+# (판단 보류) instead of confirming missing/crack/wear. Absent on 4-class models,
+# in which case obstruction handling falls back to the metadata flag only.
+OBSTRUCTION_CLASS = "obstruction"
 COLORS = {
     "tactile_block": (64, 220, 120),
     "missing": (40, 40, 230),
@@ -151,6 +156,16 @@ class ServerDamageAnalyzer:
             return payload, original, np.zeros(shape, dtype=bool)
 
         items = self._collect_instances(result, shape)
+        # 5-class model: a confident obstruction mask covering enough of the ROI
+        # means the block is occluded -> route to 판단 보류 via the existing
+        # possible_obstruction path (never auto-confirm missing/crack/wear on it).
+        obstruction_union = _union(items.get(OBSTRUCTION_CLASS, []), shape)
+        if obstruction_union.any():
+            coverage = float(obstruction_union.sum()) / float(max(1, height * width))
+            if coverage >= float(self.policy["review"].get("obstruction_coverage_min", 0.05)):
+                input_payload["possible_obstruction"] = True
+                if not input_payload.get("obstruction_source"):
+                    input_payload["obstruction_source"] = "server_model"
         tactile_items = items["tactile_block"]
         type_items = {name: items[name] for name in DAMAGE_CLASSES}
         type_unions = {name: _union(type_items[name], shape) for name in DAMAGE_CLASSES}
@@ -212,7 +227,7 @@ class ServerDamageAnalyzer:
         return payload, overlay, total_damage_mask
 
     def _collect_instances(self, result: Any, shape: tuple[int, int]) -> dict[str, list[tuple[float, np.ndarray]]]:
-        candidates = {name: [] for name in REQUIRED_CLASSES}
+        candidates = {name: [] for name in REQUIRED_CLASSES + (OBSTRUCTION_CLASS,)}
         if result.boxes is not None and result.masks is not None:
             classes = result.boxes.cls.detach().cpu().numpy().astype(int)
             confidences = result.boxes.conf.detach().cpu().numpy().astype(float)
@@ -221,11 +236,12 @@ class ServerDamageAnalyzer:
                 name = self.class_names.get(int(class_id))
                 if name not in candidates:
                     continue
-                threshold = float(
-                    self.policy["review"]["tactile_confidence"]
-                    if name == "tactile_block"
-                    else self.policy["review"]["damage_confidence"]
-                )
+                if name == "tactile_block":
+                    threshold = float(self.policy["review"]["tactile_confidence"])
+                elif name == OBSTRUCTION_CLASS:
+                    threshold = float(self.policy["review"].get("obstruction_confidence", 0.25))
+                else:
+                    threshold = float(self.policy["review"]["damage_confidence"])
                 if confidence >= threshold:
                     candidates[name].append((float(confidence), _resize_mask(mask, shape)))
         duplicate_iou = float(self.policy["review"]["duplicate_mask_iou"])
@@ -335,7 +351,18 @@ class ServerDamageAnalyzer:
             reasons.append("RATIO_NEAR_THRESHOLD")
         decision = evaluate_unit_severity(damage_types, self.policy)
         missing_unknown = damage_types["missing"]["ratio_status"] == "not_estimable"
-        total_ratio = None if missing_unknown else float(total_mask.sum() / tactile_mask.sum() * 100.0)
+        missing_estimable = (
+            damage_types["missing"]["detected"]
+            and damage_types["missing"]["ratio_status"] == "estimated"
+            and expected is not None
+            and expected.mask is not None
+        )
+        denominator_mask = expected.mask if missing_estimable else tactile_mask
+        total_ratio = (
+            None
+            if missing_unknown or not denominator_mask.any()
+            else float((total_mask & denominator_mask).sum() / denominator_mask.sum() * 100.0)
+        )
         total_status = "not_estimable" if missing_unknown else ("estimated" if total_mask.any() else "measured_no_damage")
         unit = {
             "local_unit_id": local_id,
@@ -447,9 +474,13 @@ class ServerDamageAnalyzer:
             summary_reasons = _merge_review_reasons(units)
             summary = {
                 "damage_detected": any(unit["analysis"]["damage_detected"] for unit in units),
-                "estimated_severity": worst["analysis"]["estimated_severity"],
-                "repair_priority": worst["analysis"]["repair_priority"],
-                "repair_priority_label": worst["analysis"]["repair_priority_label"],
+                "ratio_status": "not_estimable" if uncertain_units else (
+                    "estimated" if any(value is not None and value > 0 for value in estimable)
+                    else "measured_no_damage"
+                ),
+                "estimated_severity": None if uncertain_units else worst["analysis"]["estimated_severity"],
+                "repair_priority": "inspection_required" if uncertain_units else worst["analysis"]["repair_priority"],
+                "repair_priority_label": "담당자 검토 필요" if uncertain_units else worst["analysis"]["repair_priority_label"],
                 "worst_unit_id": worst["local_unit_id"],
                 "dominant_damage_type": worst["analysis"]["severity_reason"]["dominant_damage_type"],
                 "max_damage_ratio_percent": max(estimable) if estimable else None,
@@ -464,6 +495,7 @@ class ServerDamageAnalyzer:
             reasons = review_reason_list(["TACTILE_BLOCK_NOT_DETECTED"])
             summary = {
                 "damage_detected": False,
+                "ratio_status": "not_estimable",
                 "estimated_severity": None,
                 "repair_priority": None,
                 "repair_priority_label": None,
@@ -477,6 +509,56 @@ class ServerDamageAnalyzer:
                 "review_reasons": reasons,
                 "advisory_only": True,
             }
+        if input_payload["possible_obstruction"]:
+            obstruction_reason = review_reason_list(["OBSTRUCTION_SUSPECTED"])[0]
+            for unit in units:
+                analysis = unit["analysis"]
+                detected = bool(analysis["damage_detected"])
+                analysis.update(
+                    {
+                        "damage_detected": True if detected else None,
+                        "total_damage_ratio_percent": None,
+                        "ratio_status": "not_estimable",
+                        "estimated_severity": None,
+                        "repair_priority": "inspection_required",
+                        "repair_priority_label": "담당자 검토 필요",
+                        "severity_reason": {
+                            "dominant_damage_type": None,
+                            "rule": "obstruction_suspected",
+                            "measured_ratio_percent": None,
+                            "policy_version": self.policy["policy"]["version"],
+                        },
+                        "review_required": True,
+                    }
+                )
+                if all(
+                    reason["code"] != obstruction_reason["code"]
+                    for reason in analysis["review_reasons"]
+                ):
+                    analysis["review_reasons"].append(obstruction_reason)
+            detected = any(
+                unit["analysis"]["damage_detected"] is True for unit in units
+            )
+            summary.update(
+                {
+                    "damage_detected": True if detected else None,
+                    "ratio_status": "not_estimable",
+                    "estimated_severity": None,
+                    "repair_priority": "inspection_required",
+                    "repair_priority_label": "담당자 검토 필요",
+                    "max_damage_ratio_percent": None,
+                    "mean_damage_ratio_percent": None,
+                    "not_estimable_unit_count": len(units),
+                    "review_required_unit_count": len(units),
+                    "review_required": True,
+                    "advisory_only": True,
+                }
+            )
+            if all(
+                reason["code"] != obstruction_reason["code"]
+                for reason in summary["review_reasons"]
+            ):
+                summary["review_reasons"].append(obstruction_reason)
         if input_payload["edge_damage_candidate_detected"] and not summary["damage_detected"]:
             disagreement = review_reason_list(["EDGE_SERVER_DISAGREEMENT"])[0]
             if all(reason["code"] != disagreement["code"] for reason in summary["review_reasons"]):
@@ -534,6 +616,7 @@ class ServerDamageAnalyzer:
             "units": [],
             "summary": {
                 "damage_detected": None,
+                "ratio_status": "not_estimable",
                 "estimated_severity": None,
                 "repair_priority": None,
                 "worst_unit_id": None,
@@ -571,6 +654,8 @@ class ServerDamageAnalyzer:
             "edge_damage_candidate_detected": bool(
                 metadata.get("edge_damage_candidate_detected", False)
             ),
+            "possible_obstruction": bool(metadata.get("possible_obstruction", False)),
+            "obstruction_source": metadata.get("obstruction_source"),
         }
 
     def _ratio_near_threshold(self, ratio_percent: float) -> bool:
