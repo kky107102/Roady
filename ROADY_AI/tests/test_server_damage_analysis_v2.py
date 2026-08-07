@@ -96,6 +96,7 @@ def test_missing_is_not_deleted_by_tactile_intersection_when_expected_region_is_
     assert first["pixels"] == 100
     assert first["ratio_percent"] == 25.0
     assert first["ratio_status"] == "estimated"
+    assert payload["units"][0]["analysis"]["total_damage_ratio_percent"] == 25.0
 
 
 def test_missing_ratio_is_null_when_expected_region_is_unavailable():
@@ -290,6 +291,55 @@ def test_edge_candidate_without_server_damage_requires_review():
     }
 
 
+def test_obstruction_suspected_never_confirms_ratio_or_severity():
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 80, 80)
+    wear = rectangle(shape, 30, 30, 50, 50)
+    result = fake_result([(0, 0.9, tactile), (3, 0.95, wear)], shape)
+
+    payload, _, _ = analyzer().analyze_result(
+        result,
+        input_metadata={
+            "frame_quality_verified": True,
+            "roi_source": "tactile_block",
+            "edge_damage_candidate_detected": True,
+            "possible_obstruction": True,
+            "obstruction_source": "edge_ood_gate",
+        },
+    )
+
+    unit = payload["units"][0]
+    assert unit["damage_types"]["wear"]["detected"] is True
+    assert unit["analysis"]["damage_detected"] is True
+    assert unit["analysis"]["ratio_status"] == "not_estimable"
+    assert unit["analysis"]["total_damage_ratio_percent"] is None
+    assert unit["analysis"]["estimated_severity"] is None
+    assert payload["summary"]["max_damage_ratio_percent"] is None
+    assert payload["summary"]["repair_priority"] == "inspection_required"
+    assert "OBSTRUCTION_SUSPECTED" in {
+        reason["code"] for reason in payload["summary"]["review_reasons"]
+    }
+
+
+def test_obstruction_without_damage_returns_unknown_not_clean():
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 80, 80)
+    result = fake_result([(0, 0.9, tactile)], shape)
+
+    payload, _, _ = analyzer().analyze_result(
+        result,
+        input_metadata={
+            "frame_quality_verified": True,
+            "possible_obstruction": True,
+        },
+    )
+
+    assert payload["summary"]["damage_detected"] is None
+    assert payload["summary"]["max_damage_ratio_percent"] is None
+    assert payload["summary"]["estimated_severity"] is None
+    assert payload["summary"]["review_required"] is True
+
+
 def test_yaml_policy_change_is_applied_without_code_change(tmp_path):
     source = Path(__file__).parents[1] / "server_damage_analysis" / "severity_policy.yaml"
     content = source.read_text(encoding="utf-8").replace(
@@ -309,3 +359,71 @@ def test_yaml_policy_change_is_applied_without_code_change(tmp_path):
     )
 
     assert decision.severity == "moderate"
+
+
+def analyzer_5class():
+    instance = ServerDamageAnalyzer.__new__(ServerDamageAnalyzer)
+    instance.model_path = Path("fake_obstruction.pt")
+    instance.policy = load_severity_policy()
+    instance.quality = ModelQuality(
+        positive_damage_dice=0.9,
+        damage_f2=0.9,
+        ratio_mae_pp=1.0,
+        severity_macro_f1=0.9,
+    )
+    instance.class_names = {
+        0: "tactile_block", 1: "missing", 2: "crack", 3: "wear", 4: "obstruction"
+    }
+    instance.class_mapping_valid = True
+    instance.class_ids = {value: key for key, value in instance.class_names.items()}
+    return instance
+
+
+def test_obstruction_class_mask_routes_to_review_without_metadata_flag():
+    # 5-class model detects an obstruction mask covering the ROI. Even though it
+    # ALSO spuriously predicts missing at high confidence (the observed 86% failure),
+    # the block must go to 판단 보류 - never auto-confirmed as damage. No metadata
+    # flag is set here: the routing must be driven by the model's obstruction class.
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 60, 60)
+    missing = rectangle(shape, 25, 25, 55, 55)          # scooter mistaken for missing
+    obstruction = rectangle(shape, 10, 10, 100, 90)     # ~60% of ROI
+    result = fake_result(
+        [(0, 0.9, tactile), (1, 0.95, missing), (4, 0.92, obstruction)], shape
+    )
+
+    payload, _, _ = analyzer_5class().analyze_result(
+        result,
+        input_metadata={"frame_quality_verified": True, "roi_source": "tactile_block"},
+    )
+    summary = payload["summary"]
+
+    assert payload["input"]["possible_obstruction"] is True
+    assert payload["input"]["obstruction_source"] == "server_model"
+    assert summary["review_required"] is True
+    assert summary["estimated_severity"] is None
+    assert summary["max_damage_ratio_percent"] is None
+    assert "OBSTRUCTION_SUSPECTED" in {r["code"] for r in summary["review_reasons"]}
+    for unit in payload["units"]:
+        assert unit["analysis"]["ratio_status"] == "not_estimable"
+        assert unit["analysis"]["estimated_severity"] is None
+
+
+def test_tiny_obstruction_blip_below_coverage_does_not_trigger_review():
+    # An obstruction mask below obstruction_coverage_min must NOT flip a genuine
+    # damage analysis into 판단 보류.
+    shape = (100, 120)
+    tactile = rectangle(shape, 20, 20, 60, 60)
+    crack = rectangle(shape, 30, 30, 50, 50)
+    tiny = rectangle(shape, 0, 0, 4, 4)                 # ~0.13% of ROI
+    result = fake_result([(0, 0.9, tactile), (2, 0.9, crack), (4, 0.9, tiny)], shape)
+
+    payload, _, _ = analyzer_5class().analyze_result(
+        result,
+        input_metadata={"frame_quality_verified": True, "roi_source": "tactile_block"},
+    )
+
+    assert payload["input"]["possible_obstruction"] is False
+    assert "OBSTRUCTION_SUSPECTED" not in {
+        r["code"] for r in payload["summary"]["review_reasons"]
+    }

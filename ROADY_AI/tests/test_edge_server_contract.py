@@ -50,6 +50,7 @@ def test_edge_event_uses_second_image_as_server_analysis_roi(tmp_path):
         "tactile_detection_count": 2,
         "frame_selection_status": "quality_gate_passed",
         "edge_damage_candidate_detected": True,
+        "possible_obstruction": False,
     }
 
 

@@ -7,7 +7,7 @@ Jira: `S15P11A404-168`
 | 항목 | 값 |
 |---|---|
 | 모델 | YOLO26s-seg |
-| 가중치 | `models/server/yolo26s_seg_multiclass_v2_best.pt` |
+| 가중치 | `models/server/yolo26s_seg_multiclass_v3_best.pt` |
 | 입력 | Edge가 전송한 점자블록 기준 ROI |
 | 입력 크기 | 768 |
 | 결과 정책 | 잠정 정책(`draft-1`), `advisory_only=true` |
@@ -20,6 +20,23 @@ Jira: `S15P11A404-168`
 | 1 | `missing` | 큰 결손·작은 결손 | 비율을 신뢰할 수 있을 때 15% 기준으로 후처리 구분 |
 | 2 | `crack` | 균열 | 점자블록 내부의 유효 균열 Mask 분석 |
 | 3 | `wear` | 마모 | 점자블록 내부의 유효 마모 Mask 분석 |
+| 4 | `obstruction` | 거치물 | 파손 분석을 확정하지 않고 `OBSTRUCTION_SUSPECTED` 판단 보류 |
+
+## v3 고정 Test 결과
+
+고정 Test 45장, 249개 인스턴스를 `imgsz=1024`로 평가한 결과입니다.
+
+| 클래스 | Mask Precision | Mask Recall | Mask mAP50 | Mask mAP50-95 |
+|---|---:|---:|---:|---:|
+| `tactile_block` | 0.962 | 0.958 | 0.988 | 0.916 |
+| `missing` | 0.971 | 0.800 | 0.868 | 0.789 |
+| `crack` | 0.521 | 0.583 | 0.409 | 0.081 |
+| `wear` | 0.918 | 0.757 | 0.909 | 0.459 |
+| `obstruction` | 0.747 | 0.750 | 0.912 | 0.801 |
+
+`obstruction_confidence=0.25` 기준 클래스 존재 판정은 거치물 이미지 4/4를 탐지했고,
+비거치물 이미지 41장에서는 거치물 오탐이 없었습니다. 표본이 작으므로 자동 행정 판정에
+사용하지 않고 `review_required=true`, `advisory_only=true` 판단 보류 정책을 유지합니다.
 
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로 분할하고,
 개별 점자블록 대비 결손 비율을 계산할 수 있을 때만 15% 기준으로 구분합니다. 예상 블록 영역을
