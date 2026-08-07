@@ -15,33 +15,32 @@
 | `damages` | 점자블록 파손 1건의 중심 정보를 저장한다. 위도, 경도, 촬영 시각, 현재 처리 상태 등이 들어간다. |
 | `damage_images` | 파손 데이터에 연결된 이미지 파일 여러 장의 정보를 저장한다. |
 | `damage_ai_analysis_results` | AI가 분석한 파손 여부, 파손 유형, 파손 점수, 신뢰도, 보수 필요 여부, 보수 우선순위를 저장한다. |
-| `repair_assignments` | 보수 요청 시 담당자, 배정자, 예정일, 메모를 저장한다. |
 | `repair_request_histories` | 보수 요청/완료/취소 및 배정/취소 시점의 상태 변경, 요청 메모, 담당자 배정 이력을 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청도 저장한다. |
+
+`repair_assignments`는 API 명세의 후속 설계안이며 현재 `schema.sql`과 구현 ERD에는 포함하지 않는다. 현재 보수 담당자와 완료 정보는 `damages`, 요청·수정·완료·취소 이력은 `repair_request_histories`에 저장한다.
 
 ## 2. 주요 관계
 
 ```text
 users 1:N robots (responsible)
 users 1:N robot_commands (requests)
+users 1:N robot_routes (creates)
 users 1:N damages (reports)
-users 1:N damages (assigned)
-users 1:N damages (repairs)
-users 1:N repair_assignments (assigns)
-users 1:N repair_assignments (repairs)
+users 1:N damages (assigned, damage side optional)
+users 1:N damages (repairs, damage side optional)
 users 1:N repair_request_histories (requests)
+users 1:N repair_request_histories (repairs, history side optional)
 
 robots 1:N robot_status_logs
 robots 1:N robot_commands
 robots 1:N robot_routes
-robots 1:N damages
+robots 1:N damages (damage side optional)
 
 robot_routes 1:N robot_route_points
 
 damages 1:N damage_images
 damages 1:N damage_ai_analysis_results
-damages 0:1 repair_assignments
 damages 1:N repair_request_histories
-repair_assignments 0:N repair_request_histories
 ```
 
 ## 3. ERD
@@ -157,33 +156,22 @@ erDiagram
     damage_ai_analysis_results {
         bigint id PK
         bigint damage_id FK
-        boolean damaged
-        int damage_score
-        varchar damage_type
-        boolean repair_required
-        varchar repair_priority
-        decimal confidence_score
+        boolean damaged "NULL"
+        int damage_score "NULL"
+        varchar damage_type "NULL"
+        boolean repair_required "NULL"
+        varchar repair_priority "NULL"
+        decimal confidence_score "NULL"
         varchar analysis_status
-        text raw_result
-        datetime analyzed_at
+        longtext raw_result "NULL"
+        datetime analyzed_at "NULL"
         datetime created_at
-    }
-
-    repair_assignments {
-        bigint id PK
-        bigint damage_id FK "UK"
-        bigint repairer_id FK
-        bigint assigned_by FK
-        date scheduled_date
-        text note
-        datetime created_at
-        datetime updated_at
     }
 
     repair_request_histories {
         bigint id PK
         bigint damage_id FK "NOT NULL"
-        bigint repair_assignment_id FK "NULL"
+        bigint repair_assignment_id "NULL, reserved, no FK"
         bigint requested_by FK "NOT NULL"
         bigint repairer_id FK "NULL"
         varchar before_status "NOT NULL"
@@ -196,24 +184,21 @@ erDiagram
     users ||--o{ robots : responsible_for
     users ||--o{ robot_commands : requests
     users ||--o{ damages : reports
-    users ||--o{ damages : assigned_to
-    users ||--o{ damages : repairs
-    users ||--o{ repair_assignments : assigns
-    users ||--o{ repair_assignments : repairs
+    users o|--o{ damages : assigned_to
+    users o|--o{ damages : repairs
     users ||--o{ repair_request_histories : requests
+    users o|--o{ repair_request_histories : repairs
 
     robots ||--o{ robot_status_logs : records
     robots ||--o{ robot_commands : receives
     robots ||--o{ robot_routes : has
-    robots ||--o{ damages : captures
+    robots o|--o{ damages : captures
 
     robot_routes ||--o{ robot_route_points : contains
 
     damages ||--o{ damage_images : has
     damages ||--o{ damage_ai_analysis_results : analyzed_by
-    damages ||--o| repair_assignments : assigned_to
     damages ||--o{ repair_request_histories : requested_for
-    repair_assignments ||--o{ repair_request_histories : records
 ```
 
 ## 4. 상태 및 타입 후보
@@ -364,9 +349,7 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 | `damages.repairer_id` | 현재 보수 요청을 배정받은 `REPAIRER` 역할 사용자 ID. 미지정 또는 요청 취소 후에는 `NULL` |
 | `damages.repair_completed_at` | 실제 보수 완료 일자. 서버 처리 시각인 `updated_at`과 별도로 저장하며 완료 전에는 `NULL` |
 | `damages.repair_completion_note` | 보수 완료 보고 메모. 공백은 `NULL`, 최대 1,000자 |
-| `repair_assignments.repairer_id` | 보수 요청을 배정받은 보수 담당자 ID |
-| `repair_assignments.assigned_by` | 보수 요청을 생성하거나 배정한 관리자/점검 담당자 ID |
-| `repair_request_histories.repair_assignment_id` | 보수 배정과 연결된 이력인 경우 배정 ID를 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청은 `NULL` |
+| `repair_request_histories.repair_assignment_id` | 향후 `repair_assignments` 설계 연계를 위해 예약된 값이다. 현재 구현에서는 `NULL`이며 FK 제약이 없다. |
 | `repair_request_histories.repairer_id` | 보수 담당자가 지정된 이력인 경우 담당자 ID를 저장한다. 담당자 배정 없이 보수 진행 상태로 전환한 요청은 `NULL` |
 | `repair_request_histories.note` | 요청 메모. 공백은 `NULL`, 최대 1,000자 |
 | `repair_request_histories` | 보수 요청/완료/취소 및 배정/취소 시점의 상태 변경과 담당자 배정 기록을 저장한다. 관리자 검토 이력과는 분리한다. |
@@ -385,12 +368,10 @@ AI 파손 유형은 응답에서 `LARGE_MISSING`, `SMALL_MISSING`, `WEAR`, `CRAC
 | `idx_damages_road_address_name` | `road_address_name` | 도로명 주소 키워드 검색 |
 | `idx_damages_region_code_created_at` | `region_code, created_at DESC, id DESC` | 시군구 코드와 기간 조건을 함께 사용하는 파손 검색 |
 | `idx_damage_images_damage_sort_order` | `damage_id, sort_order` | 목록의 파손별 이미지 수 및 이미지 순서 조회 |
-| `idx_repair_assignments_damage_id` | `damage_id` | 파손별 보수 배정 단건 조회. 보수 배정 구현 시 추가 |
-| `idx_repair_assignments_repairer_created_at` | `repairer_id, created_at DESC` | 보수 담당자별 배정 목록 조회. 보수 배정 구현 시 추가 |
 | `idx_repair_request_histories_damage_requested_at` | `damage_id, requested_at DESC` | 파손별 보수 요청/배정/취소 이력 최신순 조회 |
-| `idx_repair_request_histories_assignment_requested_at` | `repair_assignment_id, requested_at DESC` | 보수 배정과 연결된 요청/취소 이력 조회 |
+| `idx_repair_request_histories_assignment_requested_at` | `repair_assignment_id, requested_at DESC` | 향후 보수 배정 연계를 위한 예약 인덱스 |
 
-현재 구현된 테이블의 인덱스는 신규 데이터베이스에서 `schema.sql`의 테이블 생성 과정에 적용된다. 보수 진행 전환 API에서 사용하는 `repair_request_histories` 인덱스는 `schema.sql`에 정의되어 있고, 보수 배정 테이블 인덱스는 보수 배정 기능 구현 시 `schema.sql`에 추가한다.
+현재 구현된 테이블의 인덱스는 신규 데이터베이스에서 `schema.sql`의 테이블 생성 과정에 적용된다. 보수 진행 전환 API에서 사용하는 `repair_request_histories` 인덱스도 `schema.sql`에 정의되어 있다.
 
 - 최신 컬럼은 있지만 대시보드 인덱스만 없는 데이터베이스: `docs/sql/damage-dashboard-indexes.sql`을 한 번 실행한다.
 - `created_by`를 사용하는 구버전 `damages` 테이블: `docs/sql/migrate-damages-dashboard.sql`을 한 번 실행한다. 기존 `created_by` 값은 `reported_by`로 보존된다.
