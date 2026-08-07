@@ -141,8 +141,8 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 | 0 | 0 |
 | 1~10,000 | 1~30 선형 변환 |
 | 10,001~50,000 | 31~70 선형 변환 |
-| 50,001~100,000 | 71~100 선형 변환 |
-| 100,000 초과 | 100 |
+| 50,001~300,000 | 71~100 선형 변환 |
+| 300,000 초과 | 100 |
 
 구간은 `ROADY_AI_SCORE_MINOR_MAX_PIXELS`, `ROADY_AI_SCORE_MODERATE_MAX_PIXELS`,
 `ROADY_AI_SCORE_MAX_PIXELS` 환경변수로 조정할 수 있습니다. 세 값은 반드시 오름차순이어야 합니다.
@@ -152,6 +152,12 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
 없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
+
+`damaged=true`이면 보류 상태가 되지 않도록 `repair_required=true`와 비어 있지 않은
+`repair_priority`를 반환합니다. 보수 우선순위는 픽셀 기반 `damage_score`에 따라 1~30은
+`LOW`, 31~70은 `NORMAL`, 71~100은 `HIGH`로 결정합니다. 모델이 비율 기반 심각도를
+확정하지 못하더라도 이 서비스 판정은 적용하며, 원본 모델 판단과 검토 사유는
+`analysis_detail.summary`에 그대로 보존합니다. `URGENT`는 자동 판정하지 않습니다.
 
 ```json
 {

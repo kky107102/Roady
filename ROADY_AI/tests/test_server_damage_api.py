@@ -105,6 +105,8 @@ def test_analyze_scores_missing_from_pixels_when_ratio_is_unavailable(tmp_path: 
     assert body["repair_priority"] == "NORMAL"
     assert body["analysis_detail"]["damage_ratio"] is None
     assert body["analysis_detail"]["estimated_severity"] == "moderate"
+    assert body["analysis_detail"]["summary"]["estimated_severity"] is None
+    assert body["analysis_detail"]["summary"]["repair_priority"] == "inspection_required"
 
 
 def test_analyze_passes_image_metadata_to_model(tmp_path: Path):
