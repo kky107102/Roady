@@ -1848,12 +1848,12 @@ curl -X POST "http://localhost:8000/analyze" \
 | 0 | 0 |
 | 1~10,000 | 1~30 선형 변환 |
 | 10,001~50,000 | 31~70 선형 변환 |
-| 50,001~100,000 | 71~100 선형 변환 |
-| 100,000 초과 | 100 |
+| 50,001~300,000 | 71~100 선형 변환 |
+| 300,000 초과 | 100 |
 
 점수는 점자블록 픽셀 수와 파손 비율을 사용하지 않고 `missing ∪ crack ∪ wear` 통합 마스크의
 픽셀 수만 사용한다. 기본 구간은 AI 서버 환경변수 `ROADY_AI_SCORE_MINOR_MAX_PIXELS=10000`,
-`ROADY_AI_SCORE_MODERATE_MAX_PIXELS=50000`, `ROADY_AI_SCORE_MAX_PIXELS=100000`으로 변경할 수 있다.
+`ROADY_AI_SCORE_MODERATE_MAX_PIXELS=50000`, `ROADY_AI_SCORE_MAX_PIXELS=300000`으로 변경할 수 있다.
 비율 계산 기준 영역이 없어도 파손 픽셀 수가 있으면 점수는 계산된다. `damaged=true`일 때
 서비스 심각도와 보수 우선순위는 점수 1~30=`minor`/`LOW`, 31~70=`moderate`/`NORMAL`,
 71~100=`severe`/`HIGH`로 결정한다. 점수까지 계산할 수 없는 양성 판정은 보수적으로

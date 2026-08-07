@@ -24,9 +24,11 @@ from ROADY_AI.server_damage_analysis.service import (
         (19_260, 40),
         (50_000, 70),
         (50_001, 71),
-        (75_000, 86),
-        (100_000, 100),
-        (100_001, 100),
+        (75_000, 74),
+        (100_000, 77),
+        (175_000, 86),
+        (300_000, 100),
+        (300_001, 100),
     ],
 )
 def test_damage_score_uses_only_damage_mask_pixels(pixels: int, expected: int):
@@ -70,7 +72,7 @@ def test_service_selects_highest_risk_image():
         ]
     )
 
-    assert response.damage_score == 88
+    assert response.damage_score == 74
     assert response.repair_required is True
     assert response.repair_priority == "HIGH"
     assert response.confidence_score == 0.81

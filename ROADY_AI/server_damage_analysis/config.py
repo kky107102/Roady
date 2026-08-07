@@ -29,7 +29,7 @@ class AppSettings:
     inference_concurrency: int = 1
     score_minor_max_pixels: int = 10_000
     score_moderate_max_pixels: int = 50_000
-    score_max_pixels: int = 100_000
+    score_max_pixels: int = 300_000
     verify_model_hash: bool = True
     warmup_enabled: bool = True
 
