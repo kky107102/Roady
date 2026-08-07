@@ -51,6 +51,11 @@ def load_edge_analysis_request(
         "roi_source": ai_metadata.get("roi_source", "unknown"),
         "roi_fallback_used": bool(ai_metadata.get("roi_fallback_used", False)),
         "frame_quality_verified": bool(ai_metadata.get("frame_quality_verified", False)),
+        # A persisted damage event means Edge observed a candidate. Keep this
+        # true for older event JSON that predates the explicit metadata field.
+        "edge_damage_candidate_detected": bool(
+            ai_metadata.get("edge_damage_candidate_detected", True)
+        ),
     }
     for key in (
         "analysis_unit_hint",

@@ -49,6 +49,7 @@ def test_edge_event_uses_second_image_as_server_analysis_roi(tmp_path):
         "analysis_unit_hint": "block_or_block_group",
         "tactile_detection_count": 2,
         "frame_selection_status": "quality_gate_passed",
+        "edge_damage_candidate_detected": True,
     }
 
 
@@ -67,6 +68,7 @@ def test_edge_fallback_and_unverified_quality_propagate_to_server(tmp_path):
 
     assert request.input_metadata["roi_fallback_used"] is True
     assert request.input_metadata["frame_quality_verified"] is False
+    assert request.input_metadata["edge_damage_candidate_detected"] is True
 
 
 def test_event_without_analysis_roi_is_rejected_instead_of_using_original(tmp_path):

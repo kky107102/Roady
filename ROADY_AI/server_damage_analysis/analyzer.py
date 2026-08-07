@@ -481,6 +481,11 @@ class ServerDamageAnalyzer:
                 "review_reasons": reasons,
                 "advisory_only": True,
             }
+        if input_payload["edge_damage_candidate_detected"] and not summary["damage_detected"]:
+            disagreement = review_reason_list(["EDGE_SERVER_DISAGREEMENT"])[0]
+            if all(reason["code"] != disagreement["code"] for reason in summary["review_reasons"]):
+                summary["review_reasons"].append(disagreement)
+            summary["review_required"] = True
         return {
             "schema_version": "2.0",
             "model": {
@@ -567,6 +572,9 @@ class ServerDamageAnalyzer:
             "roi_source": metadata.get("roi_source", "unknown"),
             "roi_fallback_used": bool(metadata.get("roi_fallback_used", False)),
             "frame_quality_verified": bool(metadata.get("frame_quality_verified", False)),
+            "edge_damage_candidate_detected": bool(
+                metadata.get("edge_damage_candidate_detected", False)
+            ),
         }
 
     def _model_quality_gate_failed(self) -> bool:

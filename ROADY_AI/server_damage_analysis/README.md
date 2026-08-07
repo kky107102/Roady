@@ -4,6 +4,23 @@ Jira: `S15P11A404-168`
 
 서버 AI는 Edge가 전송한 점자블록 기준 ROI를 4클래스 Segmentation 모델로 분석합니다. 분석 전제조건을 검증할 수 없으면 비율이나 심각도를 확정하지 않고 `null`, `review_required=true`, `advisory_only=true`로 반환합니다.
 
+## 현재 연결 모델
+
+- 모델: `YOLO26s-seg`
+- 가중치: `models/server/yolo26s_seg_multiclass_v2_best.pt`
+- 입력 크기: 768
+- 학습 클래스: `tactile_block`, `missing`, `crack`, `wear`
+- 모델 SHA-256은 같은 폴더의 `.sha256` 파일로 검증합니다.
+
+큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
+분할하고, 개별 점자블록 대비 결손 면적 비율을 계산할 수 있을 때 15% 기준으로
+`missing_small`과 `missing_large`를 후처리에서 구분합니다. 기준 영역을 신뢰할 수 없으면
+크기를 확정하지 않고 판단 보류합니다.
+
+Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear` 중 신뢰 가능한 근거를
+확정하지 못한 경우에는 `EDGE_SERVER_DISAGREEMENT` 사유와 함께 `review_required=true`로
+전환합니다. 씽씽이처럼 점자블록을 가리는 물체도 정상 또는 파손으로 임의 확정하지 않습니다.
+
 ## 모델 계약
 
 필수 클래스는 `tactile_block`, `missing`, `crack`, `wear`입니다. 클래스 ID를 고정하지 않고 모델의 `names` 메타데이터를 검사합니다. 필수 클래스가 없으면 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다. 기존 통합 `damage` 결과는 `missing ∪ crack ∪ wear`로 계산한 deprecated 호환 필드에서만 제공합니다.
@@ -120,7 +137,7 @@ CPU에서는 `ROADY_AI_DEVICE=cpu`를 사용합니다. GPU 서버는 시작 단�
 - 검토 코드와 한국어 메시지는 [review_reasons.py](review_reasons.py) 한곳에서 관리합니다.
 - Overlay는 tactile 외곽선과 missing/crack/wear mask, 분석 단위 ID, 비율, 심각도, 검토 여부를 표시합니다. 계산 불가 비율은 `ratio=?`입니다.
 - 기존 이미지 저장 흐름과 `regions.damage`, `analysis.damage_ratio_percent`는 유지하지만 deprecated입니다.
-- 저장소의 기존 `yolo26s_seg_v1_best.pt`는 2클래스이므로 v2 분석에 사용할 수 없습니다. 배포 전 4클래스 가중치를 배치해야 합니다.
+- 저장소에는 4클래스 `yolo26s_seg_multiclass_v2_best.pt`가 포함되어 있습니다. 모델 메타데이터의 클래스 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
 - 모델 품질 게이트 미달 시 `MODEL_QUALITY_GATE_NOT_MET` 검토 사유가 추가됩니다.
 
 ## 테스트

@@ -269,6 +269,27 @@ def test_invalid_model_class_mapping_returns_review_instead_of_analysis():
     }
 
 
+def test_edge_candidate_without_server_damage_requires_review():
+    instance = analyzer()
+
+    payload = instance._payload(
+        [],
+        instance._input_payload(
+            {
+                "frame_quality_verified": True,
+                "edge_damage_candidate_detected": True,
+            }
+        ),
+        np.zeros((10, 10), dtype=bool),
+    )
+
+    assert payload["summary"]["damage_detected"] is False
+    assert payload["summary"]["review_required"] is True
+    assert "EDGE_SERVER_DISAGREEMENT" in {
+        reason["code"] for reason in payload["summary"]["review_reasons"]
+    }
+
+
 def test_yaml_policy_change_is_applied_without_code_change(tmp_path):
     source = Path(__file__).parents[1] / "server_damage_analysis" / "severity_policy.yaml"
     content = source.read_text(encoding="utf-8").replace(
