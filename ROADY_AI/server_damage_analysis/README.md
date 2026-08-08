@@ -7,7 +7,7 @@ Jira: `S15P11A404-168`
 ## 현재 연결 모델
 
 - 모델: `YOLO26s-seg`
-- 가중치: `models/server/yolo26s_seg_multiclass_v3_best.pt`
+- 가중치: `models/server/yolo26s_seg_multiclass_v4_best.pt`
 - 입력 크기: 768
 - 학습 클래스: `tactile_block`, `missing`, `crack`, `wear`, `obstruction`
 - 모델 SHA-256은 같은 폴더의 `.sha256` 파일로 검증합니다.
@@ -194,7 +194,7 @@ CPU에서는 `ROADY_AI_DEVICE=cpu`를 사용합니다. GPU 서버는 시작 단�
 - 검토 코드와 한국어 메시지는 [review_reasons.py](review_reasons.py) 한곳에서 관리합니다.
 - Overlay는 tactile 외곽선과 missing/crack/wear mask, 분석 단위 ID, 비율, 심각도, 검토 여부를 표시합니다. 계산 불가 비율은 `ratio=?`입니다.
 - 기존 이미지 저장 흐름과 `regions.damage`, `analysis.damage_ratio_percent`는 유지하지만 deprecated입니다.
-- 기본 배포 모델은 5클래스 `yolo26s_seg_multiclass_v3_best.pt`입니다. `obstruction`은 점자블록 위 거치물을 검출해 파손 비율·심각도를 확정하지 않고 `OBSTRUCTION_SUSPECTED` 판단 보류로 전환합니다. 기존 4클래스 v2 가중치는 롤백용으로 유지합니다. 필수 4클래스의 모델 메타데이터 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
+- 기본 배포 모델은 5클래스 `yolo26s_seg_multiclass_v4_best.pt`입니다. `obstruction`은 점자블록 위 거치물을 검출해 파손 비율·심각도를 확정하지 않고 `OBSTRUCTION_SUSPECTED` 판단 보류로 전환합니다. 기존 v3 가중치는 롤백용으로 유지합니다. 필수 4클래스의 모델 메타데이터 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
 - 모델 품질 게이트 미달 시 `MODEL_QUALITY_GATE_NOT_MET` 검토 사유가 추가됩니다.
 - `quality`는 모델 검증 성능을 보여주는 참고 정보이며 이미지별 판정이나 `review_required`를 변경하지 않습니다.
 
