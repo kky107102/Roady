@@ -17,9 +17,9 @@ def _boolean_env(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class AppSettings:
-    model_path: Path = WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v2_best.pt"
+    model_path: Path = WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.pt"
     model_sha256_path: Path = (
-        WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v2_best.sha256"
+        WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.sha256"
     )
     device: str = "cpu"
     imgsz: int = 768
@@ -29,7 +29,7 @@ class AppSettings:
     inference_concurrency: int = 1
     score_minor_max_pixels: int = 10_000
     score_moderate_max_pixels: int = 50_000
-    score_max_pixels: int = 100_000
+    score_max_pixels: int = 300_000
     verify_model_hash: bool = True
     warmup_enabled: bool = True
 

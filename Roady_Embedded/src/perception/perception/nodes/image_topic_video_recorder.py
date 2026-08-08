@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 import cv2
@@ -21,8 +22,9 @@ class ImageTopicVideoRecorder(Node):
         self.declare_parameter("codec", "mp4v")
 
         self._image_topic = str(self.get_parameter("image_topic").value)
+        output_path_template = str(self.get_parameter("output_path").value)
         self._output_path = Path(
-            str(self.get_parameter("output_path").value)
+            datetime.now().strftime(output_path_template)
         ).expanduser()
         self._output_path.parent.mkdir(parents=True, exist_ok=True)
         self._output_fps = float(self.get_parameter("output_fps").value)
@@ -121,7 +123,8 @@ def main(args=None) -> None:
         rclpy.spin(node)
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

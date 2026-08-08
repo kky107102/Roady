@@ -15,7 +15,7 @@ class LidarWarningNode(Node):
         self.declare_parameter('warning_topic', '/obstacle/lidar_detected')
         self.declare_parameter('min_detection_distance', 0.20)
         self.declare_parameter('max_detection_distance', 0.50)
-        self.declare_parameter('detection_angle_deg', 10.0)
+        self.declare_parameter('front_exclusion_angle_deg', 90.0)
 
         # 라이다 구독 (QoS 호환성 적용)
         self.scan_sub = self.create_subscription(
@@ -36,27 +36,34 @@ class LidarWarningNode(Node):
         self.MAX_DETECTION_DISTANCE = float(
             self.get_parameter('max_detection_distance').value
         )
-        detection_angle_deg = max(
-            0.0, float(self.get_parameter('detection_angle_deg').value)
+        front_exclusion_angle_deg = min(
+            360.0,
+            max(
+                0.0,
+                float(self.get_parameter('front_exclusion_angle_deg').value),
+            ),
         )
-        self.DETECTION_HALF_ANGLE_RAD = math.radians(
-            detection_angle_deg / 2.0
+        self.FRONT_EXCLUSION_HALF_ANGLE_RAD = math.radians(
+            front_exclusion_angle_deg / 2.0
         )
         self.get_logger().info(
             '✅ LiDAR 장애물 감지 노드가 시작되었습니다. '
             f'(범위: {self.MIN_DETECTION_DISTANCE:.2f}~'
             f'{self.MAX_DETECTION_DISTANCE:.2f}m, '
-            f'전방 각도: ±{detection_angle_deg / 2.0:.1f}°)'
+            f'전방 제외 각도: '
+            f'±{front_exclusion_angle_deg / 2.0:.1f}°)'
         )
 
     def scan_callback(self, msg: LaserScan):
-        # 정면 0도를 기준으로 좌우 ±5도, 20~50cm 측정값만 검사한다.
+        # 전방 90도(-45~+45도)를 제외한 좌·우측면과 후방의
+        # 20~50cm 측정값만 검사한다.
         obstacle_ranges = []
         for index, distance in enumerate(msg.ranges):
             angle = msg.angle_min + index * msg.angle_increment
             normalized_angle = math.atan2(math.sin(angle), math.cos(angle))
             if (
-                abs(normalized_angle) <= self.DETECTION_HALF_ANGLE_RAD
+                abs(normalized_angle)
+                > self.FRONT_EXCLUSION_HALF_ANGLE_RAD + 1e-9
                 and math.isfinite(distance)
                 and self.MIN_DETECTION_DISTANCE
                 <= distance

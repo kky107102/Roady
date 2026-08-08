@@ -7,9 +7,9 @@ Jira: `S15P11A404-168`
 ## 현재 연결 모델
 
 - 모델: `YOLO26s-seg`
-- 가중치: `models/server/yolo26s_seg_multiclass_v2_best.pt`
+- 가중치: `models/server/yolo26s_seg_multiclass_v4_best.pt`
 - 입력 크기: 768
-- 학습 클래스: `tactile_block`, `missing`, `crack`, `wear`
+- 학습 클래스: `tactile_block`, `missing`, `crack`, `wear`, `obstruction`
 - 모델 SHA-256은 같은 폴더의 `.sha256` 파일로 검증합니다.
 
 큰 결손과 작은 결손은 별도 학습 클래스가 아닙니다. 모델은 두 유형을 `missing`으로
@@ -87,6 +87,24 @@ python -m ROADY_AI.server_damage_analysis.analyze_image \
 
 출력은 `analysis.json`, ROI 사본, Overlay, 통합 damage mask입니다. `units`와 `summary`가 v2 기준 응답이며 `regions`와 최상위 `analysis`는 deprecated 호환 필드입니다.
 
+## 면적·심각도 정책 평가
+
+고정 Test에서 실제 운영 후처리를 포함한 면적 비율 MAE, 심각도 혼동행렬,
+Macro-F1과 등급 경계 오차를 계산합니다. Test는 최종 보고에만 사용하고 모델이나
+임계값 선택에는 Validation을 사용합니다.
+
+```bash
+python -m ROADY_AI.server_damage_analysis.evaluate_policy \
+  --model ~/roady/models/server_yolo26s_edge_roi_multiclass_v1/best.pt \
+  --dataset ~/roady/datasets/server_edge_roi_multiclass_v1 \
+  --split test --imgsz 1024 --device 0 \
+  --output ~/roady/runs/server_yolo26s_edge_roi_multiclass_v1_policy_test
+```
+
+산출물은 `report.json`, `per_image.csv`, `severity_confusion.csv`와 이미지별
+Overlay입니다. 결손의 예상 블록 영역을 만들 수 없는 경우는 0%로 바꾸지 않고
+`not_estimable` 열에 집계합니다.
+
 ## FastAPI
 
 Spring의 Redis Queue Worker가 호출하는 동기식 분석 API입니다. Redis Queue와 작업 상태는 Spring이 관리하며 AI 서버는 DB나 Redis에 직접 연결하지 않습니다.
@@ -123,8 +141,8 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 | 0 | 0 |
 | 1~10,000 | 1~30 선형 변환 |
 | 10,001~50,000 | 31~70 선형 변환 |
-| 50,001~100,000 | 71~100 선형 변환 |
-| 100,000 초과 | 100 |
+| 50,001~300,000 | 71~100 선형 변환 |
+| 300,000 초과 | 100 |
 
 구간은 `ROADY_AI_SCORE_MINOR_MAX_PIXELS`, `ROADY_AI_SCORE_MODERATE_MAX_PIXELS`,
 `ROADY_AI_SCORE_MAX_PIXELS` 환경변수로 조정할 수 있습니다. 세 값은 반드시 오름차순이어야 합니다.
@@ -134,6 +152,12 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
 없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
+
+`damaged=true`이면 보류 상태가 되지 않도록 `repair_required=true`와 비어 있지 않은
+`repair_priority`를 반환합니다. 보수 우선순위는 픽셀 기반 `damage_score`에 따라 1~30은
+`LOW`, 31~70은 `NORMAL`, 71~100은 `HIGH`로 결정합니다. 모델이 비율 기반 심각도를
+확정하지 못하더라도 이 서비스 판정은 적용하며, 원본 모델 판단과 검토 사유는
+`analysis_detail.summary`에 그대로 보존합니다. `URGENT`는 자동 판정하지 않습니다.
 
 ```json
 {
@@ -170,7 +194,8 @@ CPU에서는 `ROADY_AI_DEVICE=cpu`를 사용합니다. GPU 서버는 시작 단�
 - 검토 코드와 한국어 메시지는 [review_reasons.py](review_reasons.py) 한곳에서 관리합니다.
 - Overlay는 tactile 외곽선과 missing/crack/wear mask, 분석 단위 ID, 비율, 심각도, 검토 여부를 표시합니다. 계산 불가 비율은 `ratio=?`입니다.
 - 기존 이미지 저장 흐름과 `regions.damage`, `analysis.damage_ratio_percent`는 유지하지만 deprecated입니다.
-- 저장소에는 4클래스 `yolo26s_seg_multiclass_v2_best.pt`가 포함되어 있습니다. 모델 메타데이터의 클래스 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
+- 기본 배포 모델은 5클래스 `yolo26s_seg_multiclass_v4_best.pt`입니다. `obstruction`은 점자블록 위 거치물을 검출해 파손 비율·심각도를 확정하지 않고 `OBSTRUCTION_SUSPECTED` 판단 보류로 전환합니다. 기존 v3 가중치는 롤백용으로 유지합니다. 필수 4클래스의 모델 메타데이터 매핑이 달라지면 자동 분석하지 않고 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다.
+- 모델 품질 게이트 미달 시 `MODEL_QUALITY_GATE_NOT_MET` 검토 사유가 추가됩니다.
 - `quality`는 모델 검증 성능을 보여주는 참고 정보이며 이미지별 판정이나 `review_required`를 변경하지 않습니다.
 
 ## 테스트

@@ -24,9 +24,11 @@ from ROADY_AI.server_damage_analysis.service import (
         (19_260, 40),
         (50_000, 70),
         (50_001, 71),
-        (75_000, 86),
-        (100_000, 100),
-        (100_001, 100),
+        (75_000, 74),
+        (100_000, 77),
+        (175_000, 86),
+        (300_000, 100),
+        (300_001, 100),
     ],
 )
 def test_damage_score_uses_only_damage_mask_pixels(pixels: int, expected: int):
@@ -70,7 +72,7 @@ def test_service_selects_highest_risk_image():
         ]
     )
 
-    assert response.damage_score == 88
+    assert response.damage_score == 74
     assert response.repair_required is True
     assert response.repair_priority == "HIGH"
     assert response.confidence_score == 0.81
@@ -146,6 +148,9 @@ def test_service_uses_v2_detection_independently_from_damage_score():
     assert response.damaged is True
     assert response.damage_score == 1
     assert response.damage_type == "CRACK"
+    assert response.repair_required is True
+    assert response.repair_priority == "LOW"
+    assert response.analysis_detail.estimated_severity == "minor"
 
 
 def test_service_keeps_unknown_model_decision_null():
@@ -283,7 +288,7 @@ def v2_unknown_missing_payload() -> dict:
         ],
         "summary": {
             "damage_detected": True,
-            "estimated_severity": "moderate",
+            "estimated_severity": None,
             "repair_priority": "inspection_required",
             "worst_unit_id": "block_group_1",
             "dominant_damage_type": "missing",
@@ -295,7 +300,7 @@ def v2_unknown_missing_payload() -> dict:
         "analysis": {
             "damage_detected": True,
             "damage_ratio_percent": None,
-            "estimated_severity": "moderate",
+            "estimated_severity": None,
             "review_required": True,
             "review_reasons": reasons,
             "advisory_only": True,

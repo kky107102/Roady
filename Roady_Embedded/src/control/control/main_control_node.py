@@ -7,9 +7,11 @@ from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool, Float32, String
+from std_msgs.msg import Bool, Float32, String, UInt32
 
-TRACKING_STATES = ('UNKNOWN', 'STRAIGHT', 'CORNER_LEFT', 'CORNER_RIGHT')
+TRACKING_STATES = (
+    'UNKNOWN', 'STRAIGHT', 'CORNER_LEFT', 'CORNER_RIGHT', 'STATION'
+)
 CORNER_STATES = ('CORNER_LEFT', 'CORNER_RIGHT')
 STARTUP_STATE = 'STARTUP'
 
@@ -31,8 +33,14 @@ class MainControlNode(Node):
         )
         self.create_subscription(
             Float32,
-            '/tactile/full_frame_yellow_ratio',
-            self.roi_ratio_callback,
+            '/tactile/station_rightmost_x',
+            self.station_rightmost_callback,
+            10,
+        )
+        self.create_subscription(
+            UInt32,
+            '/tactile/full_frame_navy_count',
+            self.full_frame_navy_count_callback,
             10,
         )
         self.create_subscription(Bool, '/obstacle_warning', self.lidar_callback, 10)
@@ -50,23 +58,25 @@ class MainControlNode(Node):
         self.declare_parameter('kp', 0.004)
         self.declare_parameter('max_steer', 0.75)
         self.declare_parameter('left_steering_gain', 1.30)
-        self.declare_parameter('steering_deadband_px', 15.0)
+        self.declare_parameter('steering_deadband_px', 30.0)
         self.declare_parameter('steering_filter_alpha', 0.35)
         self.declare_parameter('offset_timeout', 1.0)
         self.declare_parameter('steering_sign', -1.0)
         self.declare_parameter('target_edge_x_px', 750.0)
-        self.declare_parameter('corner_align_tolerance_px', 8.0)
-        self.declare_parameter('corner_candidate_frames', 5)
-        self.declare_parameter('corner_vote_window', 15)
+        self.declare_parameter('corner_target_edge_x_px', 750.0)
+        self.declare_parameter('corner_align_tolerance_px', 30.0)
+        self.declare_parameter('corner_align_kp', 0.004)
+        self.declare_parameter('corner_confirm_frames', 10)
         self.declare_parameter('corner_backup_duration', 1.5)
         self.declare_parameter('corner_forward_duration', 1.0)
-        self.declare_parameter('offset_backup_duration', 1.5)
-        self.declare_parameter('offset_forward_duration', 1.0)
         self.declare_parameter('corner_steer', 0.75)
-        self.declare_parameter('unknown_duration', 7.0)
-        self.declare_parameter('unknown_vote_required', 15)
-        self.declare_parameter('reacquire_yellow_ratio', 0.20)
-        self.declare_parameter('reacquire_confirm_frames', 5)
+        self.declare_parameter('startup_duration', 4.0)
+        self.declare_parameter('unknown_vote_frames', 10)
+        self.declare_parameter('unknown_max_consecutive_votes', 5)
+        self.declare_parameter('station_target_samples', 5)
+        self.declare_parameter('station_steering_kp', 0.004)
+        self.declare_parameter('station_end_navy_pixels', 1000)
+        self.declare_parameter('station_end_confirm_frames', 30)
 
         self.drive_speed = min(1.0, abs(float(self.get_parameter('drive_speed').value)))
         self.reverse_speed = min(1.0, abs(float(self.get_parameter('reverse_speed').value)))
@@ -84,14 +94,17 @@ class MainControlNode(Node):
         self.offset_timeout = max(0.0, float(self.get_parameter('offset_timeout').value))
         self.steering_sign = float(self.get_parameter('steering_sign').value)
         self.target_edge_x_px = float(self.get_parameter('target_edge_x_px').value)
+        self.corner_target_edge_x_px = float(
+            self.get_parameter('corner_target_edge_x_px').value
+        )
         self.corner_align_tolerance_px = abs(
             float(self.get_parameter('corner_align_tolerance_px').value)
         )
-        self.corner_candidate_frames = max(
-            1, int(self.get_parameter('corner_candidate_frames').value)
+        self.corner_align_kp = abs(
+            float(self.get_parameter('corner_align_kp').value)
         )
-        self.corner_vote_window = max(
-            1, int(self.get_parameter('corner_vote_window').value)
+        self.corner_confirm_frames = max(
+            1, int(self.get_parameter('corner_confirm_frames').value)
         )
         self.corner_backup_duration = max(
             0.0, float(self.get_parameter('corner_backup_duration').value)
@@ -99,47 +112,52 @@ class MainControlNode(Node):
         self.corner_forward_duration = max(
             0.0, float(self.get_parameter('corner_forward_duration').value)
         )
-        self.offset_backup_duration = max(
-            0.0, float(self.get_parameter('offset_backup_duration').value)
-        )
-        self.offset_forward_duration = max(
-            0.0, float(self.get_parameter('offset_forward_duration').value)
-        )
         self.corner_steer = min(
             1.0, abs(float(self.get_parameter('corner_steer').value))
         )
-        self.unknown_duration = max(
-            0.0, float(self.get_parameter('unknown_duration').value)
+        self.startup_duration = max(
+            0.0, float(self.get_parameter('startup_duration').value)
         )
-        self.unknown_vote_required = max(
-            1, int(self.get_parameter('unknown_vote_required').value)
+        self.unknown_vote_frames = max(
+            1, int(self.get_parameter('unknown_vote_frames').value)
         )
-        self.reacquire_yellow_ratio = max(
-            0.0, min(1.0, float(self.get_parameter('reacquire_yellow_ratio').value))
+        self.unknown_max_consecutive_votes = max(
+            1,
+            int(self.get_parameter('unknown_max_consecutive_votes').value),
         )
-        self.reacquire_confirm_frames = max(
-            1, int(self.get_parameter('reacquire_confirm_frames').value)
+        self.station_target_samples = max(
+            1, int(self.get_parameter('station_target_samples').value)
+        )
+        self.station_steering_kp = abs(
+            float(self.get_parameter('station_steering_kp').value)
+        )
+        self.station_end_navy_pixels = max(
+            0, int(self.get_parameter('station_end_navy_pixels').value)
+        )
+        self.station_end_confirm_frames = max(
+            1, int(self.get_parameter('station_end_confirm_frames').value)
         )
 
         self.tracking_state = STARTUP_STATE
         self.maneuver_phase = 'NONE'
         self.phase_started_at = time.monotonic()
-        self.startup_candidate_state = None
-        self.startup_candidate_count = 0
-        self.unknown_started_at = time.monotonic()
-        self.unknown_search_complete = False
-        self.unknown_candidate_state = None
-        self.unknown_candidate_count = 0
+        self.startup_started_at = time.monotonic()
+        self.startup_paused_at = None
+        self.startup_state_counts = Counter()
+        self.unknown_frame_states = deque(maxlen=self.unknown_vote_frames)
+        self.unknown_consecutive_votes = 0
+        self.station_target_history = deque(maxlen=self.station_target_samples)
+        self.station_target_x = None
+        self.station_rightmost_x = None
+        self.station_end_count = 0
         self.corner_candidate_direction = None
         self.corner_candidate_count = 0
-        self.corner_confirmation_history = deque(maxlen=self.corner_vote_window)
         self.corner_recovery_active = False
-        self.reacquire_count = 0
         self.current_offset = 999.0
         self.offset_history = deque(maxlen=5)
         self.last_offset_time = 0.0
         self.filtered_steering = 0.0
-        self.offset_recovery_steer = 0.0
+        self.corner_alignment_steer = 0.0
         self.is_obstacle_detected = False
         self.shutdown_requested = False
         self.shutdown_timer = None
@@ -147,7 +165,7 @@ class MainControlNode(Node):
         self.timer = self.create_timer(0.05, self.control_loop)
         self._publish_tracking_state()
         self.get_logger().info(
-            '주행 FSM 시작: STARTUP 전체 화면 무제한 탐색'
+            f'주행 FSM 시작: STARTUP 전체 화면 {self.startup_duration:.1f}초 탐색'
         )
 
     def _publish_tracking_state(self):
@@ -165,20 +183,30 @@ class MainControlNode(Node):
         self.current_offset = 999.0
         self.corner_candidate_direction = None
         self.corner_candidate_count = 0
-        self.corner_confirmation_history.clear()
         if state == 'UNKNOWN':
             self.corner_recovery_active = False
             self.maneuver_phase = 'NONE'
             if previous_state != 'UNKNOWN':
-                self.unknown_candidate_state = None
-                self.unknown_candidate_count = 0
-                self.unknown_started_at = time.monotonic()
-                self.unknown_search_complete = False
+                self.unknown_frame_states.clear()
+                self.unknown_consecutive_votes = 0
         elif state in CORNER_STATES:
             # 코너 확정 이후에는 일반 상태 판정을 잠그고 복구 입력만 처리한다.
             self.corner_recovery_active = True
             self.maneuver_phase = 'CORNER_BACKUP'
             self.phase_started_at = time.monotonic()
+            self.corner_alignment_steer = self._corner_steering()
+        elif state == 'STATION':
+            self.corner_recovery_active = False
+            self.maneuver_phase = 'STATION_CALIBRATE'
+            self.station_target_history.clear()
+            self.station_target_x = None
+            self.station_rightmost_x = None
+            self.station_end_count = 0
+            self.cmd_pub.publish(Twist())
+            self.get_logger().info(
+                f'STATION 정지: 최우측 X 좌표를 '
+                f'{self.station_target_samples}회 수집합니다.'
+            )
         else:
             self.corner_recovery_active = False
             self.maneuver_phase = 'NONE'
@@ -192,105 +220,134 @@ class MainControlNode(Node):
 
     def detection_callback(self, msg):
         # 확정된 코너 복구 중에는 프레임별 상태 판정 결과를 완전히 무시한다.
-        # leftmost_callback과 roi_ratio_callback만 복구 단계를 전환할 수 있다.
+        # leftmost_callback만 코너 정렬 완료 상태로 전환할 수 있다.
         if self.corner_recovery_active:
             return
 
         detected = msg.data if msg.data in TRACKING_STATES else 'UNKNOWN'
 
+        if detected == 'STATION' and self.tracking_state != 'STATION':
+            self.get_logger().info(
+                '흰색 간판의 남색 픽셀 3500개 이상 감지: STATION 진입'
+            )
+            self._set_tracking_state('STATION')
+            return
+
         if self.tracking_state == STARTUP_STATE:
-            self._update_startup_candidate(detected)
+            if detected != 'UNKNOWN':
+                self.startup_state_counts[detected] += 1
             return
 
         if self.maneuver_phase == 'CORNER_CONFIRM':
-            # 정지 상태에서 15프레임을 모두 모은 뒤 최빈 상태를 한 번만 확정한다.
-            # 수집 중에는 tracking_state를 갱신하지 않는다.
-            self.corner_confirmation_history.append(detected)
-            if len(self.corner_confirmation_history) >= self.corner_vote_window:
-                confirmed_state = Counter(
-                    self.corner_confirmation_history
-                ).most_common(1)[0][0]
-                self.get_logger().info(
-                    f'코너 확인 {self.corner_vote_window}프레임 최빈 상태: '
-                    f'{confirmed_state}'
-                )
-                self._set_tracking_state(confirmed_state)
-            return
-
-        if self.tracking_state == 'UNKNOWN':
-            self._update_unknown_candidate(detected)
-            return
-
-        if self.tracking_state == 'STRAIGHT':
             if detected in CORNER_STATES:
                 if detected == self.corner_candidate_direction:
                     self.corner_candidate_count += 1
                 else:
                     self.corner_candidate_direction = detected
                     self.corner_candidate_count = 1
-                if self.corner_candidate_count >= self.corner_candidate_frames:
-                    self.maneuver_phase = 'CORNER_CONFIRM'
-                    self.corner_confirmation_history.clear()
-                    self.filtered_steering = 0.0
-                    self.get_logger().warn(
-                        '코너 후보 5프레임 연속 감지: 정지 후 최근 15프레임의 '
-                        '최빈 상태를 확인합니다.'
-                    )
             else:
                 self.corner_candidate_direction = None
                 self.corner_candidate_count = 0
 
-    def _update_startup_candidate(self, detected):
-        """Confirm the initial state without applying an exploration timeout."""
-        if detected == 'UNKNOWN':
-            self.startup_candidate_state = None
-            self.startup_candidate_count = 0
+            if self.corner_candidate_count >= self.corner_confirm_frames:
+                confirmed_state = self.corner_candidate_direction
+                self.get_logger().info(
+                    f'코너 {self.corner_confirm_frames}프레임 연속 확인: '
+                    f'{confirmed_state}'
+                )
+                self._set_tracking_state(confirmed_state)
             return
 
-        if detected == self.startup_candidate_state:
-            self.startup_candidate_count += 1
-        else:
-            self.startup_candidate_state = detected
-            self.startup_candidate_count = 1
-
-        if self.startup_candidate_count >= self.unknown_vote_required:
-            self._set_tracking_state(self.startup_candidate_state)
-
-    def _update_unknown_candidate(self, detected):
-        if self.unknown_search_complete:
+        if self.tracking_state == 'UNKNOWN':
+            self._collect_unknown_frame(detected)
             return
 
-        # 마감 시각 이후 들어온 프레임으로 상태가 확정되지 않게 먼저 검사한다.
-        self._finish_unknown_search_if_due()
-        if self.unknown_search_complete:
-            return
+        if self.tracking_state == 'STRAIGHT':
+            if detected in CORNER_STATES:
+                self.maneuver_phase = 'CORNER_CONFIRM'
+                self.corner_candidate_direction = detected
+                self.corner_candidate_count = 1
+                self.filtered_steering = 0.0
+                self.get_logger().warn(
+                    '최초 코너 감지: 즉시 정지하고 같은 방향 코너를 '
+                    f'{self.corner_confirm_frames}프레임 연속 확인합니다.'
+                )
+            else:
+                self.corner_candidate_direction = None
+                self.corner_candidate_count = 0
 
-        if detected == 'UNKNOWN':
-            self.unknown_candidate_state = None
-            self.unknown_candidate_count = 0
-            return
-
-        if detected == self.unknown_candidate_state:
-            self.unknown_candidate_count += 1
-        else:
-            # 새로운 상태가 나온 현재 프레임부터 다시 1회로 센다.
-            self.unknown_candidate_state = detected
-            self.unknown_candidate_count = 1
-
-        if self.unknown_candidate_count >= self.unknown_vote_required:
-            self._set_tracking_state(self.unknown_candidate_state)
-
-    def _finish_unknown_search_if_due(self):
+    def _finish_startup_if_due(self, now):
+        """Choose the most frequent detection after mandatory startup drive."""
         if (
-            self.tracking_state != 'UNKNOWN'
-            or self.unknown_search_complete
-            or time.monotonic() - self.unknown_started_at < self.unknown_duration
+            self.tracking_state != STARTUP_STATE
+            or now - self.startup_started_at < self.startup_duration
         ):
             return
 
-        self.unknown_search_complete = True
-        self.unknown_candidate_state = None
-        self.unknown_candidate_count = 0
+        if self.startup_state_counts:
+            next_state = self.startup_state_counts.most_common(1)[0][0]
+        else:
+            next_state = 'UNKNOWN'
+        counts = dict(self.startup_state_counts)
+        self.get_logger().info(
+            f'STARTUP {self.startup_duration:.1f}초 판정 결과: '
+            f'{counts}, 최종 상태: {next_state}'
+        )
+        self._set_tracking_state(next_state)
+
+    def _collect_unknown_frame(self, detected):
+        if self.shutdown_requested:
+            return
+
+        self.unknown_frame_states.append(detected)
+        if len(self.unknown_frame_states) >= self.unknown_vote_frames:
+            self._evaluate_unknown_vote()
+
+    def _evaluate_unknown_vote(self):
+        if self.tracking_state != 'UNKNOWN' or self.shutdown_requested:
+            return
+
+        states = list(self.unknown_frame_states)
+        if len(states) < self.unknown_vote_frames:
+            return
+
+        self.unknown_frame_states.clear()
+        counts = Counter(states)
+        highest_count = max(counts.values())
+        winners = [
+            state for state, count in counts.items() if count == highest_count
+        ]
+        next_state = winners[0] if len(winners) == 1 else 'UNKNOWN'
+        self.get_logger().info(
+            f'UNKNOWN 판정 결과: frames={len(states)}, counts={dict(counts)}, '
+            f'최종 상태={next_state}'
+        )
+
+        if next_state != 'UNKNOWN':
+            self._set_tracking_state(next_state)
+            return
+
+        self.unknown_consecutive_votes += 1
+        self.get_logger().warn(
+            'UNKNOWN 투표 연속 '
+            f'{self.unknown_consecutive_votes}/'
+            f'{self.unknown_max_consecutive_votes}회'
+        )
+        if (
+            self.unknown_consecutive_votes
+            < self.unknown_max_consecutive_votes
+        ):
+            return
+
+        self._finish_driving(
+            f'투표 결과가 {self.unknown_max_consecutive_votes}회 연속 '
+            'UNKNOWN이어서 주행을 종료합니다.'
+        )
+
+    def _finish_driving(self, reason):
+        if self.shutdown_requested:
+            return
+        self.unknown_frame_states.clear()
         self.filtered_steering = 0.0
         self.cmd_pub.publish(Twist())
         finished = Bool()
@@ -300,9 +357,7 @@ class MainControlNode(Node):
         self.shutdown_timer = self.create_timer(
             0.2, self._shutdown_after_finish
         )
-        self.get_logger().warn(
-            '7초 동안 상태를 확정하지 못해 주행을 종료합니다.'
-        )
+        self.get_logger().warn(reason)
 
     def _shutdown_after_finish(self):
         """Allow the finish and stop messages to leave before exiting."""
@@ -316,17 +371,6 @@ class MainControlNode(Node):
             self.offset_history.append(float(msg.data))
             self.current_offset = sum(self.offset_history) / len(self.offset_history)
             self.last_offset_time = time.monotonic()
-            if abs(self.current_offset) > self.steering_deadband_px:
-                requested = self.steering_sign * self.current_offset
-                self.offset_recovery_steer = (
-                    self.max_steer if requested > 0.0 else -self.max_steer
-                )
-                self.maneuver_phase = 'OFFSET_BACKUP'
-                self.phase_started_at = self.last_offset_time
-                self.filtered_steering = 0.0
-                self.get_logger().info(
-                    '조향 데드밴드 초과: 후진 후 최대 조향 보정을 시작합니다.'
-                )
         else:
             self.get_logger().warn('오프셋을 찾지 못해 UNKNOWN 상태로 전환합니다.')
             self._set_tracking_state('UNKNOWN')
@@ -336,21 +380,65 @@ class MainControlNode(Node):
             return
         if not math.isfinite(msg.data) or msg.data < 0.0:
             return
-        if abs(float(msg.data) - self.target_edge_x_px) <= self.corner_align_tolerance_px:
+        if (
+            abs(float(msg.data) - self.corner_target_edge_x_px)
+            <= self.corner_align_tolerance_px
+        ):
             if self.maneuver_phase in ('CORNER_BACKUP', 'CORNER_FORWARD'):
-                self.maneuver_phase = 'REACQUIRE'
-                self.reacquire_count = 0
-                self.get_logger().info('코너 좌측 픽셀 정렬 완료: 전체 화면 재진입을 확인합니다.')
+                self.get_logger().info(
+                    '코너 좌측 픽셀 정렬 완료: UNKNOWN 상태로 전환합니다.'
+                )
+                self._set_tracking_state('UNKNOWN')
+        elif self.maneuver_phase in ('CORNER_BACKUP', 'CORNER_FORWARD'):
+            self.corner_alignment_steer = (
+                self.calculate_corner_alignment_steering(float(msg.data))
+            )
 
-    def roi_ratio_callback(self, msg):
-        if self.maneuver_phase != 'REACQUIRE':
+    def station_rightmost_callback(self, msg):
+        if self.tracking_state != 'STATION':
             return
-        if msg.data >= self.reacquire_yellow_ratio:
-            self.reacquire_count += 1
-        else:
-            self.reacquire_count = 0
-        if self.reacquire_count >= self.reacquire_confirm_frames:
-            self._set_tracking_state('UNKNOWN')
+        if not math.isfinite(msg.data) or msg.data < 0.0:
+            return
+
+        self.station_rightmost_x = float(msg.data)
+        if self.maneuver_phase != 'STATION_CALIBRATE':
+            return
+
+        self.station_target_history.append(self.station_rightmost_x)
+        self.get_logger().info(
+            f'STATION 타겟 좌표 수집 {len(self.station_target_history)}/'
+            f'{self.station_target_samples}: x={self.station_rightmost_x:.1f}'
+        )
+        if len(self.station_target_history) >= self.station_target_samples:
+            self.station_target_x = (
+                sum(self.station_target_history)
+                / len(self.station_target_history)
+            )
+            self.maneuver_phase = 'STATION_APPROACH'
+            self.get_logger().info(
+                f'STATION 타겟 X 확정: {self.station_target_x:.1f}px, '
+                '조향 전진을 시작합니다.'
+            )
+
+    def full_frame_navy_count_callback(self, msg):
+        if (
+            self.tracking_state != 'STATION'
+            or self.maneuver_phase != 'STATION_APPROACH'
+        ):
+            return
+
+        if int(msg.data) <= self.station_end_navy_pixels:
+            self.station_end_count += 1
+            self.get_logger().info(
+                f'STATION 종료 후보 {self.station_end_count}/'
+                f'{self.station_end_confirm_frames}: navy={int(msg.data)}px'
+            )
+        if self.station_end_count >= self.station_end_confirm_frames:
+            self._finish_driving(
+                f'전체 화면 남색 픽셀 {self.station_end_navy_pixels}개 이하가 '
+                f'{self.station_end_confirm_frames}프레임 확인되어 '
+                '스테이션 복귀를 완료했습니다.'
+            )
 
     def calculate_requested_steering(self, offset):
         if abs(offset) <= self.steering_deadband_px:
@@ -361,6 +449,18 @@ class MainControlNode(Node):
         left_limit = min(1.0, self.max_steer * self.left_steering_gain)
         return max(-self.max_steer, min(requested, left_limit))
 
+    def calculate_corner_alignment_steering(self, leftmost_x):
+        error = leftmost_x - self.corner_target_edge_x_px
+        requested = self.steering_sign * error * self.corner_align_kp
+        return max(-self.max_steer, min(requested, self.max_steer))
+
+    def calculate_station_steering(self):
+        if self.station_target_x is None or self.station_rightmost_x is None:
+            return 0.0
+        error = self.station_rightmost_x - self.station_target_x
+        requested = self.steering_sign * error * self.station_steering_kp
+        return max(-self.max_steer, min(requested, self.max_steer))
+
     def control_loop(self):
         twist = Twist()
         now = time.monotonic()
@@ -370,32 +470,24 @@ class MainControlNode(Node):
             return
 
         if self.is_obstacle_detected:
+            if (
+                self.tracking_state == STARTUP_STATE
+                and self.startup_paused_at is None
+            ):
+                self.startup_paused_at = now
             self.cmd_pub.publish(twist)
             return
 
-        # 카메라 프레임이 끊겨도 7초 제한은 제어 타이머에서 독립적으로 적용한다.
-        self._finish_unknown_search_if_due()
+        if (
+            self.tracking_state == STARTUP_STATE
+            and self.startup_paused_at is not None
+        ):
+            self.startup_started_at += now - self.startup_paused_at
+            self.startup_paused_at = None
+        self._finish_startup_if_due(now)
 
         if self.maneuver_phase == 'CORNER_CONFIRM':
             pass
-        elif self.maneuver_phase == 'OFFSET_BACKUP':
-            if now - self.phase_started_at < self.offset_backup_duration:
-                twist.linear.x = -self.reverse_speed
-            else:
-                self.maneuver_phase = 'OFFSET_FORWARD'
-                self.phase_started_at = now
-                twist.linear.x = self.drive_speed
-                twist.angular.z = self.offset_recovery_steer
-        elif self.maneuver_phase == 'OFFSET_FORWARD':
-            if now - self.phase_started_at < self.offset_forward_duration:
-                twist.linear.x = self.drive_speed
-                twist.angular.z = self.offset_recovery_steer
-            else:
-                self.maneuver_phase = 'NONE'
-                self.current_offset = 999.0
-                self.offset_history.clear()
-                self.last_offset_time = now
-                self.filtered_steering = 0.0
         elif self.maneuver_phase == 'CORNER_BACKUP':
             if now - self.phase_started_at < self.corner_backup_duration:
                 twist.linear.x = -self.reverse_speed
@@ -403,24 +495,26 @@ class MainControlNode(Node):
                 self.maneuver_phase = 'CORNER_FORWARD'
                 self.phase_started_at = now
                 twist.linear.x = self.drive_speed
-                twist.angular.z = self._corner_steering()
+                twist.angular.z = self.corner_alignment_steer
         elif self.maneuver_phase == 'CORNER_FORWARD':
             if now - self.phase_started_at < self.corner_forward_duration:
                 twist.linear.x = self.drive_speed
-                twist.angular.z = self._corner_steering()
+                twist.angular.z = self.corner_alignment_steer
             else:
                 self.maneuver_phase = 'CORNER_BACKUP'
                 self.phase_started_at = now
                 twist.linear.x = -self.reverse_speed
-        elif self.maneuver_phase == 'REACQUIRE':
+        elif self.maneuver_phase == 'STATION_CALIBRATE':
+            pass
+        elif self.maneuver_phase == 'STATION_APPROACH':
             twist.linear.x = self.drive_speed
+            twist.angular.z = self.calculate_station_steering()
         elif self.tracking_state == STARTUP_STATE:
-            # 최초 상태가 확정될 때까지 시간 제한 없이 전체 ROI로 직진한다.
+            # 최초 4초 동안 전체 ROI 판정을 수집하며 직진한다.
             twist.linear.x = self.drive_speed
         elif self.tracking_state == 'UNKNOWN':
-            # UNKNOWN 탐색 중에도 별도의 저속값을 쓰지 않고 현재 설정 속도로 주행한다.
-            if not self.unknown_search_complete:
-                twist.linear.x = self.drive_speed
+            # UNKNOWN 투표 중에도 현재 설정된 일반 주행 속도로 주행한다.
+            twist.linear.x = self.drive_speed
         elif self.tracking_state == 'STRAIGHT':
             offset_is_valid = (
                 math.isfinite(self.current_offset)

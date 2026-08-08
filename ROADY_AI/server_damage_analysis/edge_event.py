@@ -56,11 +56,15 @@ def load_edge_analysis_request(
         "edge_damage_candidate_detected": bool(
             ai_metadata.get("edge_damage_candidate_detected", True)
         ),
+        # This flag must come from an upstream obstruction/OOD gate. The
+        # four-class segmentation model does not contain an obstruction class.
+        "possible_obstruction": bool(ai_metadata.get("possible_obstruction", False)),
     }
     for key in (
         "analysis_unit_hint",
         "tactile_detection_count",
         "frame_selection_status",
+        "obstruction_source",
     ):
         if key in ai_metadata:
             input_metadata[key] = ai_metadata[key]

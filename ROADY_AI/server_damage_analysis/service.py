@@ -27,7 +27,7 @@ PRIORITY_BY_SEVERITY = {
 
 DEFAULT_MINOR_MAX_PIXELS = 10_000
 DEFAULT_MODERATE_MAX_PIXELS = 50_000
-DEFAULT_MAX_SCORE_PIXELS = 100_000
+DEFAULT_MAX_SCORE_PIXELS = 300_000
 
 MISSING_LARGE_THRESHOLD_PERCENT = 15.0
 
@@ -113,6 +113,17 @@ def calculate_damage_score(
     return 100
 
 
+def severity_from_damage_score(damage_score: int | None) -> str | None:
+    """Derive the service severity used for repair decisions from a damage score."""
+    if damage_score is None or damage_score <= 0:
+        return None
+    if damage_score <= 30:
+        return "minor"
+    if damage_score <= 70:
+        return "moderate"
+    return "severe"
+
+
 def read_and_verify_sha256(
     model_path: Path,
     sha256_path: Path,
@@ -186,14 +197,15 @@ class DamageAnalysisService:
         analysis = selected.payload["analysis"]
         summary = selected.payload.get("summary", analysis)
         model = selected.payload["model"]
+        response_severity = self._response_severity(selected)
         repair_required = (
-            None
-            if selected.severity is None
-            else selected.severity in {"moderate", "severe"}
+            None if selected.damaged is None else selected.damaged
         )
         severity_label = analysis.get("estimated_severity_label")
-        if severity_label is None and selected.severity is not None:
-            severity_label = SEVERITY_LABELS[selected.severity]
+        if response_severity != selected.severity:
+            severity_label = None
+        if severity_label is None and response_severity is not None:
+            severity_label = SEVERITY_LABELS[response_severity]
 
         return DamageAnalysisResponse(
             damaged=selected.damaged,
@@ -202,8 +214,8 @@ class DamageAnalysisService:
             repair_required=repair_required,
             repair_priority=(
                 None
-                if selected.severity is None
-                else PRIORITY_BY_SEVERITY[selected.severity]
+                if selected.damaged is not True or response_severity is None
+                else PRIORITY_BY_SEVERITY[response_severity]
             ),
             confidence_score=(
                 selected.confidence_score if selected.damaged is True else None
@@ -221,7 +233,7 @@ class DamageAnalysisService:
                 ),
                 damage_ratio=selected.damage_ratio,
                 damage_ratio_percent=selected.damage_ratio_percent,
-                estimated_severity=selected.severity,
+                estimated_severity=response_severity,
                 estimated_severity_label=(
                     None if severity_label is None else str(severity_label)
                 ),
@@ -408,9 +420,22 @@ class DamageAnalysisService:
             damage_score=item.damage_score,
             damage_ratio=item.damage_ratio,
             damage_ratio_percent=item.damage_ratio_percent,
-            estimated_severity=item.severity,
+            estimated_severity=self._response_severity(item),
             confidence_score=item.confidence_score if item.damaged is True else None,
             review_required=bool(
                 item.payload.get("summary", analysis).get("review_required", False)
             ),
         )
+
+    @staticmethod
+    def _response_severity(item: _AnalyzedImage) -> str | None:
+        if item.damaged is not True:
+            return item.severity
+
+        score_severity = severity_from_damage_score(item.damage_score)
+        if score_severity is not None:
+            return score_severity
+
+        # A positive model decision must produce a usable repair priority even
+        # when the damage ratio or mask pixel count cannot be estimated.
+        return "moderate"
