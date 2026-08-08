@@ -17,6 +17,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 def _default_damage_model_path():
     relative_path = Path(
         'artifacts/tactile_damage_candidate/'
+        'v4/'
         'tactile_damage_candidate_yolo26n_best.engine'
     )
     for parent in Path(__file__).resolve().parents:
@@ -93,7 +94,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'damage_process_every_n_frames',
-            default_value='6',
+            default_value='3',
             description='Run damage inference every N tactile-camera frames',
         ),
         DeclareLaunchArgument(
@@ -154,15 +155,20 @@ def generate_launch_description():
                 'inference_device': '0',
                 'inference_image_size': 768,
                 'detection_threshold': 0.15,
+                'require_tactile_roi_for_event': True,
+                'require_verified_frame_for_event': True,
+                'minimum_event_confidence': 0.25,
+                'group_by_tactile_unit': False,
+                'stable_observation_count': 2,
                 'process_every_n_frames': ParameterValue(
                     LaunchConfiguration('damage_process_every_n_frames'),
                     value_type=int,
                 ),
                 'publish_annotated': False,
                 'detection_only_mode': False,
-                'confirm_count': 3,
+                'confirm_count': 2,
                 'confirm_window_sec': 2.0,
-                'min_confirm_duration_sec': 0.4,
+                'min_confirm_duration_sec': 0.1,
                 'min_observation_interval_sec': 0.1,
                 'candidate_timeout_sec': 1.2,
                 'reported_track_cooldown_sec': 5.0,

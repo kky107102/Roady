@@ -69,13 +69,14 @@ def generate_launch_description():
             'damage_model_path',
             default_value=(
                 'artifacts/tactile_damage_candidate/'
+                'v4/'
                 'tactile_damage_candidate_yolo26n_best.engine'
             ),
             description='TensorRT engine used by damage_detection_node',
         ),
         DeclareLaunchArgument(
             'damage_process_every_n_frames',
-            default_value='6',
+            default_value='3',
             description='Run damage inference every N tactile-camera frames',
         ),
         DeclareLaunchArgument(

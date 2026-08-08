@@ -37,13 +37,13 @@ class DamageDetectionNode(Node):
         self.declare_parameter("inference_device", "0")
         self.declare_parameter("inference_image_size", 768)
         self.declare_parameter("detection_threshold", 0.15)
-        self.declare_parameter("confirm_count", 3)
+        self.declare_parameter("confirm_count", 2)
         self.declare_parameter("confirm_window_sec", 2.0)
-        self.declare_parameter("min_confirm_duration_sec", 0.4)
+        self.declare_parameter("min_confirm_duration_sec", 0.1)
         self.declare_parameter("min_observation_interval_sec", 0.1)
         self.declare_parameter("candidate_timeout_sec", 1.0)
         self.declare_parameter("reported_track_cooldown_sec", 5.0)
-        self.declare_parameter("tactile_roi_margin_ratio", 0.20)
+        self.declare_parameter("tactile_roi_margin_ratio", 0.0)
         self.declare_parameter("damage_fallback_scale", 1.5)
         self.declare_parameter("tactile_relation_iou", 0.01)
         self.declare_parameter("frame_edge_margin_px", 3)
@@ -54,6 +54,10 @@ class DamageDetectionNode(Node):
         self.declare_parameter("stable_area_change_ratio", 0.10)
         self.declare_parameter("stable_center_shift_ratio", 0.03)
         self.declare_parameter("stable_observation_count", 2)
+        self.declare_parameter("require_tactile_roi_for_event", True)
+        self.declare_parameter("require_verified_frame_for_event", True)
+        self.declare_parameter("minimum_event_confidence", 0.25)
+        self.declare_parameter("group_by_tactile_unit", False)
         self.declare_parameter("process_every_n_frames", 1)
         self.declare_parameter("benchmark_duration_sec", 0.0)
         self.declare_parameter(
@@ -130,6 +134,18 @@ class DamageDetectionNode(Node):
             stable_observation_count=int(
                 self.get_parameter("stable_observation_count").value
             ),
+            require_tactile_roi_for_event=bool(
+                self.get_parameter("require_tactile_roi_for_event").value
+            ),
+            require_verified_frame_for_event=bool(
+                self.get_parameter("require_verified_frame_for_event").value
+            ),
+            minimum_event_confidence=float(
+                self.get_parameter("minimum_event_confidence").value
+            ),
+            group_by_tactile_unit=bool(
+                self.get_parameter("group_by_tactile_unit").value
+            ),
         )
         self._frame_count = 0
         self._event_count = 0
@@ -179,6 +195,18 @@ class DamageDetectionNode(Node):
             ),
             "min_observation_interval_sec": float(
                 self.get_parameter("min_observation_interval_sec").value
+            ),
+            "require_tactile_roi_for_event": bool(
+                self.get_parameter("require_tactile_roi_for_event").value
+            ),
+            "require_verified_frame_for_event": bool(
+                self.get_parameter("require_verified_frame_for_event").value
+            ),
+            "minimum_event_confidence": float(
+                self.get_parameter("minimum_event_confidence").value
+            ),
+            "group_by_tactile_unit": bool(
+                self.get_parameter("group_by_tactile_unit").value
             ),
                 "reported_track_cooldown_sec": float(
                     self.get_parameter("reported_track_cooldown_sec").value
@@ -339,6 +367,9 @@ class DamageDetectionNode(Node):
         try:
             event = self._repository.save_event(
                 images=[ready.original_image, ready.analysis_roi],
+                # Keep the full frame locally for debugging, but upload only
+                # the selected single-tactile-block ROI for server segmentation.
+                upload_image_indices=[1],
                 location=location,
                 robot_id=robot_id,
                 description=description,

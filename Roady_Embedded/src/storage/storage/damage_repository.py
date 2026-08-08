@@ -120,11 +120,14 @@ class DamageRepository:
         return [self._resolve_image_name(name) for name in event.get("images", [])]
 
     def resolve_upload_image_paths(self, event: dict) -> list[Path]:
-        # Production events store [representative original, expanded ROI].
-        # Upload only the first image so queued events created under an older
-        # upload policy also send the original camera frame rather than the ROI.
-        image_paths = self.resolve_image_paths(event)
-        return image_paths[:1]
+        upload_names = event.get("uploadImages")
+        if upload_names is not None:
+            if not isinstance(upload_names, list) or not upload_names:
+                raise ValueError("uploadImages must be a non-empty list")
+            return [self._resolve_image_name(name) for name in upload_names]
+        # Legacy events did not record an upload policy and stored the original
+        # camera frame first, so preserve that behavior for already queued data.
+        return self.resolve_image_paths(event)[:1]
 
     def delete_event(self, event_path: str | Path) -> None:
         path = Path(event_path)

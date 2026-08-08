@@ -44,6 +44,8 @@ def test_same_candidate_requires_three_frames_then_emits_once():
         confirm_count=3,
         confirm_window_sec=2.0,
         candidate_timeout_sec=1.0,
+        require_tactile_roi_for_event=False,
+        require_verified_frame_for_event=False,
     )
 
     assert pipeline.process(frame, timestamp=0.0) == []
@@ -73,6 +75,8 @@ def test_ready_candidate_can_retry_until_persisted():
         confirm_count=1,
         min_confirm_duration_sec=0.0,
         candidate_timeout_sec=0.5,
+        require_tactile_roi_for_event=False,
+        require_verified_frame_for_event=False,
     )
     pipeline.process(frame, timestamp=0.0)
     detector.detections = []
@@ -140,6 +144,8 @@ def test_reported_track_suppresses_repeated_event_during_cooldown():
         min_confirm_duration_sec=0.0,
         candidate_timeout_sec=0.5,
         reported_track_cooldown_sec=5.0,
+        require_tactile_roi_for_event=False,
+        require_verified_frame_for_event=False,
     )
     pipeline.process(frame, timestamp=0.0)
     detector.detections = []
@@ -173,7 +179,7 @@ def test_selects_single_tactile_bbox_related_to_damage():
     assert not selection.roi_fallback_used
 
 
-def test_related_tactile_boxes_are_merged_before_margin():
+def test_best_related_single_tactile_box_is_selected_before_margin():
     selection = select_analysis_roi(
         damage_bbox=(180, 120, 240, 180),
         tactile_boxes=[(100, 100, 200, 200), (190, 100, 290, 200)],
@@ -182,8 +188,8 @@ def test_related_tactile_boxes_are_merged_before_margin():
     )
 
     assert selection.tactile_detection_count == 2
-    assert selection.bbox == (62.0, 80.0, 328.0, 220.0)
-    assert selection.analysis_unit_hint == "block_or_block_group"
+    assert selection.bbox == (170.0, 80.0, 310.0, 220.0)
+    assert selection.analysis_unit_hint == "single_tactile_block"
 
 
 def test_tactile_margin_is_clipped_to_image_boundary():
@@ -220,7 +226,7 @@ def test_frame_quality_gate_distinguishes_verified_and_fallback_roi():
     tactile = RoiSelection(
         bbox=(100, 100, 300, 300),
         roi_source="tactile_block",
-        analysis_unit_hint="block_or_block_group",
+        analysis_unit_hint="single_tactile_block",
         tactile_detection_count=1,
         roi_fallback_used=False,
     )
@@ -280,7 +286,169 @@ def test_pipeline_uses_tactile_roi_and_records_quality_metadata():
 
     assert len(ready) == 1
     assert ready[0].metadata["roi_source"] == "tactile_block"
-    assert ready[0].metadata["analysis_unit_hint"] == "block_or_block_group"
+    assert ready[0].metadata["analysis_unit_hint"] == "single_tactile_block"
     assert ready[0].metadata["frame_quality_verified"] is True
-    assert ready[0].analysis_roi.shape[:2] == (280, 280)
+    assert ready[0].analysis_roi.shape[:2] == (200, 200)
     assert np.array_equal(ready[0].tactile_roi, ready[0].analysis_roi)
+
+
+def test_pipeline_rejects_confirmed_damage_without_tactile_roi():
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [detection("damage_candidate", 0.9, (150, 150, 200, 200))]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        min_confirm_duration_sec=0.1,
+        candidate_timeout_sec=0.5,
+        require_tactile_roi_for_event=True,
+    )
+
+    pipeline.process(frame, timestamp=0.0)
+    pipeline.process(frame, timestamp=0.2)
+    detector.detections = []
+
+    assert pipeline.process(frame, timestamp=0.71) == []
+    assert pipeline.candidates == ()
+
+
+def test_pipeline_accepts_late_tactile_match_before_track_expires():
+    rng = np.random.default_rng(11)
+    frame = rng.integers(0, 256, (480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [detection("damage_candidate", 0.9, (150, 150, 200, 200))]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        min_confirm_duration_sec=0.1,
+        stable_observation_count=1,
+        candidate_timeout_sec=0.5,
+        require_tactile_roi_for_event=True,
+    )
+
+    pipeline.process(frame, timestamp=0.0)
+    detector.detections = [
+        detection("tactile_block", 0.95, (100, 100, 300, 300)),
+        detection("damage_candidate", 0.9, (150, 150, 200, 200)),
+    ]
+    pipeline.process(frame, timestamp=0.2)
+    pipeline.process(frame, timestamp=0.4)
+    detector.detections = []
+    ready = pipeline.process(frame, timestamp=0.91)
+
+    assert len(ready) == 1
+    assert ready[0].metadata["roi_source"] == "tactile_block"
+
+
+def test_damage_boxes_on_same_tactile_unit_share_one_track():
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [
+            detection("tactile_block", 0.9, (100, 100, 400, 350)),
+            detection("damage_candidate", 0.8, (130, 140, 170, 180)),
+            detection("damage_candidate", 0.7, (300, 240, 340, 280)),
+        ]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        group_by_tactile_unit=True,
+    )
+
+    pipeline.process(frame, timestamp=0.0)
+
+    assert len(pipeline.candidates) == 1
+    assert len(pipeline.candidates[0].observation_times) == 1
+
+
+def test_same_tactile_unit_remains_one_track_across_frames():
+    frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [
+            detection("tactile_block", 0.9, (100, 100, 400, 350)),
+            detection("damage_candidate", 0.8, (130, 140, 170, 180)),
+            detection("damage_candidate", 0.7, (300, 240, 340, 280)),
+        ]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        min_confirm_duration_sec=0.1,
+        candidate_timeout_sec=0.5,
+        group_by_tactile_unit=True,
+    )
+    pipeline.process(frame, timestamp=0.0)
+    detector.detections = [
+        detection("tactile_block", 0.9, (102, 100, 402, 350)),
+        detection("damage_candidate", 0.8, (135, 142, 175, 182)),
+        detection("damage_candidate", 0.7, (305, 242, 345, 282)),
+    ]
+    pipeline.process(frame, timestamp=0.2)
+
+    assert len(pipeline.candidates) == 1
+    assert pipeline.candidates[0].confirmed
+
+    detector.detections = []
+    ready = pipeline.process(frame, timestamp=0.71)
+    assert len(ready) == 0
+
+
+def test_pipeline_rejects_event_below_minimum_confidence():
+    rng = np.random.default_rng(17)
+    frame = rng.integers(0, 256, (480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [
+            detection("tactile_block", 0.9, (100, 100, 300, 300)),
+            detection("damage_candidate", 0.2, (150, 150, 200, 200)),
+        ]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        min_confirm_duration_sec=0.1,
+        stable_observation_count=1,
+        candidate_timeout_sec=0.5,
+        minimum_event_confidence=0.25,
+    )
+
+    pipeline.process(frame, timestamp=0.0)
+    pipeline.process(frame, timestamp=0.2)
+    detector.detections = []
+
+    assert pipeline.process(frame, timestamp=0.71) == []
+
+
+def test_closer_verified_tactile_frame_replaces_earlier_frame():
+    rng = np.random.default_rng(23)
+    far_frame = rng.integers(0, 180, (480, 640, 3), dtype=np.uint8)
+    close_frame = rng.integers(180, 256, (480, 640, 3), dtype=np.uint8)
+    detector = MockDamageDetector(
+        [
+            detection("tactile_block", 0.9, (150, 100, 350, 250)),
+            detection("damage_candidate", 0.8, (200, 150, 250, 200)),
+        ]
+    )
+    pipeline = DamageEventPipeline(
+        detector=detector,
+        confirm_count=2,
+        min_confirm_duration_sec=0.1,
+        stable_observation_count=1,
+        candidate_timeout_sec=0.5,
+    )
+    pipeline.process(far_frame, timestamp=0.0)
+    pipeline.process(far_frame, timestamp=0.2)
+    detector.detections = [
+        detection("tactile_block", 0.9, (100, 80, 450, 400)),
+        detection("damage_candidate", 0.8, (200, 150, 250, 200)),
+    ]
+    pipeline.process(close_frame, timestamp=0.4)
+    pipeline.process(close_frame, timestamp=0.6)
+    detector.detections = []
+    ready = pipeline.process(close_frame, timestamp=1.11)
+
+    assert len(ready) == 1
+    assert ready[0].analysis_roi.shape[:2] == (320, 350)
+    representative = ready[0].metadata["representative_frame"]
+    assert representative["selection"] == "closest_verified_tactile_roi"
