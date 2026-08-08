@@ -17,7 +17,7 @@ Jira `S15P11A404-98`의 YOLO26n Detect 기반 점자블록 및 파손 후보 탐
 
 - 구조: YOLO26n Detect
 - 입력: 768
-- 모델 버전: `edge_yolo26n_balanced_replay_v3`
+- 모델 버전: `edge_yolo26n_large_missing_replay_v4`
 - 시작 가중치: 큰 결손 탐지가 안정적이었던 기존 v1 `best.pt`
 - 학습: 큰 결손 Replay와 신규 마모 데이터를 균형 구성한 Fine-tuning
 - 클래스 수: 2
@@ -26,10 +26,10 @@ Jira `S15P11A404-98`의 YOLO26n Detect 기반 점자블록 및 파손 후보 탐
 
 | 클래스 | Precision | Recall | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|
-| `tactile_block` | 92.5% | 95.0% | 98.3% | 93.0% |
-| `damage_candidate` | 80.0% | 74.1% | 85.7% | 67.9% |
+| `tactile_block` | 97.0% | 92.8% | 98.6% | 91.2% |
+| `damage_candidate` | 86.3% | 72.3% | 85.6% | 68.6% |
 
-동일한 고정 Test에서 직전 모델의 `damage_candidate` 성능은 Precision 86.2%, Recall 69.6%, mAP50 75.9%, mAP50-95 58.1%였다. 새 균형 Replay 모델은 Precision이 일부 낮아졌지만 Recall은 4.5%p, mAP50은 9.8%p, mAP50-95는 9.8%p 개선됐으며 F2-score는 약 0.752이다. Edge AI는 파손을 최종 확정하지 않고 서버 정밀 분석 대상으로 전달하므로 Recall과 F2-score를 우선한다.
+v4는 큰 결손 미탐 하드 예제를 Replay한 모델이다. 고정 Test에서 직전 v3 대비 `damage_candidate` Precision과 엄격한 위치 정확도는 유지·개선됐지만 Recall은 약 1.8%p 낮아졌다. 학습에 사용한 하드 예제에서는 99개 중 88개를 복구했으나 이는 학습 데이터 재평가이므로 일반화 지표로 사용하지 않는다. 최종 채택 전 별도 로봇 주행 영상에서 이벤트 Recall과 흙·검은 틈 오탐률을 함께 확인한다.
 
 학습 표본은 원본 유형 기준으로 큰 결손 30%, 마모 30%, 작은 결손·균열 등 기타 파손 25%, 흙·낙엽 등 Hard Negative 15%가 되도록 구성했다. 씽씽이는 현 결정에 따라 `damage_candidate` 후보에 포함하며, 서버에서 분석 불확실 시 판단 보류 대상으로 처리한다.
 
@@ -44,7 +44,7 @@ ROADY_AI/models/edge/tactile_damage_candidate_yolo26n_best.pt
 SHA-256:
 
 ```text
-085684f195398ba0af8cbea1a104a116ca4b71e41b9005bb2cdd1affd30868a7
+88f34a917b47527c1eae33d325cc643704b8be23c2e4cd5382dfce71437ab1ee
 ```
 
 기존 YOLO11n 모델과 별도 손상 분류기는 운영 대상에서 제외한다.
