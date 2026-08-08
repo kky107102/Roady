@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -20,6 +21,26 @@ def generate_launch_description():
     enable_drive_recording = LaunchConfiguration('enable_drive_recording')
     recording_image_topic = LaunchConfiguration('recording_image_topic')
     recording_output_path = LaunchConfiguration('recording_output_path')
+    start_damage_detection = LaunchConfiguration('start_damage_detection')
+    damage_model_path = LaunchConfiguration('damage_model_path')
+    damage_process_every_n_frames = LaunchConfiguration(
+        'damage_process_every_n_frames'
+    )
+    start_line_tracking = LaunchConfiguration('start_line_tracking')
+    start_drive = LaunchConfiguration('start_drive')
+    start_image_upload = LaunchConfiguration('start_image_upload')
+    upload_enabled = LaunchConfiguration('upload_enabled')
+    upload_base_url = LaunchConfiguration('upload_base_url')
+    upload_access_token = LaunchConfiguration('upload_access_token')
+    obstacle_roi_left_ratio = LaunchConfiguration('obstacle_roi_left_ratio')
+    obstacle_roi_top_ratio = LaunchConfiguration('obstacle_roi_top_ratio')
+    obstacle_roi_right_ratio = LaunchConfiguration('obstacle_roi_right_ratio')
+    obstacle_roi_bottom_ratio = LaunchConfiguration('obstacle_roi_bottom_ratio')
+    obstacle_publish_annotated = LaunchConfiguration('obstacle_publish_annotated')
+    obstacle_min_ground_y_ratio = LaunchConfiguration('obstacle_min_ground_y_ratio')
+    obstacle_min_box_height_ratio = LaunchConfiguration(
+        'obstacle_min_box_height_ratio'
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -57,6 +78,41 @@ def generate_launch_description():
             default_value='~/%Y%m%d_%H%M%S.mp4',
             description='MP4 path; datetime strftime tokens are supported',
         ),
+        DeclareLaunchArgument(
+            'start_damage_detection',
+            default_value='true',
+            description='Start damage detection on the tactile camera stream',
+        ),
+        DeclareLaunchArgument(
+            'damage_model_path',
+            default_value=(
+                'artifacts/tactile_damage_candidate/'
+                'v4/'
+                'tactile_damage_candidate_yolo26n_best.engine'
+            ),
+            description='TensorRT engine used by damage_detection_node',
+        ),
+        DeclareLaunchArgument(
+            'damage_process_every_n_frames',
+            default_value='3',
+            description='Run damage inference every N tactile-camera frames',
+        ),
+        DeclareLaunchArgument('start_line_tracking', default_value='true'),
+        DeclareLaunchArgument('start_drive', default_value='true'),
+        DeclareLaunchArgument('start_image_upload', default_value='true'),
+        DeclareLaunchArgument('upload_enabled', default_value='false'),
+        DeclareLaunchArgument(
+            'upload_base_url',
+            default_value='https://i15a404.p.ssafy.io',
+        ),
+        DeclareLaunchArgument('upload_access_token', default_value=''),
+        DeclareLaunchArgument('obstacle_roi_left_ratio', default_value='0.40'),
+        DeclareLaunchArgument('obstacle_roi_top_ratio', default_value='0.05'),
+        DeclareLaunchArgument('obstacle_roi_right_ratio', default_value='0.60'),
+        DeclareLaunchArgument('obstacle_roi_bottom_ratio', default_value='0.70'),
+        DeclareLaunchArgument('obstacle_publish_annotated', default_value='false'),
+        DeclareLaunchArgument('obstacle_min_ground_y_ratio', default_value='0.0'),
+        DeclareLaunchArgument('obstacle_min_box_height_ratio', default_value='0.0'),
 
         # Tactile camera/tracing, motor, and main controller.
         IncludeLaunchDescription(
@@ -70,6 +126,11 @@ def generate_launch_description():
                 'enable_drive_recording': enable_drive_recording,
                 'recording_image_topic': recording_image_topic,
                 'recording_output_path': recording_output_path,
+                'start_damage_detection': start_damage_detection,
+                'damage_model_path': damage_model_path,
+                'damage_process_every_n_frames': damage_process_every_n_frames,
+                'start_line_tracking': start_line_tracking,
+                'start_drive': start_drive,
             }.items(),
         ),
 
@@ -97,7 +158,13 @@ def generate_launch_description():
                 'image_topic': '/camera/obstacle/image_raw',
                 'detected_topic': '/obstacle/human_lower_limb_detected',
                 'annotated_topic': '/obstacle/lower_limb_annotated',
-                'publish_annotated': True,
+                'roi_left_ratio': obstacle_roi_left_ratio,
+                'roi_top_ratio': obstacle_roi_top_ratio,
+                'roi_right_ratio': obstacle_roi_right_ratio,
+                'roi_bottom_ratio': obstacle_roi_bottom_ratio,
+                'publish_annotated': obstacle_publish_annotated,
+                'min_ground_y_ratio': obstacle_min_ground_y_ratio,
+                'min_box_height_ratio': obstacle_min_box_height_ratio,
             }],
         ),
         Node(
@@ -144,6 +211,20 @@ def generate_launch_description():
                 'stop_topic': '/emergency_stop',
                 'stop_on_camera_timeout': True,
                 'camera_startup_grace_sec': 5.0,
+            }],
+        ),
+        Node(
+            package='communication',
+            executable='image_upload_node',
+            name='image_upload_node',
+            condition=IfCondition(start_image_upload),
+            output='screen',
+            parameters=[{
+                'arrival_topic': '/driving/finished',
+                'upload_enabled': ParameterValue(upload_enabled, value_type=bool),
+                'base_url': upload_base_url,
+                'access_token': upload_access_token,
+                'storage_dir': 'data/damage_events',
             }],
         ),
     ])

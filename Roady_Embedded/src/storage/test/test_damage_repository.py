@@ -95,6 +95,24 @@ def test_save_event_selects_only_original_for_upload(tmp_path):
     assert payload["uploadImages"] == [event.image_paths[0]]
 
 
+def test_save_event_can_select_tactile_roi_for_upload(tmp_path):
+    repository = DamageRepository(tmp_path)
+    event = repository.save_event(
+        images=[
+            np.full((2, 2, 3), fill_value=10, dtype=np.uint8),
+            np.full((2, 2, 3), fill_value=20, dtype=np.uint8),
+        ],
+        upload_image_indices=[1],
+        location=DamageLocation(latitude=12.4, longitude=8.7),
+    )
+    payload = repository.to_dict(event)
+
+    assert payload["uploadImages"] == [event.image_paths[1]]
+    assert repository.resolve_upload_image_paths(payload) == [
+        repository.resolve_image_paths(payload)[1]
+    ]
+
+
 def test_legacy_event_uploads_first_stored_image_as_original(tmp_path):
     repository = DamageRepository(tmp_path)
     event = repository.save_event(
