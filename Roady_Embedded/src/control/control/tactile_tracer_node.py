@@ -34,12 +34,18 @@ class TactileTracerNode(Node):
         )
 
         self.declare_parameter('image_topic', '/camera/tactile/image_raw')
+        self.declare_parameter(
+            'damage_annotated_topic', '/tactile/damage_annotated'
+        )
         self.declare_parameter('damage_detection_topic', '/damage/detections')
         self.declare_parameter('damage_overlay_timeout_sec', 0.3)
         self.declare_parameter('target_edge_x_px', 750)
         self.declare_parameter('roi_top_ratio', 0.55)
         self.declare_parameter('station_navy_min_pixels', 3500)
         image_topic = str(self.get_parameter('image_topic').value)
+        damage_annotated_topic = str(
+            self.get_parameter('damage_annotated_topic').value
+        )
         damage_detection_topic = str(
             self.get_parameter('damage_detection_topic').value
         )
@@ -64,6 +70,11 @@ class TactileTracerNode(Node):
             Image,
             image_topic,
             self.image_callback,
+            qos_profile_sensor_data,
+        )
+        self.damage_annotated_pub = self.create_publisher(
+            Image,
+            damage_annotated_topic,
             qos_profile_sensor_data,
         )
         self.state_sub = self.create_subscription(
@@ -91,6 +102,12 @@ class TactileTracerNode(Node):
         frame = self.image_message_to_bgr(msg)
         if frame is None:
             return
+
+        damage_annotated_frame = frame.copy()
+        self.draw_damage_overlay(damage_annotated_frame)
+        self.damage_annotated_pub.publish(
+            self.bgr_to_image_message(damage_annotated_frame, msg)
+        )
 
         block_type, offset, _, leftmost_x, debug_frame = (
             self.analyze_tactile_block(frame)
@@ -212,6 +229,18 @@ class TactileTracerNode(Node):
         else:
             frame = frame.copy()
         return frame
+
+    @staticmethod
+    def bgr_to_image_message(frame, source_msg):
+        """OpenCV BGR 프레임을 원본 시각의 ROS 이미지로 변환한다."""
+        output = Image()
+        output.header = source_msg.header
+        output.height, output.width = frame.shape[:2]
+        output.encoding = 'bgr8'
+        output.is_bigendian = 0
+        output.step = output.width * 3
+        output.data = np.ascontiguousarray(frame).tobytes()
+        return output
 
     def analyze_tactile_block(self, frame):
         height, width, _ = frame.shape

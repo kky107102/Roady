@@ -90,8 +90,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'recording_image_topic',
-            default_value='/camera/tactile/image_raw',
-            description='Raw tactile camera topic to record',
+            default_value='/tactile/damage_annotated',
+            description='Damage-only annotated tactile image topic to record',
         ),
         DeclareLaunchArgument(
             'recording_output_path',
@@ -164,6 +164,7 @@ def generate_launch_description():
             condition=IfCondition(LaunchConfiguration('start_line_tracking')),
             parameters=[{
                 'image_topic': '/camera/tactile/image_raw',
+                'damage_annotated_topic': '/tactile/damage_annotated',
                 'damage_detection_topic': '/damage/detections',
                 'damage_overlay_timeout_sec': 0.3,
                 'target_edge_x_px': 750,
