@@ -70,8 +70,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'recording_image_topic',
-            default_value='/camera/tactile/image_raw',
-            description='ROS image topic to record during driving',
+            default_value='/tactile/damage_annotated',
+            description='Damage-only annotated tactile image topic to record',
         ),
         DeclareLaunchArgument(
             'recording_output_path',
