@@ -1,8 +1,8 @@
-# ROADY 서버 AI 파손 분석 v2
+# ROADY 서버 AI 파손 분석
 
 Jira: `S15P11A404-168`
 
-서버 AI는 Edge가 전송한 점자블록 기준 ROI를 4클래스 Segmentation 모델로 분석합니다. 분석 전제조건을 검증할 수 없으면 비율이나 심각도를 확정하지 않고 `null`, `review_required=true`, `advisory_only=true`로 반환합니다.
+서버 AI는 Edge가 전송한 점자블록 기준 ROI를 YOLO26s Segmentation 모델로 분석합니다. 현재 운영 후보는 점자블록과 파손 3유형, 가림 물체를 포함한 5클래스 모델입니다. 분석 전제조건을 검증할 수 없으면 비율이나 심각도를 확정하지 않고 `null`, `review_required=true`, `advisory_only=true`로 반환합니다.
 
 ## 현재 연결 모델
 
@@ -24,7 +24,7 @@ Edge에서 파손 후보가 탐지됐지만 서버가 `missing`, `crack`, `wear`
 
 ## 모델 계약
 
-필수 클래스는 `tactile_block`, `missing`, `crack`, `wear`입니다. 클래스 ID를 고정하지 않고 모델의 `names` 메타데이터를 검사합니다. 필수 클래스가 없으면 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다. 기존 통합 `damage` 결과는 `missing ∪ crack ∪ wear`로 계산한 deprecated 호환 필드에서만 제공합니다.
+필수 파손 분석 클래스는 `tactile_block`, `missing`, `crack`, `wear`입니다. `obstruction`은 시연환경에서 점자블록 위 거치물, 예를 들어 씽씽이를 판단 보류로 보내기 위한 선택 클래스입니다. 클래스 ID를 고정하지 않고 모델의 `names` 메타데이터를 검사합니다. 필수 클래스가 없으면 `MODEL_CLASS_MAPPING_INVALID`로 검토 전환합니다. 기존 통합 `damage` 결과는 `missing ∪ crack ∪ wear`로 계산한 deprecated 호환 필드에서만 제공합니다.
 
 ## 분석 단위
 
@@ -69,7 +69,7 @@ Edge 이벤트 JSON:
 
 ```bash
 python -m ROADY_AI.server_damage_analysis.analyze_image \
-  --model /path/to/4class_best.pt \
+  --model ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.pt \
   --event-json /path/to/pending/damage_event.json \
   --output output --device cpu --imgsz 768
 ```
@@ -78,14 +78,14 @@ python -m ROADY_AI.server_damage_analysis.analyze_image \
 
 ```bash
 python -m ROADY_AI.server_damage_analysis.analyze_image \
-  --model /path/to/4class_best.pt \
+  --model ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.pt \
   --image analysis_roi.jpg \
   --input-metadata input_metadata.json \
   --policy ROADY_AI/server_damage_analysis/severity_policy.yaml \
   --output output --device cpu --imgsz 768
 ```
 
-출력은 `analysis.json`, ROI 사본, Overlay, 통합 damage mask입니다. `units`와 `summary`가 v2 기준 응답이며 `regions`와 최상위 `analysis`는 deprecated 호환 필드입니다.
+출력은 `analysis.json`, ROI 사본, Overlay, 통합 damage mask입니다. `units`와 `summary`가 현재 기준 응답이며 `regions`와 최상위 `analysis`는 deprecated 호환 필드입니다.
 
 ## 면적·심각도 정책 평가
 
@@ -95,10 +95,10 @@ Macro-F1과 등급 경계 오차를 계산합니다. Test는 최종 보고에만
 
 ```bash
 python -m ROADY_AI.server_damage_analysis.evaluate_policy \
-  --model ~/roady/models/server_yolo26s_edge_roi_multiclass_v1/best.pt \
-  --dataset ~/roady/datasets/server_edge_roi_multiclass_v1 \
-  --split test --imgsz 1024 --device 0 \
-  --output ~/roady/runs/server_yolo26s_edge_roi_multiclass_v1_policy_test
+  --model ~/roady/models/server_yolo26s_seg_multiclass_v4/best.pt \
+  --dataset ~/roady/datasets/server_edge_roi_multiclass_v4 \
+  --split test --imgsz 768 --device 0 \
+  --output ~/roady/runs/server_yolo26s_seg_multiclass_v4_policy_test
 ```
 
 산출물은 `report.json`, `per_image.csv`, `severity_confusion.csv`와 이미지별
@@ -147,7 +147,7 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 구간은 `ROADY_AI_SCORE_MINOR_MAX_PIXELS`, `ROADY_AI_SCORE_MODERATE_MAX_PIXELS`,
 `ROADY_AI_SCORE_MAX_PIXELS` 환경변수로 조정할 수 있습니다. 세 값은 반드시 오름차순이어야 합니다.
 
-`damaged`는 `damage_score > 0`이 아니라 v2 `summary.damage_detected`를 사용합니다. `missing`,
+`damaged`는 `damage_score > 0`이 아니라 `summary.damage_detected`를 사용합니다. `missing`,
 `crack`, `wear` 중 하나라도 유효하게 탐지되면 `true`입니다. 모델 클래스 계약이
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수

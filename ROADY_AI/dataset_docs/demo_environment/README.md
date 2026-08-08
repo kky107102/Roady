@@ -3,18 +3,45 @@
 Jira: [S15P11A404-261](https://ssafy.atlassian.net/browse/S15P11A404-261)
 
 - 문서 버전: `v1.1`
-- 최종 갱신: `2026-08-05`
+- 최종 갱신: `2026-08-08`
 
-실제 시연 장소에서 휴대폰과 로봇 카메라로 촬영한 이미지를 이용해 Edge AI의 점자블록 및 파손 후보 탐지 성능을 개선하기 위한 데이터셋이다.
+실제 시연 장소에서 휴대폰과 로봇 카메라로 촬영한 이미지를 이용해 Edge AI의 점자블록·파손 후보 탐지와 Server AI의 파손 유형·면적 분석 성능을 개선하기 위한 데이터셋이다.
 
-## 클래스
+## 데이터 출처와 활용 범위
+
+ROADY AI는 공개 데이터와 실제 시연환경 데이터를 역할을 나누어 사용했다.
+
+| 출처 | 활용 |
+|---|---|
+| AI-Hub 등 공개 점자블록·도로 이미지 | 초기 점자블록 탐지 구조 검토, 라벨 형식 설계, 기본 데이터 분포 참고 |
+| 휴대폰 촬영 시연환경 이미지 | 파손 유형별 정밀 Polygon 라벨링, 서버 Segmentation 학습·검수 |
+| 로봇 카메라 촬영 이미지·주행 영상 | Edge 실제 입력 분포 반영, 큰 결손·마모·씽씽이 하드 예제 보강 |
+| 검수 결과와 미탐/오탐 기록 | Replay 학습, Hard Negative 구성, 고정 테스트셋 관리 |
+
+공개 데이터는 기본 구조와 초기 학습 방향을 잡는 데 사용했고, 최종 시연 성능은 실제 시연환경 데이터와 로봇 카메라 데이터에 맞춰 파인튜닝했다.
+
+## Edge AI 클래스
 
 | ID | 클래스 | 설명 |
 |---:|---|---|
 | 0 | `tactile_block` | 화면에서 확인되는 점자블록 영역 |
 | 1 | `damage_candidate` | 큰 결손, 작은 결손, 마모, 균열 등 서버 정밀 분석이 필요한 파손 후보 |
 
-흙, 낙엽, 그림자, 얼룩은 `damage_candidate`로 라벨링하지 않고 Hard Negative로 관리한다.
+Edge AI는 실시간 후보 탐지 모델이므로 파손 유형을 세분류하지 않는다. 큰 결손, 작은 결손, 마모, 균열, 점자블록 위 거치물 의심 영역은 모두 `damage_candidate`로 서버에 전달한다.
+
+흙, 낙엽, 그림자, 얼룩은 기본적으로 `damage_candidate`로 라벨링하지 않고 Hard Negative로 관리한다. 단, 점자블록을 가리는 씽씽이 등 거치물은 시연 정책에 따라 Edge에서는 후보로 서버에 전달하고, Server AI에서 `obstruction` 또는 판단 보류로 처리한다.
+
+## Server AI 클래스
+
+| ID | 클래스 | 설명 |
+|---:|---|---|
+| 0 | `tactile_block` | 파손 면적 비율 계산의 기준 영역 |
+| 1 | `missing` | 큰 결손·작은 결손 통합 결손 영역 |
+| 2 | `crack` | 균열 |
+| 3 | `wear` | 마모 |
+| 4 | `obstruction` | 씽씽이 등 점자블록 위 거치물 또는 가림 물체 |
+
+큰 결손과 작은 결손은 Server 모델에서 모두 `missing`으로 학습한다. 개별 점자블록 대비 결손 비율을 계산할 수 있을 때 후처리에서 15% 기준으로 작은 결손과 큰 결손을 구분한다.
 
 ## 파손 유형 메타데이터
 
@@ -24,6 +51,8 @@ Jira: [S15P11A404-261](https://ssafy.atlassian.net/browse/S15P11A404-261)
 - 균열: 표면에 갈라짐이 확인되는 상태
 
 Edge 모델은 위 유형을 모두 `damage_candidate` 단일 클래스로 탐지하며, 유형과 심각도는 Server AI가 정밀 분석한다.
+
+Server 모델은 결손·균열·마모를 유형별 Mask로 분리하고, 씽씽이처럼 점자블록 분석을 방해하는 물체는 파손으로 확정하지 않고 `review_required=true` 판단 보류 대상으로 처리한다.
 
 ## 구축 현황
 
@@ -43,13 +72,21 @@ Edge 모델은 위 유형을 모두 `damage_candidate` 단일 클래스로 탐�
 
 ## 라벨 형식
 
-Ultralytics YOLO Detect 형식을 사용한다.
+Edge Detect 데이터셋은 Ultralytics YOLO Detect 형식을 사용한다.
 
 ```text
 class_id x_center y_center width height
 ```
 
 모든 좌표는 이미지 너비와 높이를 기준으로 0~1 사이로 정규화한다.
+
+Server Segmentation 데이터셋은 Ultralytics YOLO Segmentation 형식을 사용한다.
+
+```text
+class_id x1 y1 x2 y2 ... xn yn
+```
+
+점자블록, 결손, 균열, 마모, 거치물은 가능한 한 실제 보이는 경계를 기준으로 Polygon을 작성한다. 가려진 점자블록은 원래 모양을 추정해서 채우지 않고 보이는 영역만 라벨링한다.
 
 ## 검수 결과 반영 규칙
 
@@ -79,7 +116,7 @@ class_id x_center y_center width height
 
 과도한 회전, 강한 Mosaic, 파손 형상을 왜곡하는 변환은 사용하지 않는다.
 
-## 학습 결과
+## Edge 학습 결과
 
 모델: `YOLO26n Detect`, 입력 크기 768, batch 16
 
@@ -92,6 +129,20 @@ class_id x_center y_center width height
 | mAP50-95 | 0.631 | 0.615 |
 
 Edge AI의 목적은 파손 후보를 놓치지 않고 Server AI에 전달하는 것이므로 Recall과 F2-score가 상승한 검수 반영 모델을 우선 사용한다.
+
+최종 운영 후보는 큰 결손 Replay와 신규 마모 데이터를 반영한 `edge_yolo26n_large_missing_replay_v4`이다. 기존 YOLO11n 기반 모델과 별도 손상 분류기는 운영 대상에서 제외한다.
+
+## Server 학습 결과 관리
+
+Server AI 운영 후보는 `YOLO26s-seg` 기반 5클래스 모델 `yolo26s_seg_multiclass_v4_best.pt`이다. Server 평가는 단순 mAP뿐 아니라 다음 항목을 함께 본다.
+
+- 점자블록 개별 인스턴스 분리 여부
+- 결손·균열·마모 Mask 품질
+- 결손 면적 비율 계산 가능 여부
+- 씽씽이 등 `obstruction` 검출 여부
+- `review_required`, `advisory_only` 정책 작동 여부
+
+분석 전제조건이 불충분하면 면적 비율을 0으로 확정하지 않고 `not_estimable`과 관리자 검토로 전환한다.
 
 ## 저장소 정책
 
