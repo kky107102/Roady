@@ -17,9 +17,9 @@ def _boolean_env(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class AppSettings:
-    model_path: Path = WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v3_best.pt"
+    model_path: Path = WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.pt"
     model_sha256_path: Path = (
-        WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v3_best.sha256"
+        WORKSPACE / "ROADY_AI/models/server/yolo26s_seg_multiclass_v4_best.sha256"
     )
     device: str = "cpu"
     imgsz: int = 768
