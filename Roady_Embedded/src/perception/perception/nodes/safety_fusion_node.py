@@ -35,6 +35,7 @@ class SafetyFusionNode(Node):
         self.declare_parameter("minimum_hold_sec", 1.0)
         self.declare_parameter("camera_timeout_sec", 0.5)
         self.declare_parameter("stop_on_camera_timeout", False)
+        self.declare_parameter("camera_startup_grace_sec", 5.0)
         self.declare_parameter("publish_rate_hz", 20.0)
 
         self._camera_timeout_sec = float(
@@ -43,6 +44,11 @@ class SafetyFusionNode(Node):
         self._stop_on_camera_timeout = bool(
             self.get_parameter("stop_on_camera_timeout").value
         )
+        self._camera_startup_grace_sec = max(
+            0.0,
+            float(self.get_parameter("camera_startup_grace_sec").value),
+        )
+        self._started_at = time.monotonic()
         vote_window = int(self.get_parameter("vote_window").value)
         vote_required = int(self.get_parameter("vote_required").value)
         clear_frames = int(self.get_parameter("clear_frames").value)
@@ -83,7 +89,8 @@ class SafetyFusionNode(Node):
             f"Camera safety filter ready: vote={vote_required}/{vote_window}, "
             f"clear={clear_frames} frames, hold={minimum_hold_sec:.2f}s, "
             f"timeout={self._camera_timeout_sec:.2f}s, "
-            f"stop_on_timeout={self._stop_on_camera_timeout}"
+            f"stop_on_timeout={self._stop_on_camera_timeout}, "
+            f"startup_grace={self._camera_startup_grace_sec:.2f}s"
         )
 
     def _on_camera_detection(self, msg: Bool) -> None:
@@ -93,10 +100,17 @@ class SafetyFusionNode(Node):
         self._lidar_detected = bool(msg.data)
 
     def _publish_state(self) -> None:
+        now = time.monotonic()
+        startup_grace_active = (
+            now - self._started_at < self._camera_startup_grace_sec
+        )
+        enforce_camera_timeout = (
+            self._stop_on_camera_timeout and not startup_grace_active
+        )
         state = self._filter.check_timeout(
-            time.monotonic(),
+            now,
             self._camera_timeout_sec,
-            self._stop_on_camera_timeout,
+            enforce_camera_timeout,
         )
         stop_required = state.stop_required or self._lidar_detected
         reason = "lidar_obstacle" if self._lidar_detected else state.reason
@@ -109,6 +123,7 @@ class SafetyFusionNode(Node):
             "recent_detections": list(state.recent_detections),
             "clear_count": state.clear_count,
             "camera_alive": state.camera_alive,
+            "startup_grace_active": startup_grace_active,
         }
         self._status_publisher.publish(
             String(data=json.dumps(status, ensure_ascii=False))

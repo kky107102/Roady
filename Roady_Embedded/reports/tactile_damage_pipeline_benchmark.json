@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "label": "yolo26n_camera_pipeline",
+  "model": "/home/ssafy/dev_ky/S15P11A404/Roady_Embedded/artifacts/tactile_damage_candidate/tactile_damage_candidate_yolo26n_best.engine",
+  "camera_topic": "/camera/tactile/image_raw",
+  "started_unix_sec": 1786103163.5607243,
+  "started_at": "2026-08-07T20:46:03.560724+09:00",
+  "duration_sec": 61.62292966399991,
+  "frames": 221,
+  "end_to_end_fps": 3.586327381788018,
+  "detections": {
+    "detected_frames": 221,
+    "detection_rate": 1.0,
+    "mean_per_frame": 1.6289592760180995,
+    "max_per_frame": 3
+  },
+  "latency_ms": {
+    "mean": 56.24158494117651,
+    "p50": 53.96096,
+    "p95": 64.915776,
+    "max": 166.308256
+  },
+  "temperature_c": {
+    "samples": 221,
+    "mean": 48.61189592760188,
+    "max": 49.031
+  },
+  "configuration": {
+    "engine_sha256": "6698d0863cc902bec8d9660e43be5db3f997677bde557ec13f0c0bc5e25f885d",
+    "confidence": 0.15,
+    "inference_image_size": 768,
+    "process_every_n_frames": 6,
+    "publish_annotated": false,
+    "detection_only_mode": false,
+    "confirm_count": 3,
+    "confirm_window_sec": 2.0,
+    "candidate_timeout_sec": 1.2,
+    "min_confirm_duration_sec": 0.4,
+    "min_observation_interval_sec": 0.1,
+    "reported_track_cooldown_sec": 5.0,
+    "tactile_roi_margin_ratio": 0.2,
+    "damage_fallback_scale": 1.5,
+    "latency_scope": "camera ROS stamp to callback completion",
+    "camera_width": 1280,
+    "camera_height": 720,
+    "camera_encoding": "bgr8",
+    "stage_timings_ms": {
+      "image_conversion": {
+        "mean": 0.8611764706115763,
+        "p50": 0.7713919999332575,
+        "p95": 1.485440000124072,
+        "max": 2.418368000235205
+      },
+      "detection_tracking": {
+        "mean": 45.19873838912994,
+        "p50": 43.43465599959018,
+        "p95": 53.27996799996981,
+        "max": 136.8840000000091
+      },
+      "annotation_publish": {
+        "mean": 0.002781104073590837,
+        "p50": 0.0026880002224061172,
+        "p95": 0.003968000328313792,
+        "max": 0.004223999894747976
+      },
+      "event_persistence": {
+        "mean": 0.14673419003497348,
+        "p50": 0.0015680002434237394,
+        "p95": 0.0026560001060715877,
+        "max": 32.04931200025385
+      },
+      "callback_total": {
+        "mean": 46.45032948417389,
+        "p50": 44.5025919998443,
+        "p95": 55.256095999993704,
+        "max": 137.84355200004939
+      }
+    }
+  }
+}

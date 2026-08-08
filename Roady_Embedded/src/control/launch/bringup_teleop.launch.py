@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -11,20 +9,6 @@ from launch.event_handlers import OnProcessExit
 from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
-
-
-def _default_damage_model_path():
-    relative_path = Path(
-        'artifacts/tactile_damage_candidate/'
-        'tactile_damage_candidate_yolo26n_best.engine'
-    )
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / relative_path
-        if candidate.is_file():
-            return str(candidate)
-    return str(relative_path)
-
 
 
 def generate_launch_description():
@@ -33,30 +17,31 @@ def generate_launch_description():
         executable='main_control_node',
         name='main_control_node',
         output='screen',
-        condition=IfCondition(LaunchConfiguration('start_drive')),
         parameters=[{
             'drive_speed': 0.4,
             'reverse_speed': 0.4,
             'kp': 0.004,
             'max_steer': 0.75,
             'left_steering_gain': 1.30,
-            'steering_deadband_px': 15.0,
+            'steering_deadband_px': 30.0,
             'steering_filter_alpha': 0.35,
             'offset_timeout': 1.0,
             'steering_sign': -1.0,
             'target_edge_x_px': 750.0,
-            'corner_align_tolerance_px': 8.0,
-            'corner_candidate_frames': 5,
-            'corner_vote_window': 15,
+            'corner_target_edge_x_px': 750.0,
+            'corner_align_tolerance_px': 30.0,
+            'corner_align_kp': 0.004,
+            'corner_confirm_frames': 10,
             'corner_backup_duration': 1.5,
             'corner_forward_duration': 1.0,
-            'offset_backup_duration': 1.5,
-            'offset_forward_duration': 1.0,
             'corner_steer': 0.75,
-            'unknown_duration': 7.0,
-            'unknown_vote_required': 15,
-            'reacquire_yellow_ratio': 0.20,
-            'reacquire_confirm_frames': 5,
+            'startup_duration': 4.0,
+            'unknown_vote_frames': 10,
+            'unknown_max_consecutive_votes': 5,
+            'station_target_samples': 5,
+            'station_steering_kp': 0.004,
+            'station_end_navy_pixels': 1000,
+            'station_end_confirm_frames': 30,
         }],
         remappings=[
             ('/obstacle_warning', LaunchConfiguration('obstacle_stop_topic')),
@@ -82,29 +67,19 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument(
-            'start_damage_detection',
+            'enable_drive_recording',
             default_value='true',
-            description='Start damage detection on the tactile camera stream',
+            description='Record the raw tactile camera topic to an MP4 file',
         ),
         DeclareLaunchArgument(
-            'damage_model_path',
-            default_value=_default_damage_model_path(),
-            description='TensorRT engine used by damage_detection_node',
+            'recording_image_topic',
+            default_value='/camera/tactile/image_raw',
+            description='Raw tactile camera topic to record',
         ),
         DeclareLaunchArgument(
-            'damage_process_every_n_frames',
-            default_value='6',
-            description='Run damage inference every N tactile-camera frames',
-        ),
-        DeclareLaunchArgument(
-            'start_line_tracking',
-            default_value='true',
-            description='Start tactile_tracer_node',
-        ),
-        DeclareLaunchArgument(
-            'start_drive',
-            default_value='true',
-            description='Start motor_node and main_control_node',
+            'recording_output_path',
+            default_value='~/%Y%m%d_%H%M%S.mp4',
+            description='MP4 path; datetime strftime tokens are supported',
         ),
         # 1. 점자블록 인식용 카메라 노드
         Node(
@@ -122,53 +97,36 @@ def generate_launch_description():
                 'topic': '/camera/tactile/image_raw',
             }],
         ),
-        # 2. 비전 인지 노드
+        # 2. 가공 전 점자 카메라 원본 영상 저장 노드
+        Node(
+            package='perception',
+            executable='image_topic_video_recorder',
+            name='tactile_raw_video_recorder',
+            condition=IfCondition(
+                LaunchConfiguration('enable_drive_recording')
+            ),
+            output='screen',
+            parameters=[{
+                'image_topic': LaunchConfiguration('recording_image_topic'),
+                'output_path': LaunchConfiguration('recording_output_path'),
+                'output_fps': 30.0,
+                'codec': 'mp4v',
+            }],
+        ),
+        # 3. 비전 인지 노드
         Node(
             package='control',
             executable='tactile_tracer_node',
             name='tactile_tracer_node',
             output='screen',
-            condition=IfCondition(LaunchConfiguration('start_line_tracking')),
             parameters=[{
                 'image_topic': '/camera/tactile/image_raw',
-                'damage_detection_topic': '/damage/detections',
-                'damage_overlay_timeout_sec': 0.3,
                 'target_edge_x_px': 750,
                 'roi_top_ratio': 0.55,
+                'station_navy_min_pixels': 3500,
             }],
         ),
-        # 3. 촉각 카메라 파손 탐지 노드
-        Node(
-            package='perception',
-            executable='damage_detection_node',
-            name='damage_detection_node',
-            output='screen',
-            condition=IfCondition(
-                LaunchConfiguration('start_damage_detection')
-            ),
-            parameters=[{
-                'image_topic': '/camera/tactile/image_raw',
-                'detection_topic': '/damage/detections',
-                'location_topic': '/location/fix',
-                'detect_model_path': LaunchConfiguration('damage_model_path'),
-                'inference_device': '0',
-                'inference_image_size': 768,
-                'detection_threshold': 0.15,
-                'process_every_n_frames': ParameterValue(
-                    LaunchConfiguration('damage_process_every_n_frames'),
-                    value_type=int,
-                ),
-                'publish_annotated': False,
-                'detection_only_mode': False,
-                'confirm_count': 3,
-                'confirm_window_sec': 2.0,
-                'min_confirm_duration_sec': 0.4,
-                'min_observation_interval_sec': 0.1,
-                'candidate_timeout_sec': 1.2,
-                'reported_track_cooldown_sec': 5.0,
-            }],
-        ),
-        # # 3. 라이다 장애물 탐지 노드
+        # # 4. 라이다 장애물 탐지 노드
         # Node(
         #     package='control',
         #     executable='lidar_warning_node',
@@ -177,15 +135,14 @@ def generate_launch_description():
         #     output='screen'
         # ),
 
-        # 4. 하드웨어 액추에이터 노드
+        # 5. 하드웨어 액추에이터 노드
         Node(
             package='control',
             executable='motor_node',
             name='motor_node',
-            output='screen',
-            condition=IfCondition(LaunchConfiguration('start_drive')),
+            output='screen'
         ),
-        # 5. 자율주행 판단 및 자동 출발 메인 노드
+        # 6. 자율주행 판단 및 자동 출발 메인 노드
         main_control_node,
         RegisterEventHandler(
             OnProcessExit(
