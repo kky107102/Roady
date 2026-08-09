@@ -90,9 +90,9 @@ docker compose ps
 AI 컨테이너는 모델 해시 검증과 warm-up 후 `/health/ready`가 성공한다. backend는 AI healthcheck가 성공한 뒤 시작한다.
 
 
-## 5. 환경 변수
+## 4. 환경 변수
 
-### 5.1 MySQL·Spring·공통 환경 (`Roady_BE/.env`)
+### 4.1 MySQL, Spring, 공통 환경 (`Roady_BE/.env`)
 
 | 변수 | 예시/기본값 | 설명 |
 | --- | --- | --- |
@@ -104,7 +104,7 @@ AI 컨테이너는 모델 해시 검증과 warm-up 후 `/health/ready`가 성공
 | `SPRING_DATASOURCE_USERNAME/PASSWORD` | DB 계정과 동일 | Spring JDBC 접속 정보 |
 | `SPRING_DATA_REDIS_HOST/PORT` | `redis` / `6379` | Redis 주소 |
 | `ROADY_DEFAULT_USERS_ENABLED` | `true` | admin/inspector/repairer/viewer 샘플 계정 생성 |
-| `ROADY_SAMPLE_DATA_ENABLED` | `true` | 로봇·파손 시연 데이터 생성 |
+| `ROADY_SAMPLE_DATA_ENABLED` | `true` | 로봇, 파손 시연 데이터 생성 |
 | `MQTT_ENABLED` | `true` | MQTT adapter 활성화 |
 | `MQTT_BROKER_IP/PORT` | `mqtt` / `1883` | Mosquitto 주소 |
 | `ROADY_ROBOT_LOCATION_REDIS_KEY_PATTERN` | `roady:robots:{robotId}:location` | 최신 위치 Redis key |
@@ -123,7 +123,7 @@ AI 컨테이너는 모델 해시 검증과 warm-up 후 `/health/ready`가 성공
 
 JWT secret은 `roady.jwt.secret`으로 관리한다. 운영에서는 `application.properties`의 개발용 기본값을 사용하지 말고 Spring 외부 설정(`ROADY_JWT_SECRET` 또는 실행 인자)으로 교체한다. access token 기본 유효기간은 30분, refresh token은 14일이다.
 
-### 5.2 Compose·프론트·AI 환경
+### 4.2 Compose, 프론트, AI 환경
 
 | 변수 | 기본값 | 설명 |
 | --- | --- | --- |
@@ -144,7 +144,7 @@ JWT secret은 `roady.jwt.secret`으로 관리한다. 운영에서는 `applicatio
 | `ROADY_AI_SCORE_MODERATE_MAX_PIXELS` | `50000` | score 구간 2 상한 |
 | `ROADY_AI_SCORE_MAX_PIXELS` | `100000` | score 100 도달 픽셀 수 |
 
-## 6. 주요 설정·계정 파일 목록
+## 5. 주요 설정, 계정 파일 목록
 
 | 파일 | 용도 |
 | --- | --- |
@@ -164,9 +164,9 @@ JWT secret은 `roady.jwt.secret`으로 관리한다. 운영에서는 `applicatio
 
 샘플 계정은 `ROADY_DEFAULT_USERS_ENABLED=true`일 때 생성된다. 계정은 `admin`, `inspector`, `repairer`, `viewer`이며 초기 샘플 비밀번호는 애플리케이션 initializer에 정의된 개발용 값이다. 운영 환경에서는 seed를 끄고 별도 계정을 생성한다.
 
-## 7. 배포 특이사항 및 운영 점검
+## 6. 배포 특이사항 및 운영 점검
 
-1. MySQL·Redis·Mosquitto·AI가 healthy가 된 뒤 backend가 시작되므로 첫 기동은 이미지 다운로드와 AI warm-up 시간만큼 기다린다.
+1. MySQL, Redis, Mosquitto, AI가 healthy가 된 뒤 backend가 시작되므로 첫 기동은 이미지 다운로드와 AI warm-up 시간만큼 기다린다.
 2. `docker compose down`은 named volume을 보존한다. DB까지 삭제하려면 `down -v`가 필요하지만 데이터가 삭제되므로 운영에서는 실행하지 않는다.
 3. `mysql-data`, `redis-data`, `mqtt-data`는 영속 volume이다. EC2 장애에 대비해 별도 백업을 보관한다.
 4. 프론트 API 주소는 운영 도메인의 `/api`를 사용한다. `localhost:3000/api` 요청이 Nginx를 거쳐 backend로 전달되어야 한다.
