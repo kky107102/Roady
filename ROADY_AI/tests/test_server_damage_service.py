@@ -140,6 +140,57 @@ def test_service_maps_v2_dominant_damage_type(
     assert response.damage_type == expected_type
 
 
+@pytest.mark.parametrize(
+    ("additional_type", "expected_type"),
+    [
+        ("wear", "WEAR"),
+        ("crack", "CRACK"),
+    ],
+)
+def test_service_prioritizes_crack_and_wear_over_missing(
+    additional_type: str,
+    expected_type: str,
+):
+    payload_value = v2_payload("missing", 90.0, confidence=1.0)
+    payload_value["units"].append(
+        {
+            "local_unit_id": "block_2",
+            "damage_types": {
+                "missing": {"detected": False, "confidence": None, "ratio_percent": 0.0},
+                "crack": {
+                    "detected": additional_type == "crack",
+                    "confidence": 0.01,
+                    "ratio_percent": 0.01,
+                },
+                "wear": {
+                    "detected": additional_type == "wear",
+                    "confidence": 0.01,
+                    "ratio_percent": 0.01,
+                },
+            },
+        }
+    )
+    service = make_service(FakeAnalyzer([payload_value]))
+
+    response = service.analyze_images([input_image("multiple-damage-types.jpg")])
+
+    assert response.damage_type == expected_type
+
+
+def test_service_prioritizes_crack_over_wear():
+    payload_value = v2_payload("wear", 90.0, confidence=1.0)
+    payload_value["units"][0]["damage_types"]["crack"] = {
+        "detected": True,
+        "confidence": 0.01,
+        "ratio_percent": 0.01,
+    }
+    service = make_service(FakeAnalyzer([payload_value]))
+
+    response = service.analyze_images([input_image("crack-and-wear.jpg")])
+
+    assert response.damage_type == "CRACK"
+
+
 def test_service_uses_v2_detection_independently_from_damage_score():
     service = make_service(FakeAnalyzer([v2_payload("crack", 0.12)]))
 
