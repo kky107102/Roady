@@ -1,0 +1,27 @@
+# ROS 2 / colcon build artifacts
+build/
+install/
+log/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+drive_env/
+
+# Python cache and test artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE and editor settings
+.idea/
+.vscode/
+*.swp
+
+# OS-generated files
+.DS_Store
+Thumbs.db

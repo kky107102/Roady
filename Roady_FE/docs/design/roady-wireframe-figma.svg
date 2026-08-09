@@ -1,0 +1,246 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      text { font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif; fill: #202632; }
+      .title { font-size: 24px; font-weight: 700; fill: #174EA6; }
+      .h2 { font-size: 18px; font-weight: 700; }
+      .label { font-size: 14px; font-weight: 600; }
+      .body { font-size: 13px; }
+      .small { font-size: 11px; }
+      .panel { fill: #FFFFFF; stroke: #667085; stroke-width: 1.5; }
+      .soft { fill: #F5F7FA; stroke: #98A2B3; stroke-width: 1; }
+      .line { fill: none; stroke: #667085; stroke-width: 1.5; }
+      .blue { fill: #EAF2FF; stroke: #1769E0; stroke-width: 1.5; }
+      .bluebtn { fill: #1769E0; stroke: #1769E0; }
+      .white { fill: #FFFFFF; }
+      .warn { fill: #FFF4F2; stroke: #E5484D; stroke-width: 1.5; }
+      .chip { fill: #FFF1F0; stroke: #FF8A80; }
+      .arrow { fill: none; stroke: #1769E0; stroke-width: 2; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 6 5; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0 0 L8 4 L0 8 Z" fill="#1769E0"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#F3F5F8"/>
+
+  <!-- 1. Detection list -->
+  <g id="detection-list">
+    <rect x="16" y="16" width="650" height="420" rx="10" class="panel"/>
+    <text x="34" y="50" class="title">1. 탐지 검토 목록</text>
+    <text x="320" y="48" class="small" fill="#1769E0">탭은 조회 기준이며 상태를 직접 변경하지 않음</text>
+    <rect x="34" y="68" width="105" height="348" rx="6" class="soft"/>
+    <text x="58" y="98" class="h2">Roady</text>
+    <rect x="44" y="120" width="85" height="38" rx="5" class="blue"/>
+    <text x="62" y="144" class="label" fill="#1769E0">탐지 검토</text>
+    <text x="62" y="188" class="label">보수 관리</text>
+    <text x="62" y="224" class="label">로디 운행</text>
+    <text x="62" y="260" class="label">설정</text>
+
+    <rect x="154" y="68" width="494" height="348" rx="6" class="panel"/>
+    <rect x="170" y="82" width="110" height="36" rx="4" class="blue"/>
+    <text x="205" y="105" class="label" fill="#1769E0">미확인</text>
+    <rect x="282" y="82" width="110" height="36" rx="4" class="soft"/>
+    <text x="322" y="105" class="label">확인</text>
+
+    <rect x="170" y="130" width="90" height="34" rx="4" class="soft"/>
+    <text x="191" y="152" class="body">기간 30일</text>
+    <rect x="268" y="130" width="100" height="34" rx="4" class="soft"/>
+    <text x="290" y="152" class="body">지역 전체</text>
+    <rect x="376" y="130" width="116" height="34" rx="4" class="soft"/>
+    <text x="394" y="152" class="body">우선순위 전체</text>
+    <rect x="500" y="130" width="130" height="34" rx="4" class="soft"/>
+    <text x="520" y="152" class="body">파손 유형 전체</text>
+
+    <rect x="170" y="176" width="460" height="94" rx="6" class="panel"/>
+    <rect x="182" y="188" width="82" height="68" rx="4" class="soft"/>
+    <text x="206" y="226" class="small">이미지</text>
+    <text x="280" y="202" class="small">RD-2026-000127</text>
+    <text x="280" y="226" class="label">강남대로 점자블록 파손</text>
+    <text x="280" y="250" class="small">서울특별시 서초구 강남대로</text>
+    <rect x="515" y="188" width="102" height="24" rx="12" class="chip"/>
+    <text x="530" y="204" class="small" fill="#C62828">AI 제안 · 긴급</text>
+
+    <rect x="170" y="282" width="460" height="94" rx="6" class="panel"/>
+    <rect x="182" y="294" width="82" height="68" rx="4" class="soft"/>
+    <text x="206" y="332" class="small">이미지</text>
+    <text x="280" y="308" class="small">RD-2026-000126</text>
+    <text x="280" y="332" class="label">서초대로 점자블록 파손</text>
+    <text x="280" y="356" class="small">서울특별시 서초구 서초대로</text>
+    <rect x="548" y="294" width="68" height="24" rx="12" class="chip"/>
+    <text x="568" y="310" class="small" fill="#C62828">긴급</text>
+    <text x="560" y="357" class="small" fill="#1769E0">확인 완료</text>
+  </g>
+
+  <!-- 2. Detail and decisions -->
+  <g id="detection-detail">
+    <rect x="680" y="16" width="904" height="420" rx="10" class="panel"/>
+    <text x="700" y="50" class="title">2. 탐지 사건 상세 및 관리자 판정</text>
+    <rect x="700" y="68" width="420" height="340" rx="6" class="panel"/>
+    <text x="720" y="96" class="small">RD-2026-000127</text>
+    <text x="720" y="124" class="h2">강남대로 점자블록 파손</text>
+    <text x="720" y="148" class="body">서울특별시 서초구 강남대로 · 2026.07.30 14:20</text>
+    <rect x="720" y="170" width="190" height="120" rx="5" class="soft"/>
+    <text x="785" y="235" class="body">탐지 이미지</text>
+    <rect x="922" y="170" width="80" height="54" rx="4" class="soft"/>
+    <rect x="922" y="236" width="80" height="54" rx="4" class="soft"/>
+    <rect x="720" y="304" width="382" height="58" rx="5" class="blue"/>
+    <text x="738" y="326" class="label">AI 분석 결과</text>
+    <text x="738" y="350" class="small">우선순위 긴급 · 파손 유형 탈락 · 파손률 72%</text>
+    <rect x="720" y="374" width="182" height="28" rx="5" class="soft"/>
+    <text x="773" y="393" class="label">보수 불필요</text>
+    <rect x="912" y="374" width="190" height="28" rx="5" class="bluebtn"/>
+    <text x="975" y="393" class="label white">보수 필요</text>
+
+    <!-- image modal -->
+    <rect x="1140" y="68" width="202" height="112" rx="7" class="panel"/>
+    <text x="1152" y="88" class="small" fill="#1769E0">① 이미지 확대</text>
+    <rect x="1170" y="96" width="140" height="66" rx="4" class="soft"/>
+    <text x="1218" y="133" class="small">1 / 3</text>
+
+    <!-- no repair modal -->
+    <rect x="1140" y="194" width="202" height="104" rx="7" class="panel"/>
+    <text x="1152" y="216" class="small" fill="#1769E0">② 보수 불필요 확인</text>
+    <text x="1152" y="240" class="small">해당 사건을 보수 불필요</text>
+    <text x="1152" y="256" class="small">처리하시겠습니까?</text>
+    <rect x="1174" y="266" width="66" height="24" rx="4" class="soft"/>
+    <text x="1195" y="283" class="small">취소</text>
+    <rect x="1248" y="266" width="72" height="24" rx="4" class="bluebtn"/>
+    <text x="1271" y="283" class="small white">확인</text>
+
+    <!-- manager decision -->
+    <rect x="1358" y="68" width="206" height="230" rx="7" class="panel"/>
+    <text x="1370" y="90" class="small" fill="#1769E0">③ 관리자 판정 입력</text>
+    <text x="1370" y="116" class="small">사건명</text>
+    <rect x="1430" y="100" width="118" height="26" rx="3" class="soft"/>
+    <text x="1442" y="118" class="small">점자블록 파손</text>
+    <text x="1370" y="152" class="small">우선순위</text>
+    <rect x="1430" y="136" width="118" height="26" rx="3" class="soft"/>
+    <text x="1442" y="154" class="small">긴급 ▼</text>
+    <text x="1370" y="188" class="small">파손 유형</text>
+    <rect x="1430" y="172" width="118" height="26" rx="3" class="soft"/>
+    <text x="1442" y="190" class="small">탈락 ▼</text>
+    <text x="1370" y="220" class="small">판정 사유</text>
+    <rect x="1430" y="206" width="118" height="36" rx="3" class="soft"/>
+    <rect x="1398" y="256" width="66" height="26" rx="4" class="soft"/>
+    <text x="1419" y="274" class="small">취소</text>
+    <rect x="1472" y="256" width="76" height="26" rx="4" class="bluebtn"/>
+    <text x="1497" y="274" class="small white">확인</text>
+
+    <!-- confirmed state -->
+    <rect x="1140" y="314" width="424" height="94" rx="7" class="blue"/>
+    <text x="1154" y="338" class="label">④ 확인 완료 상태</text>
+    <text x="1154" y="362" class="small">관리자 판정: 보수 필요 · 확인자: 김관리 · 확인 일시: 2026.07.30 15:10</text>
+    <rect x="1438" y="370" width="108" height="26" rx="4" class="bluebtn"/>
+    <text x="1464" y="388" class="small white">판정 수정</text>
+  </g>
+
+  <!-- 3. Repair list -->
+  <g id="repair-list">
+    <rect x="16" y="452" width="650" height="340" rx="10" class="panel"/>
+    <text x="34" y="486" class="title">3. 보수 관리 목록</text>
+    <text x="36" y="518" class="label">기간</text>
+    <rect x="80" y="498" width="70" height="30" rx="4" class="soft"/><text x="101" y="518" class="small">오늘</text>
+    <rect x="156" y="498" width="54" height="30" rx="4" class="soft"/><text x="174" y="518" class="small">7일</text>
+    <rect x="216" y="498" width="58" height="30" rx="4" class="blue"/><text x="232" y="518" class="small">30일</text>
+    <rect x="510" y="498" width="130" height="30" rx="4" class="soft"/><text x="530" y="518" class="small">최근 변경 순 ▼</text>
+
+    <text x="36" y="560" class="label" fill="#1769E0">요청 전</text>
+    <text x="118" y="560" class="label">요청 완료</text>
+    <text x="216" y="560" class="label">접수 완료</text>
+    <text x="314" y="560" class="label">보수 중</text>
+    <text x="396" y="560" class="label">보수 완료</text>
+    <line x1="34" y1="570" x2="96" y2="570" stroke="#1769E0" stroke-width="3"/>
+
+    <rect x="34" y="584" width="606" height="174" class="panel"/>
+    <line x1="34" y1="620" x2="640" y2="620" class="line"/>
+    <line x1="34" y1="656" x2="640" y2="656" class="line"/>
+    <line x1="34" y1="692" x2="640" y2="692" class="line"/>
+    <line x1="34" y1="728" x2="640" y2="728" class="line"/>
+    <text x="48" y="607" class="small">우선순위</text>
+    <text x="126" y="607" class="small">사건번호</text>
+    <text x="260" y="607" class="small">사건명</text>
+    <text x="400" y="607" class="small">현재 상태</text>
+    <text x="488" y="607" class="small">최근 변경일</text>
+    <text x="582" y="607" class="small">상세보기</text>
+    <text x="48" y="644" class="small" fill="#C62828">긴급</text>
+    <text x="126" y="644" class="small">RD-2026-000127</text>
+    <text x="260" y="644" class="small">강남대로 점자블록 파손</text>
+    <text x="400" y="644" class="small" fill="#1769E0">요청 전</text>
+    <text x="488" y="644" class="small">07.30 15:10</text>
+    <rect x="568" y="628" width="60" height="24" rx="4" class="soft"/><text x="579" y="645" class="small">상세보기</text>
+    <text x="48" y="680" class="small">높음</text><text x="126" y="680" class="small">RD-2026-000126</text>
+    <text x="260" y="680" class="small">서초대로 점자블록 파손</text><text x="400" y="680" class="small">요청 완료</text>
+    <text x="488" y="680" class="small">07.30 14:40</text>
+    <text x="48" y="716" class="small">보통</text><text x="126" y="716" class="small">RD-2026-000125</text>
+    <text x="260" y="716" class="small">테헤란로 점자블록 파손</text><text x="400" y="716" class="small">접수 완료</text>
+    <text x="488" y="716" class="small">07.30 13:20</text>
+  </g>
+
+  <!-- 4. Repair detail -->
+  <g id="repair-detail">
+    <rect x="680" y="452" width="904" height="340" rx="10" class="panel"/>
+    <text x="700" y="486" class="title">4. 보수 사건 상세</text>
+    <rect x="700" y="500" width="90" height="28" rx="4" class="soft"/><text x="720" y="519" class="small">← 목록으로</text>
+    <text x="814" y="519" class="small">RD-2026-000127</text>
+    <text x="946" y="519" class="h2">강남대로 점자블록 파손</text>
+
+    <line x1="744" y1="568" x2="1450" y2="568" class="line"/>
+    <g class="body">
+      <circle cx="760" cy="568" r="15" class="blue"/><text x="756" y="573">1</text>
+      <circle cx="936" cy="568" r="15" class="soft"/><text x="932" y="573">2</text>
+      <circle cx="1112" cy="568" r="15" class="soft"/><text x="1108" y="573">3</text>
+      <circle cx="1288" cy="568" r="15" class="soft"/><text x="1284" y="573">4</text>
+      <circle cx="1450" cy="568" r="15" class="soft"/><text x="1446" y="573">5</text>
+    </g>
+    <text x="730" y="600" class="small" fill="#1769E0">요청 전</text>
+    <text x="908" y="600" class="small">요청 완료</text>
+    <text x="1084" y="600" class="small">접수 완료</text>
+    <text x="1270" y="600" class="small">보수 중</text>
+    <text x="1426" y="600" class="small">보수 완료</text>
+
+    <rect x="710" y="622" width="160" height="98" rx="5" class="soft"/><text x="758" y="674" class="body">대표 이미지</text>
+    <rect x="882" y="622" width="72" height="46" rx="4" class="soft"/><rect x="882" y="676" width="72" height="44" rx="4" class="soft"/>
+    <rect x="980" y="622" width="380" height="98" rx="5" class="soft"/>
+    <text x="1000" y="646" class="small">위치  서울특별시 서초구 강남대로</text>
+    <text x="1000" y="668" class="small">일시  2026.07.30 14:20</text>
+    <text x="1000" y="690" class="small">우선순위  긴급</text>
+    <text x="1000" y="712" class="small">파손 유형  탈락</text>
+    <rect x="710" y="740" width="150" height="34" rx="5" class="bluebtn"/><text x="749" y="762" class="label white">요청서 작성</text>
+    <rect x="870" y="740" width="150" height="34" rx="5" class="soft"/><text x="909" y="762" class="label">요청서 확인</text>
+    <rect x="1030" y="740" width="150" height="34" rx="5" class="soft"/><text x="1069" y="762" class="label">완료 보고서</text>
+  </g>
+
+  <!-- State flow -->
+  <g id="state-flow">
+    <rect x="16" y="808" width="1568" height="176" rx="10" class="panel"/>
+    <text x="34" y="842" class="title">상태 전이 및 수정 규칙</text>
+    <rect x="40" y="874" width="120" height="52" rx="6" class="soft"/><text x="63" y="905" class="label">AI 분석 완료</text>
+    <path d="M160 900 H210" class="arrow"/>
+    <rect x="214" y="874" width="100" height="52" rx="6" class="soft"/><text x="242" y="905" class="label">미확인</text>
+    <path d="M314 892 H370" class="arrow"/>
+    <path d="M314 912 H370" class="arrow"/>
+    <rect x="374" y="854" width="130" height="44" rx="6" class="blue"/><text x="397" y="881" class="label">보수 불필요</text>
+    <rect x="374" y="910" width="130" height="44" rx="6" class="blue"/><text x="404" y="937" class="label">보수 필요</text>
+    <path d="M504 876 H560" class="arrow"/>
+    <rect x="564" y="850" width="136" height="52" rx="6" class="soft"/><text x="610" y="880" class="label">확인</text>
+    <path d="M504 932 H560" class="arrow"/>
+    <rect x="564" y="910" width="176" height="52" rx="6" class="blue"/><text x="580" y="940" class="label">확인 + 보수 관리 요청 전</text>
+    <path d="M740 936 H790" class="arrow"/>
+    <rect x="794" y="910" width="118" height="52" rx="6" class="soft"/><text x="819" y="940" class="label">요청 완료</text>
+    <path d="M912 936 H962" class="arrow"/>
+    <rect x="966" y="910" width="118" height="52" rx="6" class="soft"/><text x="991" y="940" class="label">접수 완료</text>
+    <path d="M1084 936 H1134" class="arrow"/>
+    <rect x="1138" y="910" width="102" height="52" rx="6" class="soft"/><text x="1165" y="940" class="label">보수 중</text>
+    <path d="M1240 936 H1290" class="arrow"/>
+    <rect x="1294" y="910" width="108" height="52" rx="6" class="soft"/><text x="1319" y="940" class="label">보수 완료</text>
+    <path d="M700 858 C800 818 1030 818 1130 858" class="arrow dash"/>
+    <text x="865" y="832" class="small" fill="#1769E0">판정 수정 · 모든 변경 이력 보존</text>
+    <rect x="1420" y="850" width="144" height="114" rx="6" class="warn"/>
+    <text x="1434" y="874" class="label" fill="#C62828">진행 중 판정 변경</text>
+    <text x="1434" y="898" class="small">• 변경 사유 필수</text>
+    <text x="1434" y="920" class="small">• 보수 사건 삭제 금지</text>
+    <text x="1434" y="942" class="small">• 취소 이력 보존</text>
+  </g>
+</svg>

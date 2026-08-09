@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "label": "unnamed",
+  "model": "artifacts/obstacle_lower_limb/best.engine",
+  "camera_topic": "/camera/obstacle/image_raw",
+  "started_unix_sec": 1786167109.7643511,
+  "started_at": "2026-08-08T14:31:49.764351+09:00",
+  "duration_sec": 242.71740575999866,
+  "frames": 4256,
+  "end_to_end_fps": 17.53479519391524,
+  "detections": {
+    "detected_frames": 305,
+    "detection_rate": 0.07166353383458647,
+    "mean_per_frame": 0.11842105263157894,
+    "max_per_frame": 4
+  },
+  "latency_ms": {
+    "mean": 24.774268060149094,
+    "p50": 22.56630400006543,
+    "p95": 38.60828799952287,
+    "max": 117.51967999953195
+  },
+  "temperature_c": {
+    "samples": 4256,
+    "mean": 53.52019619360785,
+    "max": 54.437
+  },
+  "configuration": {
+    "engine_sha256": "61c16094510f46be95e8afad2dc463701c91862beffafd85a008a8112aaed21e",
+    "confidence": 0.25,
+    "image_size": 640,
+    "publish_annotated": true,
+    "camera_width": 1280,
+    "camera_height": 720,
+    "camera_encoding": "bgr8"
+  }
+}

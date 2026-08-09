@@ -10,10 +10,18 @@ public class Damage {
     private Long reportedBy;
     private Long assignedTo;
     private String description;
+    private String addressName;
+    private String roadAddressName;
+    private String regionCode;
+    private String region1DepthName;
+    private String region2DepthName;
+    private String region3DepthName;
+    private LocalDateTime geocodedAt;
     private BigDecimal latitude;
     private BigDecimal longitude;
     private LocalDateTime capturedAt;
     private String currentStatus;
+    private String processingPriority;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -26,10 +34,18 @@ public class Damage {
             Long reportedBy,
             Long assignedTo,
             String description,
+            String addressName,
+            String roadAddressName,
+            String regionCode,
+            String region1DepthName,
+            String region2DepthName,
+            String region3DepthName,
+            LocalDateTime geocodedAt,
             BigDecimal latitude,
             BigDecimal longitude,
             LocalDateTime capturedAt,
             String currentStatus,
+            String processingPriority,
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {
@@ -38,10 +54,18 @@ public class Damage {
         this.reportedBy = reportedBy;
         this.assignedTo = assignedTo;
         this.description = description;
+        this.addressName = addressName;
+        this.roadAddressName = roadAddressName;
+        this.regionCode = regionCode;
+        this.region1DepthName = region1DepthName;
+        this.region2DepthName = region2DepthName;
+        this.region3DepthName = region3DepthName;
+        this.geocodedAt = geocodedAt;
         this.latitude = latitude;
         this.longitude = longitude;
         this.capturedAt = capturedAt;
         this.currentStatus = currentStatus;
+        this.processingPriority = processingPriority;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -86,6 +110,62 @@ public class Damage {
         this.description = description;
     }
 
+    public String getAddressName() {
+        return addressName;
+    }
+
+    public void setAddressName(String addressName) {
+        this.addressName = addressName;
+    }
+
+    public String getRoadAddressName() {
+        return roadAddressName;
+    }
+
+    public void setRoadAddressName(String roadAddressName) {
+        this.roadAddressName = roadAddressName;
+    }
+
+    public String getRegionCode() {
+        return regionCode;
+    }
+
+    public void setRegionCode(String regionCode) {
+        this.regionCode = regionCode;
+    }
+
+    public String getRegion1DepthName() {
+        return region1DepthName;
+    }
+
+    public void setRegion1DepthName(String region1DepthName) {
+        this.region1DepthName = region1DepthName;
+    }
+
+    public String getRegion2DepthName() {
+        return region2DepthName;
+    }
+
+    public void setRegion2DepthName(String region2DepthName) {
+        this.region2DepthName = region2DepthName;
+    }
+
+    public String getRegion3DepthName() {
+        return region3DepthName;
+    }
+
+    public void setRegion3DepthName(String region3DepthName) {
+        this.region3DepthName = region3DepthName;
+    }
+
+    public LocalDateTime getGeocodedAt() {
+        return geocodedAt;
+    }
+
+    public void setGeocodedAt(LocalDateTime geocodedAt) {
+        this.geocodedAt = geocodedAt;
+    }
+
     public BigDecimal getLatitude() {
         return latitude;
     }
@@ -116,6 +196,14 @@ public class Damage {
 
     public void setCurrentStatus(String currentStatus) {
         this.currentStatus = currentStatus;
+    }
+
+    public String getProcessingPriority() {
+        return processingPriority;
+    }
+
+    public void setProcessingPriority(String processingPriority) {
+        this.processingPriority = processingPriority;
     }
 
     public LocalDateTime getCreatedAt() {

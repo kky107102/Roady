@@ -1,6 +1,7 @@
 package com.blockai.roady.damage.domain;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public record DamageSummary(
@@ -9,12 +10,86 @@ public record DamageSummary(
         Long reportedBy,
         Long assignedTo,
         String description,
+        String addressName,
+        String roadAddressName,
+        String regionCode,
+        String region1DepthName,
+        String region2DepthName,
+        String region3DepthName,
+        LocalDateTime geocodedAt,
         BigDecimal latitude,
         BigDecimal longitude,
         LocalDateTime capturedAt,
         String currentStatus,
+        String processingPriority,
+        String reviewDamageType,
+        String reviewNote,
+        String assignedToName,
+        Long repairerId,
+        String repairerName,
+        LocalDateTime repairRequestedAt,
+        String repairRequestNote,
+        LocalDate repairCompletedAt,
+        String repairCompletionNote,
         long imageCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
+
+    public DamageSummary(
+            Long id,
+            Long robotId,
+            Long reportedBy,
+            Long assignedTo,
+            String description,
+            String addressName,
+            String roadAddressName,
+            String regionCode,
+            String region1DepthName,
+            String region2DepthName,
+            String region3DepthName,
+            LocalDateTime geocodedAt,
+            BigDecimal latitude,
+            BigDecimal longitude,
+            LocalDateTime capturedAt,
+            String currentStatus,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote,
+            long imageCount,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt
+    ) {
+        this(
+                id,
+                robotId,
+                reportedBy,
+                assignedTo,
+                description,
+                addressName,
+                roadAddressName,
+                regionCode,
+                region1DepthName,
+                region2DepthName,
+                region3DepthName,
+                geocodedAt,
+                latitude,
+                longitude,
+                capturedAt,
+                currentStatus,
+                processingPriority,
+                reviewDamageType,
+                reviewNote,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                imageCount,
+                createdAt,
+                updatedAt
+        );
+    }
 }

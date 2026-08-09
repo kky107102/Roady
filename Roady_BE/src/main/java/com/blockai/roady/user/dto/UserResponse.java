@@ -10,6 +10,7 @@ public record UserResponse(
         String username,
         String email,
         String name,
+        String assignedRegionCode,
         UserRole role,
         boolean active,
         LocalDateTime createdAt
@@ -21,6 +22,7 @@ public record UserResponse(
                 user.username(),
                 user.email(),
                 user.name(),
+                user.assignedRegionCode(),
                 user.role(),
                 user.active(),
                 user.createdAt()

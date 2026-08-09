@@ -1,9 +1,22 @@
 package com.blockai.roady.damage.service;
 
 import com.blockai.roady.damage.domain.Damage;
+import com.blockai.roady.damage.domain.DamageDashboardSummary;
+import com.blockai.roady.damage.domain.DamageFilterCriteria;
 import com.blockai.roady.damage.domain.DamageImage;
+import com.blockai.roady.damage.domain.DamageMapBounds;
+import com.blockai.roady.damage.domain.DamageMapMarker;
+import com.blockai.roady.damage.domain.DamageSearchCriteria;
+import com.blockai.roady.damage.domain.DamageSearchItem;
+import com.blockai.roady.damage.domain.DamageSearchPage;
+import com.blockai.roady.damage.domain.DamageStatusCount;
 import com.blockai.roady.damage.domain.DamageSummary;
+import com.blockai.roady.damage.geocoding.GeocodedAddress;
+import com.blockai.roady.damage.geocoding.KakaoReverseGeocodingClient;
 import com.blockai.roady.damage.mapper.DamageMapper;
+import com.blockai.roady.user.domain.UserAccount;
+import com.blockai.roady.user.domain.UserRole;
+import com.blockai.roady.user.service.UserAccountService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -13,8 +26,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -28,18 +43,40 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DamageServiceTest {
 
+    private static final String ADDRESS_NAME = "Gyeonggi Anseong Juksan 343-1";
+    private static final String ROAD_ADDRESS_NAME = "Gyeonggi Anseong Juksanchogyogil 69-4";
+
     @Mock
     private DamageMapper damageMapper;
+
+    @Mock
+    private KakaoReverseGeocodingClient geocodingClient;
+
+    @Mock
+    private UserAccountService userAccountService;
 
     @InjectMocks
     private DamageService damageService;
 
     @Test
-    void createStoresDamageAndMultipleImages() {
+    void createStoresDamageAddressWhenReverseGeocodingSucceeds() {
         LocalDateTime capturedAt = LocalDateTime.of(2026, 7, 22, 10, 30);
+        LocalDateTime geocodedAt = LocalDateTime.of(2026, 7, 22, 10, 31);
         MockMultipartFile firstImage = image("first.jpg");
         MockMultipartFile secondImage = image("second.jpg");
 
+        when(geocodingClient.reverseGeocode(
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567)
+        )).thenReturn(Optional.of(new GeocodedAddress(
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                geocodedAt
+        )));
         doAnswer(invocation -> {
             Damage damage = invocation.getArgument(0);
             damage.setId(1L);
@@ -50,11 +87,21 @@ class DamageServiceTest {
                 10L,
                 2L,
                 3L,
-                "점자블록 파손",
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                geocodedAt,
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
                 "COLLECTED",
+                null,
+                null,
+                null,
                 2L,
                 capturedAt,
                 capturedAt
@@ -64,7 +111,7 @@ class DamageServiceTest {
                 10L,
                 2L,
                 3L,
-                "점자블록 파손",
+                "tactile block damage",
                 BigDecimal.valueOf(37.1234567),
                 BigDecimal.valueOf(127.1234567),
                 capturedAt,
@@ -80,12 +127,62 @@ class DamageServiceTest {
         assertThat(savedDamage.getRobotId()).isEqualTo(10L);
         assertThat(savedDamage.getReportedBy()).isEqualTo(2L);
         assertThat(savedDamage.getAssignedTo()).isEqualTo(3L);
+        assertThat(savedDamage.getAddressName()).isEqualTo(ADDRESS_NAME);
+        assertThat(savedDamage.getRoadAddressName()).isEqualTo(ROAD_ADDRESS_NAME);
+        assertThat(savedDamage.getRegionCode()).isEqualTo("41550");
+        assertThat(savedDamage.getRegion1DepthName()).isEqualTo("Gyeonggi");
+        assertThat(savedDamage.getRegion2DepthName()).isEqualTo("Anseong");
+        assertThat(savedDamage.getRegion3DepthName()).isEqualTo("Juksan");
+        assertThat(savedDamage.getGeocodedAt()).isEqualTo(geocodedAt);
 
         List<DamageImage> savedImages = imageCaptor.getAllValues();
         assertThat(savedImages).extracting(DamageImage::getSortOrder).containsExactly(1, 2);
         assertThat(savedImages).extracting(DamageImage::getOriginalFilename)
                 .containsExactly("first.jpg", "second.jpg");
         assertThat(result.imageCount()).isEqualTo(2L);
+    }
+
+    @Test
+    void createStoresDamageWithoutAddressWhenReverseGeocodingReturnsEmpty() {
+        MockMultipartFile image = image("damage.jpg");
+        when(geocodingClient.reverseGeocode(null, null)).thenReturn(Optional.empty());
+        doAnswer(invocation -> {
+            Damage damage = invocation.getArgument(0);
+            damage.setId(1L);
+            return 1;
+        }).when(damageMapper).insertDamage(any(Damage.class));
+        when(damageMapper.findSummaryById(1L)).thenReturn(new DamageSummary(
+                1L,
+                null,
+                2L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "COLLECTED",
+                null,
+                null,
+                null,
+                1L,
+                null,
+                null
+        ));
+
+        damageService.create(null, 2L, null, null, null, null, null, List.of(image));
+
+        ArgumentCaptor<Damage> damageCaptor = ArgumentCaptor.forClass(Damage.class);
+        verify(damageMapper).insertDamage(damageCaptor.capture());
+        assertThat(damageCaptor.getValue().getAddressName()).isNull();
+        assertThat(damageCaptor.getValue().getRoadAddressName()).isNull();
+        assertThat(damageCaptor.getValue().getGeocodedAt()).isNull();
     }
 
     @Test
@@ -112,6 +209,656 @@ class DamageServiceTest {
         verify(damageMapper, never()).insertDamage(any(Damage.class));
         verify(damageMapper, never()).insertImage(any(DamageImage.class));
         verify(damageMapper, never()).findSummaryById(eq(1L));
+        verify(geocodingClient, never()).reverseGeocode(any(), any());
+    }
+
+    @Test
+    void searchReturnsFilteredPage() {
+        LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+        DamageSearchCriteria criteria = new DamageSearchCriteria(
+                from,
+                to,
+                "AI_ANALYZED",
+                10L,
+                3L,
+                "41550",
+                "Juksan",
+                1,
+                20
+        );
+        DamageSearchItem summary = new DamageSearchItem(
+                1L,
+                10L,
+                3L,
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                LocalDateTime.of(2026, 7, 22, 10, 31),
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567),
+                LocalDateTime.of(2026, 7, 22, 10, 30),
+                "AI_ANALYZED",
+                "HIGH",
+                "CRACK",
+                "review note",
+                2L,
+                82,
+                "CRACK",
+                true,
+                "HIGH",
+                BigDecimal.valueOf(0.91),
+                LocalDateTime.of(2026, 7, 22, 10, 31)
+        );
+
+        when(damageMapper.searchSummaries(
+                from,
+                to,
+                "AI_ANALYZED",
+                10L,
+                3L,
+                "41550",
+                null,
+                "Juksan",
+                20L,
+                20
+        )).thenReturn(List.of(summary));
+        when(damageMapper.countSummaries(
+                from,
+                to,
+                "AI_ANALYZED",
+                10L,
+                3L,
+                "41550",
+                null,
+                "Juksan"
+        )).thenReturn(41L);
+
+        DamageSearchPage result = damageService.search(criteria);
+
+        assertThat(result.content()).containsExactly(summary);
+        assertThat(result.page()).isEqualTo(1);
+        assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalElements()).isEqualTo(41);
+        assertThat(result.totalPages()).isEqualTo(3);
+    }
+
+    @Test
+    void updateReviewStoresRequestedReviewFields() {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요"));
+        when(damageMapper.updateReview(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요"))
+                .thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(
+                1L,
+                " requested ",
+                " urgent ",
+                " large_missing ",
+                "  현장 확인 필요  "
+        );
+
+        verify(damageMapper).updateReview(1L, "REQUESTED", "URGENT", "LARGE_MISSING", "현장 확인 필요");
+        assertThat(result.currentStatus()).isEqualTo("REQUESTED");
+        assertThat(result.processingPriority()).isEqualTo("URGENT");
+        assertThat(result.reviewDamageType()).isEqualTo("LARGE_MISSING");
+        assertThat(result.reviewNote()).isEqualTo("현장 확인 필요");
+        assertThat(result.updatedAt()).isEqualTo(updatedAt);
+    }
+
+    @Test
+    void updateReviewClearsReviewFieldsWhenRevertedToAiAnalyzed() {
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "REQUESTED", "HIGH", "CRACK", "old note"))
+                .thenReturn(summary(1L, "AI_ANALYZED", null, null, null));
+        when(damageMapper.updateReview(1L, "AI_ANALYZED", null, null, null)).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, "AI_ANALYZED", null, null, null);
+
+        verify(damageMapper).updateReview(1L, "AI_ANALYZED", null, null, null);
+        assertThat(result.currentStatus()).isEqualTo("AI_ANALYZED");
+        assertThat(result.processingPriority()).isNull();
+        assertThat(result.reviewDamageType()).isNull();
+        assertThat(result.reviewNote()).isNull();
+    }
+
+    @Test
+    void updateReviewClearsReviewFieldsWhenCanceled() {
+        when(damageMapper.findSummaryById(1L))
+                .thenReturn(summary(1L, "AI_ANALYZED", null))
+                .thenReturn(summary(1L, "CANCELED", null, null, null));
+        when(damageMapper.updateReview(1L, "CANCELED", null, null, null)).thenReturn(1);
+
+        DamageSummary result = damageService.updateReview(1L, "CANCELED", "HIGH", "CRACK", "ignored");
+
+        verify(damageMapper).updateReview(1L, "CANCELED", null, null, null);
+        assertThat(result.currentStatus()).isEqualTo("CANCELED");
+        assertThat(result.processingPriority()).isNull();
+        assertThat(result.reviewDamageType()).isNull();
+        assertThat(result.reviewNote()).isNull();
+    }
+
+    @Test
+    void updateReviewRejectsInvalidReviewStatus() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REPAIR_COMPLETED", null, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage review status.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsInvalidProcessingPriority() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "CRITICAL", "CRACK", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage processing priority.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsMissingStatus() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, null, "HIGH", "CRACK", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Damage review status is required.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsRequestedWithoutProcessingPriority() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", null, "CRACK", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("processingPriority is required when status is REQUESTED.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsRequestedWithoutReviewDamageType() {
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "HIGH", null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("reviewDamageType is required when status is REQUESTED.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void updateReviewRejectsTooLongReviewNote() {
+        String tooLongNote = "a".repeat(1001);
+
+        assertThatThrownBy(() -> damageService.updateReview(1L, "REQUESTED", "HIGH", "CRACK", tooLongNote))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("reviewNote must be 1000 characters or less.");
+
+        verify(damageMapper, never()).updateReview(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairTransitionsStatusAndStoresNormalizedNote() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(1);
+        when(damageMapper.insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq((Long) null),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("hello"),
+                any(LocalDateTime.class)
+        )).thenReturn(1);
+
+        DamageSummary result = damageService.requestRepair(3L, 2L, null, null, null, "  hello  ");
+
+        verify(damageMapper).transitionToRepairInProgress(3L, "HIGH", "CRACK", null);
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq((Long) null),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("hello"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_IN_PROGRESS");
+    }
+
+    @Test
+    void requestRepairStoresBlankNoteAsNull() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(1);
+
+        damageService.requestRepair(3L, 2L, null, null, null, "   ");
+
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq((Long) null),
+                eq("REQUESTED"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq(null),
+                any(LocalDateTime.class)
+        );
+    }
+
+    @Test
+    void requestRepairRejectsDamageOutsideRequestedStatus() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "AI_ANALYZED", "HIGH", "CRACK", null));
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only REQUESTED damage can move to repair in progress.");
+
+        verify(damageMapper, never()).transitionToRepairInProgress(any(), any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsConcurrentStatusChange() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
+        when(damageMapper.transitionToRepairInProgress(3L, "HIGH", "CRACK", null)).thenReturn(0);
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Damage is no longer in REQUESTED status.");
+
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsTooLongNote() {
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, null, null, null, "a".repeat(1001)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("note must be 1000 characters or less.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+        verify(damageMapper, never()).transitionToRepairInProgress(any(), any(), any(), any());
+    }
+
+    @Test
+    void requestRepairRejectsUserWithoutRepairerRole() {
+        when(userAccountService.findById(9L)).thenReturn(Optional.of(new UserAccount(
+                9L,
+                "inspector",
+                "hash",
+                "inspector@roady.local",
+                "Inspector",
+                null,
+                UserRole.INSPECTOR,
+                true,
+                LocalDateTime.of(2026, 8, 4, 10, 0)
+        )));
+
+        assertThatThrownBy(() -> damageService.requestRepair(3L, 2L, "HIGH", "CRACK", 9L, "hello"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("repairerId must reference a REPAIRER user.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+    }
+
+    @Test
+    void updateRepairRequestKeepsStatusAndStoresEditHistory() {
+        when(userAccountService.findById(9L)).thenReturn(Optional.of(new UserAccount(
+                9L,
+                "repairer",
+                "hash",
+                "repairer@roady.local",
+                "Repairer",
+                null,
+                UserRole.REPAIRER,
+                true,
+                LocalDateTime.of(2026, 8, 4, 10, 0)
+        )));
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "NORMAL", "POTHOLE", null))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null, 9L));
+        when(damageMapper.updateRepairRequest(3L, "HIGH", "CRACK", 9L)).thenReturn(1);
+
+        DamageSummary result = damageService.updateRepairRequest(
+                3L,
+                2L,
+                " high ",
+                " crack ",
+                9L,
+                "  assignment changed  "
+        );
+
+        verify(damageMapper).updateRepairRequest(3L, "HIGH", "CRACK", 9L);
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq(9L),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("assignment changed"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_IN_PROGRESS");
+        assertThat(result.repairerId()).isEqualTo(9L);
+    }
+
+    @Test
+    void completeRepairTransitionsStatusAndStoresHistory() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "REPAIR_COMPLETED", "HIGH", "CRACK", "reviewed"));
+        LocalDate completedAt = LocalDate.of(2026, 8, 4);
+        when(damageMapper.completeRepair(3L, completedAt, "done")).thenReturn(1);
+
+        DamageSummary result = damageService.completeRepair(3L, 2L, completedAt, "  done  ");
+
+        verify(damageMapper).completeRepair(3L, completedAt, "done");
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq((Long) null),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("REPAIR_COMPLETED"),
+                eq("done"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REPAIR_COMPLETED");
+    }
+
+    @Test
+    void cancelRepairTransitionsStatusAndStoresHistory() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", "reviewed"))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", "reviewed"));
+        when(damageMapper.cancelRepairRequest(3L)).thenReturn(1);
+
+        DamageSummary result = damageService.cancelRepair(3L, 2L, "  cancel  ");
+
+        verify(damageMapper).cancelRepairRequest(3L);
+        verify(damageMapper).insertRepairRequestHistory(
+                eq(3L),
+                eq(2L),
+                eq((Long) null),
+                eq("REPAIR_IN_PROGRESS"),
+                eq("REQUESTED"),
+                eq("cancel"),
+                any(LocalDateTime.class)
+        );
+        assertThat(result.currentStatus()).isEqualTo("REQUESTED");
+    }
+
+    @Test
+    void completeRepairRejectsDamageOutsideRepairInProgressStatus() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REQUESTED", "HIGH", "CRACK", null));
+
+        assertThatThrownBy(() -> damageService.completeRepair(3L, 2L, LocalDate.of(2026, 8, 4), "done"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Only REPAIR_IN_PROGRESS damage can move to REPAIR_COMPLETED.");
+
+        verify(damageMapper, never()).completeRepair(any(), any(), any());
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void completeRepairRejectsFutureCompletionDate() {
+        assertThatThrownBy(() -> damageService.completeRepair(
+                3L,
+                2L,
+                LocalDate.now().plusDays(1),
+                "done"
+        ))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("completedAt cannot be a future date.");
+
+        verify(damageMapper, never()).findSummaryById(any());
+    }
+
+    @Test
+    void cancelRepairRejectsConcurrentStatusChange() {
+        when(damageMapper.findSummaryById(3L))
+                .thenReturn(summary(3L, "REPAIR_IN_PROGRESS", "HIGH", "CRACK", null));
+        when(damageMapper.cancelRepairRequest(3L)).thenReturn(0);
+
+        assertThatThrownBy(() -> damageService.cancelRepair(3L, 2L, "cancel"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Damage is no longer in REPAIR_IN_PROGRESS status.");
+
+        verify(damageMapper, never()).insertRepairRequestHistory(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void searchReturnsZeroTotalPagesForEmptyResult() {
+        DamageSearchCriteria criteria = new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20
+        );
+        when(damageMapper.searchSummaries(null, null, null, null, null, null, null, null, 0L, 20))
+                .thenReturn(List.of());
+        when(damageMapper.countSummaries(null, null, null, null, null, null, null, null))
+                .thenReturn(0L);
+
+        DamageSearchPage result = damageService.search(criteria);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.totalPages()).isZero();
+    }
+
+    @Test
+    void searchCriteriaRejectsInvalidPageConditions() {
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                -1,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("page must be 0 or greater.");
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                0,
+                101
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("size must be between 1 and 100.");
+    }
+
+    @Test
+    void searchCriteriaRejectsInvalidPeriodAndStatus() {
+        LocalDateTime from = LocalDateTime.of(2026, 8, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 7, 1, 0, 0);
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                from,
+                to,
+                null,
+                null,
+                null,
+                null,
+                0,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("from must be earlier than to.");
+
+        assertThatThrownBy(() -> new DamageSearchCriteria(
+                null,
+                null,
+                "UNKNOWN",
+                null,
+                null,
+                null,
+                0,
+                20
+        )).isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid damage status.");
+    }
+
+    @Test
+    void searchCriteriaParsesCaseNumberAndEscapesAddressKeyword() {
+        DamageSearchCriteria numeric = new DamageSearchCriteria(null, null, null, null, null, "42", 0, 20);
+        DamageSearchCriteria text = new DamageSearchCriteria(null, null, null, null, null, " road_% ", 0, 20);
+
+        assertThat(numeric.caseNumber()).isEqualTo(42L);
+        assertThat(numeric.addressKeyword()).isEqualTo("42");
+        assertThat(text.caseNumber()).isNull();
+        assertThat(text.keyword()).isEqualTo("road_%");
+        assertThat(text.addressKeyword()).isEqualTo("road\\_\\%");
+    }
+
+    @Test
+    void summarizeReturnsTotalsAndZeroFilledStatusCounts() {
+        LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+        DamageFilterCriteria criteria = new DamageFilterCriteria(from, to, null, 10L, null);
+        when(damageMapper.summarizeByStatus(from, to, null, 10L, null, null))
+                .thenReturn(List.of(
+                        new DamageStatusCount("COLLECTED", 3, 2),
+                        new DamageStatusCount("AI_ANALYZED", 2, 1)
+                ));
+
+        DamageDashboardSummary result = damageService.summarize(criteria);
+
+        assertThat(result.total()).isEqualTo(5);
+        assertThat(result.unassigned()).isEqualTo(3);
+        assertThat(result.statusCounts())
+                .containsEntry("COLLECTED", 3L)
+                .containsEntry("AI_ANALYZED", 2L)
+                .containsEntry("REPAIR_COMPLETED", 0L)
+                .hasSize(7);
+    }
+
+    @Test
+    void summarizeReturnsZeroFilledResponseForEmptyResult() {
+        DamageFilterCriteria criteria = new DamageFilterCriteria(null, null, null, null, null);
+        when(damageMapper.summarizeByStatus(null, null, null, null, null, null))
+                .thenReturn(List.of());
+
+        DamageDashboardSummary result = damageService.summarize(criteria);
+
+        assertThat(result.total()).isZero();
+        assertThat(result.unassigned()).isZero();
+        assertThat(result.statusCounts())
+                .hasSize(7)
+                .allSatisfy((status, count) -> assertThat(count).isZero());
+    }
+
+    @Test
+    void findMapMarkersUsesCommonDamageFilters() {
+        LocalDateTime from = LocalDateTime.of(2026, 7, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2026, 8, 1, 0, 0);
+        DamageFilterCriteria criteria = new DamageFilterCriteria(
+                from,
+                to,
+                "AI_ANALYZED",
+                10L,
+                3L,
+                "41550"
+        );
+        DamageMapMarker marker = new DamageMapMarker(
+                1L,
+                BigDecimal.valueOf(37.5665),
+                BigDecimal.valueOf(126.978),
+                "AI_ANALYZED"
+        );
+        DamageMapBounds bounds = new DamageMapBounds(
+                BigDecimal.valueOf(37.45),
+                BigDecimal.valueOf(37.62),
+                BigDecimal.valueOf(126.80),
+                BigDecimal.valueOf(127.10)
+        );
+        when(damageMapper.findMapMarkers(
+                from,
+                to,
+                "AI_ANALYZED",
+                10L,
+                3L,
+                "41550",
+                bounds.south(),
+                bounds.north(),
+                bounds.west(),
+                bounds.east()
+        ))
+                .thenReturn(List.of(marker));
+
+        assertThat(damageService.findMapMarkers(criteria, bounds)).containsExactly(marker);
+    }
+
+    private DamageSummary summary(Long id, String status, String processingPriority) {
+        return summary(id, status, processingPriority, null, null);
+    }
+
+    private DamageSummary summary(
+            Long id,
+            String status,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote
+    ) {
+        return summary(id, status, processingPriority, reviewDamageType, reviewNote, null);
+    }
+
+    private DamageSummary summary(
+            Long id,
+            String status,
+            String processingPriority,
+            String reviewDamageType,
+            String reviewNote,
+            Long repairerId
+    ) {
+        LocalDateTime updatedAt = LocalDateTime.of(2026, 7, 31, 11, 0);
+        return new DamageSummary(
+                id,
+                10L,
+                2L,
+                3L,
+                "tactile block damage",
+                ADDRESS_NAME,
+                ROAD_ADDRESS_NAME,
+                "41550",
+                "Gyeonggi",
+                "Anseong",
+                "Juksan",
+                LocalDateTime.of(2026, 7, 22, 10, 31),
+                BigDecimal.valueOf(37.1234567),
+                BigDecimal.valueOf(127.1234567),
+                LocalDateTime.of(2026, 7, 22, 10, 30),
+                status,
+                processingPriority,
+                reviewDamageType,
+                reviewNote,
+                "Inspector",
+                repairerId,
+                repairerId == null ? null : "Repairer",
+                null,
+                null,
+                null,
+                null,
+                2L,
+                updatedAt,
+                updatedAt
+        );
     }
 
     private MockMultipartFile image(String filename) {

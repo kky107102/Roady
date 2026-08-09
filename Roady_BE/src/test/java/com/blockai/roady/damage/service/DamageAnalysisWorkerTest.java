@@ -38,6 +38,9 @@ class DamageAnalysisWorkerTest {
     private DamageMapper damageMapper;
 
     @Mock
+    private DamageAiAnalysisService aiAnalysisService;
+
+    @Mock
     private AiImageAnalysisClient aiClient;
 
     @Mock
@@ -53,6 +56,7 @@ class DamageAnalysisWorkerTest {
                 queue,
                 analysisResultMapper,
                 damageMapper,
+                aiAnalysisService,
                 aiClient,
                 resultParser,
                 properties
@@ -63,14 +67,31 @@ class DamageAnalysisWorkerTest {
     void consumeQueuedJobsStoresAiResponseIntoAnalysisResult() {
         DamageAnalysisQueueMessage message = new DamageAnalysisQueueMessage(10L, 1L);
         String rawResult = """
-                {"damaged":true,"damageScore":82,"repairRequired":true,"repairPriority":"HIGH","confidenceScore":0.91}
+                {
+                  "damaged": true,
+                  "damage_score": 0,
+                  "damage_type": "CRACK",
+                  "repair_required": false,
+                  "repair_priority": null,
+                  "confidence_score": 0.7139,
+                  "analysis_detail": {
+                    "schema_version": "2.0",
+                    "units": [{"local_unit_id": "block_1"}],
+                    "summary": {
+                      "damage_detected": true,
+                      "dominant_damage_type": "crack",
+                      "max_damage_ratio_percent": 0.12
+                    }
+                  }
+                }
                 """;
         ParsedAiImageAnalysisResult parsedResult = new ParsedAiImageAnalysisResult(
                 true,
-                82,
-                true,
-                "HIGH",
-                BigDecimal.valueOf(0.91)
+                0,
+                "CRACK",
+                false,
+                null,
+                new BigDecimal("0.7139")
         );
 
         when(queue.poll()).thenReturn(message);
@@ -82,14 +103,11 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper).markProcessing(10L);
-        verify(analysisResultMapper).markSucceeded(
+        verify(aiAnalysisService).markProcessing(10L);
+        verify(aiAnalysisService).markSucceeded(
                 10L,
-                true,
-                82,
-                true,
-                "HIGH",
-                BigDecimal.valueOf(0.91),
+                1L,
+                parsedResult,
                 rawResult
         );
         verify(queue, never()).deadLetter(any(DamageAnalysisQueueMessage.class));
@@ -107,8 +125,8 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper).markProcessing(10L);
-        verify(analysisResultMapper).markFailed(10L, "AI server unavailable");
+        verify(aiAnalysisService).markProcessing(10L);
+        verify(aiAnalysisService).markFailed(10L, 1L, "AI server unavailable");
         verify(queue).deadLetter(eq(message));
     }
 
@@ -120,7 +138,7 @@ class DamageAnalysisWorkerTest {
 
         worker.consumeQueuedJobs();
 
-        verify(analysisResultMapper, never()).markProcessing(10L);
+        verify(aiAnalysisService, never()).markProcessing(10L);
         verify(aiClient, never()).analyze(any(), any());
     }
 
@@ -142,8 +160,18 @@ class DamageAnalysisWorkerTest {
                 "road damage",
                 null,
                 null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
                 now,
                 "COLLECTED",
+                null,
+                null,
+                null,
                 1L,
                 now,
                 now

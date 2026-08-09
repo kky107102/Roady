@@ -1,5 +1,6 @@
 package com.blockai.roady.damage.service;
 
+import com.blockai.roady.damage.domain.DamageTypeNormalizer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ public class AiImageAnalysisResultParser {
             return new ParsedAiImageAnalysisResult(
                     booleanValue(root, "damaged", "isDamaged", "damageDetected", "damage_detected"),
                     integerValue(root, "damageScore", "damage_score", "score"),
+                    normalizeDamageType(textValue(root, "damageType", "damage_type", "type")),
                     booleanValue(root, "repairRequired", "repair_required"),
                     textValue(root, "repairPriority", "repair_priority"),
                     decimalValue(root, "confidenceScore", "confidence_score", "confidence")
@@ -76,6 +78,10 @@ public class AiImageAnalysisResultParser {
             return null;
         }
         return value.asText();
+    }
+
+    private String normalizeDamageType(String damageType) {
+        return DamageTypeNormalizer.normalizeAiDamageType(damageType);
     }
 
     private BigDecimal decimalValue(JsonNode root, String... fieldNames) {

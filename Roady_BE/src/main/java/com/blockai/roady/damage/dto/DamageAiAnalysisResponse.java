@@ -1,6 +1,7 @@
 package com.blockai.roady.damage.dto;
 
 import com.blockai.roady.damage.domain.DamageAiAnalysisResult;
+import com.blockai.roady.damage.domain.DamageTypeNormalizer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -10,6 +11,7 @@ public record DamageAiAnalysisResponse(
         Long damageId,
         Boolean damaged,
         Integer damageScore,
+        String damageType,
         Boolean repairRequired,
         String repairPriority,
         BigDecimal confidenceScore,
@@ -25,6 +27,7 @@ public record DamageAiAnalysisResponse(
                 result.getDamageId(),
                 result.getDamaged(),
                 result.getDamageScore(),
+                DamageTypeNormalizer.normalizeAiDamageType(result.getDamageType()),
                 result.getRepairRequired(),
                 result.getRepairPriority(),
                 result.getConfidenceScore(),

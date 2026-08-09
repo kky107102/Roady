@@ -11,6 +11,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Component
@@ -39,12 +40,14 @@ public class AiImageAnalysisClient {
             body.add("images", new NamedByteArrayResource(image.getData(), image.getOriginalFilename()));
         }
 
-        return restClient.post()
+        byte[] responseBody = restClient.post()
                 .uri(properties.getEndpointUrl())
                 .contentType(MediaType.MULTIPART_FORM_DATA)
                 .body(body)
                 .retrieve()
-                .body(String.class);
+                .body(byte[].class);
+
+        return responseBody == null ? null : new String(responseBody, StandardCharsets.UTF_8);
     }
 
     private String valueOrEmpty(Object value) {

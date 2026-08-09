@@ -1,0 +1,34 @@
+{
+  "eventId": "damage_20260807T204404224444_8075bd2b",
+  "robotId": 1,
+  "description": "로디 1호 점자블록 파손 감지",
+  "latitude": 37.5665,
+  "longitude": 126.978,
+  "capturedAt": "2026-08-07T20:44:04",
+  "images": [
+    "damage_20260807T204404224444_8075bd2b_01.jpg",
+    "damage_20260807T204404224444_8075bd2b_02.jpg"
+  ],
+  "metadata": {
+    "ai": {
+      "roi_source": "tactile_block",
+      "analysis_unit_hint": "block_or_block_group",
+      "tactile_detection_count": 3,
+      "roi_fallback_used": false,
+      "frame_selection_status": "fallback_best_available",
+      "frame_quality_verified": false,
+      "frame_quality": {
+        "score": 0.949884,
+        "sharpness": 65.683,
+        "roi_width": 727,
+        "roi_height": 503,
+        "roi_area": 365681,
+        "area_change_ratio": 0.049899,
+        "center_shift_ratio": 0.006807,
+        "rejection_reasons": [
+          "ROI_TOUCHES_FRAME_EDGE"
+        ]
+      }
+    }
+  }
+}

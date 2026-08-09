@@ -1,0 +1,836 @@
+from __future__ import annotations
+
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Protocol
+
+import cv2
+import numpy as np
+
+from perception.algorithms.damage_detector import DamageDetection
+
+
+BBox = tuple[float, float, float, float]
+
+
+class Detector(Protocol):
+    def detect(self, image: np.ndarray): ...
+
+
+@dataclass(frozen=True)
+class DamageEvidence:
+    bbox: BBox
+    score: float
+    sources: frozenset[str]
+    roi_selection: "RoiSelection | None" = None
+
+
+@dataclass(frozen=True)
+class RoiSelection:
+    bbox: BBox
+    roi_source: str
+    analysis_unit_hint: str
+    tactile_detection_count: int
+    roi_fallback_used: bool
+
+    def metadata(self) -> dict[str, object]:
+        return {
+            "roi_source": self.roi_source,
+            "analysis_unit_hint": self.analysis_unit_hint,
+            "tactile_detection_count": self.tactile_detection_count,
+            "roi_fallback_used": self.roi_fallback_used,
+        }
+
+
+@dataclass(frozen=True)
+class FrameQualityAssessment:
+    score: float
+    hard_gate_passed: bool
+    stable: bool
+    sharpness: float
+    roi_width: int
+    roi_height: int
+    roi_area: int
+    area_change_ratio: float | None
+    center_shift_ratio: float | None
+    rejection_reasons: tuple[str, ...]
+
+
+@dataclass
+class DamageCandidate:
+    candidate_id: int
+    first_seen_at: float
+    last_seen_at: float
+    last_bbox: BBox
+    observation_times: deque[float] = field(default_factory=deque)
+    best_score: float = 0.0
+    best_quality: float = -1.0
+    best_original: np.ndarray | None = None
+    best_analysis_roi: np.ndarray | None = None
+    best_location: tuple[float, float] | None = None
+    best_roi_metadata: dict[str, object] = field(default_factory=dict)
+    best_frame_quality_verified: bool = False
+    best_available_quality: float = -1.0
+    best_closeness_score: float = -1.0
+    last_roi_center: tuple[float, float] | None = None
+    last_roi_area: float | None = None
+    stable_observation_count: int = 0
+    confirmed: bool = False
+    ready_emitted: bool = False
+    reported: bool = False
+    velocity_x: float = 0.0
+    velocity_y: float = 0.0
+
+
+@dataclass(frozen=True)
+class ReadyDamageEvent:
+    candidate_id: int
+    original_image: np.ndarray
+    analysis_roi: np.ndarray
+    observation_count: int
+    best_score: float
+    location: tuple[float, float] | None
+    metadata: dict[str, object]
+
+    @property
+    def tactile_roi(self) -> np.ndarray:
+        """Deprecated compatibility alias for callers using the old field name."""
+        return self.analysis_roi
+
+
+class DamageEventPipeline:
+    """Tracks damage-candidate detections and emits one representative event.
+
+    Matching is image-coordinate based for now. A ground/world-coordinate matcher
+    can replace ``_match_candidate`` when odometry and camera calibration arrive.
+    """
+
+    def __init__(
+        self,
+        detector: Detector,
+        detection_threshold: float = 0.15,
+        confirm_count: int = 3,
+        confirm_window_sec: float = 2.0,
+        min_confirm_duration_sec: float = 0.4,
+        min_observation_interval_sec: float = 0.1,
+        candidate_timeout_sec: float = 1.0,
+        reported_track_cooldown_sec: float = 5.0,
+        match_center_ratio: float = 0.20,
+        tactile_roi_margin_ratio: float = 0.0,
+        damage_fallback_scale: float = 1.5,
+        tactile_relation_iou: float = 0.01,
+        frame_edge_margin_px: int = 3,
+        minimum_roi_width_px: int = 32,
+        minimum_roi_height_px: int = 32,
+        minimum_roi_area_px: int = 1024,
+        minimum_sharpness: float = 10.0,
+        stable_area_change_ratio: float = 0.10,
+        stable_center_shift_ratio: float = 0.03,
+        stable_observation_count: int = 2,
+        require_tactile_roi_for_event: bool = True,
+        require_verified_frame_for_event: bool = True,
+        minimum_event_confidence: float = 0.25,
+        group_by_tactile_unit: bool = False,
+    ) -> None:
+        if confirm_count < 1:
+            raise ValueError("confirm_count must be positive")
+        if not 0.0 <= minimum_event_confidence <= 1.0:
+            raise ValueError("minimum_event_confidence must be between 0 and 1")
+        self.detector = detector
+        self.detection_threshold = detection_threshold
+        self.confirm_count = confirm_count
+        self.confirm_window_sec = confirm_window_sec
+        self.min_confirm_duration_sec = min_confirm_duration_sec
+        self.min_observation_interval_sec = min_observation_interval_sec
+        self.candidate_timeout_sec = candidate_timeout_sec
+        self.reported_track_cooldown_sec = reported_track_cooldown_sec
+        self.match_center_ratio = match_center_ratio
+        self.tactile_roi_margin_ratio = tactile_roi_margin_ratio
+        self.damage_fallback_scale = damage_fallback_scale
+        self.tactile_relation_iou = tactile_relation_iou
+        self.frame_edge_margin_px = frame_edge_margin_px
+        self.minimum_roi_width_px = minimum_roi_width_px
+        self.minimum_roi_height_px = minimum_roi_height_px
+        self.minimum_roi_area_px = minimum_roi_area_px
+        self.minimum_sharpness = minimum_sharpness
+        self.stable_area_change_ratio = stable_area_change_ratio
+        self.stable_center_shift_ratio = stable_center_shift_ratio
+        self.required_stable_observations = max(1, stable_observation_count)
+        self.require_tactile_roi_for_event = require_tactile_roi_for_event
+        self.require_verified_frame_for_event = require_verified_frame_for_event
+        self.minimum_event_confidence = minimum_event_confidence
+        self.group_by_tactile_unit = group_by_tactile_unit
+        self._candidates: dict[int, DamageCandidate] = {}
+        self._next_id = 1
+        self._last_detections: tuple[DamageDetection, ...] = ()
+
+    @property
+    def candidates(self) -> tuple[DamageCandidate, ...]:
+        return tuple(self._candidates.values())
+
+    @property
+    def last_detections(self) -> tuple[DamageDetection, ...]:
+        return self._last_detections
+
+    def process(
+        self,
+        frame: np.ndarray,
+        timestamp: float,
+        location: tuple[float, float] | None = None,
+    ) -> list[ReadyDamageEvent]:
+        if frame is None or frame.size == 0:
+            raise ValueError("frame is empty")
+        detections, _ = self.detector.detect(frame)
+        self._last_detections = tuple(detections)
+        evidence = self._collect_detector_evidence(detections)
+        tactile_boxes = [
+            detection.xyxy
+            for detection in detections
+            if detection.label == "tactile_block"
+        ]
+        merged = self._merge_frame_evidence(evidence, tactile_boxes, frame.shape)
+        if self.group_by_tactile_unit:
+            merged = self._group_evidence_by_tactile_unit(merged)
+
+        assignments = self._match_candidates(merged, frame.shape, timestamp)
+        for item, candidate in zip(merged, assignments):
+            if candidate is None:
+                candidate = self._new_candidate(item, timestamp)
+            self._observe(candidate, item, frame, timestamp, location)
+
+        return self._finalize_expired(timestamp)
+
+    def flush(self, timestamp: float) -> list[ReadyDamageEvent]:
+        """Finalize confirmed tracks at shutdown or end of a recorded sequence."""
+        return self._finalize_expired(timestamp, force=True)
+
+    def acknowledge(self, candidate_id: int) -> None:
+        """Remove a ready candidate only after its event is safely persisted."""
+        candidate = self._candidates.get(candidate_id)
+        if candidate is None or not candidate.ready_emitted:
+            raise KeyError(f"candidate is not awaiting acknowledgement: {candidate_id}")
+        candidate.reported = True
+        candidate.ready_emitted = False
+
+    def retry(self, candidate_id: int) -> None:
+        """Allow a failed persistence attempt to be emitted on the next frame."""
+        candidate = self._candidates.get(candidate_id)
+        if candidate is None or not candidate.ready_emitted:
+            raise KeyError(f"candidate is not awaiting retry: {candidate_id}")
+        candidate.ready_emitted = False
+
+    def _collect_detector_evidence(
+        self, detections: list[DamageDetection]
+    ) -> list[DamageEvidence]:
+        return [
+            DamageEvidence(
+                bbox=detection.xyxy,
+                score=detection.confidence,
+                sources=frozenset({"detector"}),
+            )
+            for detection in detections
+            if detection.label == "damage_candidate"
+            and detection.confidence >= self.detection_threshold
+        ]
+
+    def _merge_frame_evidence(
+        self,
+        evidence: list[DamageEvidence],
+        tactile_boxes: list[BBox],
+        frame_shape: tuple[int, ...],
+    ) -> list[DamageEvidence]:
+        remaining = list(evidence)
+        merged: list[DamageEvidence] = []
+        while remaining:
+            group = [remaining.pop(0)]
+            changed = True
+            while changed:
+                changed = False
+                group_box = _union_bbox([item.bbox for item in group])
+                for item in list(remaining):
+                    if _iou(group_box, item.bbox) > 0.05:
+                        group.append(item)
+                        remaining.remove(item)
+                        changed = True
+            combined_score = 1.0
+            sources: set[str] = set()
+            for item in group:
+                combined_score *= 1.0 - item.score
+                sources.update(item.sources)
+            merged_bbox = _union_bbox([item.bbox for item in group])
+            merged.append(
+                DamageEvidence(
+                    bbox=merged_bbox,
+                    score=1.0 - combined_score,
+                    sources=frozenset(sources),
+                    roi_selection=select_analysis_roi(
+                        damage_bbox=merged_bbox,
+                        tactile_boxes=tactile_boxes,
+                        frame_shape=frame_shape,
+                        tactile_margin_ratio=self.tactile_roi_margin_ratio,
+                        fallback_scale=self.damage_fallback_scale,
+                        relation_iou=self.tactile_relation_iou,
+                    ),
+                )
+            )
+        return merged
+
+    @staticmethod
+    def _group_evidence_by_tactile_unit(
+        evidence: list[DamageEvidence],
+    ) -> list[DamageEvidence]:
+        """Collapse all damage detections assigned to one tactile ROI per frame."""
+        grouped: dict[tuple[float, ...], list[DamageEvidence]] = {}
+        passthrough: list[DamageEvidence] = []
+        for item in evidence:
+            selection = item.roi_selection
+            if selection is None or selection.roi_fallback_used:
+                passthrough.append(item)
+                continue
+            key = tuple(round(value, 3) for value in selection.bbox)
+            grouped.setdefault(key, []).append(item)
+
+        result = list(passthrough)
+        for items in grouped.values():
+            selection = items[0].roi_selection
+            combined_score = 1.0
+            sources: set[str] = set()
+            for item in items:
+                combined_score *= 1.0 - item.score
+                sources.update(item.sources)
+            result.append(
+                DamageEvidence(
+                    bbox=_union_bbox([item.bbox for item in items]),
+                    score=1.0 - combined_score,
+                    sources=frozenset(sources),
+                    roi_selection=selection,
+                )
+            )
+        return result
+
+    def _new_candidate(
+        self, evidence: DamageEvidence, timestamp: float
+    ) -> DamageCandidate:
+        candidate = DamageCandidate(
+            candidate_id=self._next_id,
+            first_seen_at=timestamp,
+            last_seen_at=timestamp,
+            last_bbox=_tracking_bbox(evidence),
+        )
+        self._candidates[candidate.candidate_id] = candidate
+        self._next_id += 1
+        return candidate
+
+    def _match_candidates(
+        self,
+        evidence: list[DamageEvidence],
+        frame_shape: tuple[int, ...],
+        timestamp: float,
+    ) -> list[DamageCandidate | None]:
+        """Globally assign at most one detection to each existing track."""
+        diagonal = float(np.hypot(frame_shape[1], frame_shape[0]))
+        pairs: list[tuple[float, int, int, DamageCandidate]] = []
+        for evidence_index, item in enumerate(evidence):
+            item_tracking_bbox = _tracking_bbox(item)
+            for candidate in self._candidates.values():
+                if candidate.ready_emitted:
+                    continue
+                elapsed = max(0.0, timestamp - candidate.last_seen_at)
+                predicted_bbox = _shift_bbox(
+                    candidate.last_bbox,
+                    candidate.velocity_x * elapsed,
+                    candidate.velocity_y * elapsed,
+                )
+                overlap = max(
+                    _iou(candidate.last_bbox, item_tracking_bbox),
+                    _iou(predicted_bbox, item_tracking_bbox),
+                )
+                distance = min(
+                    _center_distance(candidate.last_bbox, item_tracking_bbox),
+                    _center_distance(predicted_bbox, item_tracking_bbox),
+                ) / max(diagonal, 1.0)
+                if overlap <= 0.01 and distance > self.match_center_ratio:
+                    continue
+                pairs.append(
+                    (distance - overlap, evidence_index, candidate.candidate_id, candidate)
+                )
+
+        assignments: list[DamageCandidate | None] = [None] * len(evidence)
+        used_candidates: set[int] = set()
+        for _, evidence_index, candidate_id, candidate in sorted(
+            pairs, key=lambda item: item[0]
+        ):
+            if assignments[evidence_index] is not None or candidate_id in used_candidates:
+                continue
+            assignments[evidence_index] = candidate
+            used_candidates.add(candidate_id)
+        return assignments
+
+    def _observe(
+        self,
+        candidate: DamageCandidate,
+        evidence: DamageEvidence,
+        frame: np.ndarray,
+        timestamp: float,
+        location: tuple[float, float] | None,
+    ) -> None:
+        previous_seen_at = candidate.last_seen_at
+        previous_center = _bbox_center(candidate.last_bbox)
+        tracking_bbox = _tracking_bbox(evidence)
+        current_center = _bbox_center(tracking_bbox)
+        elapsed = timestamp - previous_seen_at
+        if candidate.observation_times and elapsed > 0:
+            instant_velocity_x = (current_center[0] - previous_center[0]) / elapsed
+            instant_velocity_y = (current_center[1] - previous_center[1]) / elapsed
+            smoothing = 0.35
+            candidate.velocity_x = (
+                (1.0 - smoothing) * candidate.velocity_x
+                + smoothing * instant_velocity_x
+            )
+            candidate.velocity_y = (
+                (1.0 - smoothing) * candidate.velocity_y
+                + smoothing * instant_velocity_y
+            )
+        candidate.last_seen_at = timestamp
+        candidate.last_bbox = tracking_bbox
+        if candidate.reported:
+            return
+        # Multiple overlapping detections in one frame count as one observation.
+        if (
+            not candidate.observation_times
+            or timestamp - candidate.observation_times[-1]
+            >= self.min_observation_interval_sec
+        ):
+            candidate.observation_times.append(timestamp)
+        cutoff = timestamp - self.confirm_window_sec
+        while candidate.observation_times and candidate.observation_times[0] < cutoff:
+            candidate.observation_times.popleft()
+        observed_duration = (
+            candidate.observation_times[-1] - candidate.observation_times[0]
+            if len(candidate.observation_times) >= 2
+            else 0.0
+        )
+        if (
+            len(candidate.observation_times) >= self.confirm_count
+            and observed_duration >= self.min_confirm_duration_sec
+        ):
+            candidate.confirmed = True
+        candidate.best_score = max(candidate.best_score, evidence.score)
+
+        selection = evidence.roi_selection or select_analysis_roi(
+            damage_bbox=evidence.bbox,
+            tactile_boxes=[],
+            frame_shape=frame.shape,
+            tactile_margin_ratio=self.tactile_roi_margin_ratio,
+            fallback_scale=self.damage_fallback_scale,
+            relation_iou=self.tactile_relation_iou,
+        )
+        # A damage-only crop is useful for diagnostics, but it is not a valid
+        # server analysis unit. Keep tracking so a later frame can provide a
+        # tactile-block match; never select the fallback as the saved frame.
+        if self.require_tactile_roi_for_event and selection.roi_fallback_used:
+            return
+        assessment = assess_frame_quality(
+            frame=frame,
+            roi_selection=selection,
+            damage_bbox=evidence.bbox,
+            confidence=evidence.score,
+            previous_center=candidate.last_roi_center,
+            previous_area=candidate.last_roi_area,
+            frame_edge_margin_px=self.frame_edge_margin_px,
+            minimum_roi_width_px=self.minimum_roi_width_px,
+            minimum_roi_height_px=self.minimum_roi_height_px,
+            minimum_roi_area_px=self.minimum_roi_area_px,
+            minimum_sharpness=self.minimum_sharpness,
+            stable_area_change_ratio=self.stable_area_change_ratio,
+            stable_center_shift_ratio=self.stable_center_shift_ratio,
+        )
+        if assessment.stable:
+            candidate.stable_observation_count += 1
+        else:
+            candidate.stable_observation_count = 0
+        verified = (
+            assessment.hard_gate_passed
+            and candidate.stable_observation_count >= self.required_stable_observations
+        )
+        candidate.last_roi_center = _bbox_center(selection.bbox)
+        candidate.last_roi_area = _bbox_area(selection.bbox)
+
+        if self.require_verified_frame_for_event and not verified:
+            return
+
+        frame_area = max(float(frame.shape[0] * frame.shape[1]), 1.0)
+        roi_area_ratio = assessment.roi_area / frame_area
+        roi_bottom_ratio = selection.bbox[3] / max(float(frame.shape[0]), 1.0)
+        closeness_score = 0.65 * min(roi_area_ratio / 0.35, 1.0) + 0.35 * min(
+            roi_bottom_ratio, 1.0
+        )
+
+        should_replace = (
+            verified and not candidate.best_frame_quality_verified
+        ) or (
+            verified == candidate.best_frame_quality_verified
+            and (
+                closeness_score > candidate.best_closeness_score + 1e-6
+                or (
+                    abs(closeness_score - candidate.best_closeness_score) <= 1e-6
+                    and assessment.score > candidate.best_available_quality
+                )
+            )
+        )
+        if should_replace:
+            candidate.best_quality = assessment.score
+            candidate.best_available_quality = assessment.score
+            candidate.best_frame_quality_verified = verified
+            candidate.best_closeness_score = closeness_score
+            candidate.best_original = frame.copy()
+            candidate.best_analysis_roi = crop_bbox(frame, selection.bbox)
+            candidate.best_location = location
+            candidate.best_roi_metadata = {
+                **selection.metadata(),
+                "frame_selection_status": (
+                    "quality_gate_passed" if verified else "fallback_best_available"
+                ),
+                "frame_quality_verified": verified,
+                "representative_frame": {
+                    "selection": "closest_verified_tactile_roi",
+                    "closeness_score": round(closeness_score, 6),
+                    "roi_area_ratio": round(roi_area_ratio, 6),
+                    "roi_bottom_ratio": round(roi_bottom_ratio, 6),
+                },
+                "frame_quality": {
+                    "score": round(assessment.score, 6),
+                    "sharpness": round(assessment.sharpness, 3),
+                    "roi_width": assessment.roi_width,
+                    "roi_height": assessment.roi_height,
+                    "roi_area": assessment.roi_area,
+                    "area_change_ratio": assessment.area_change_ratio,
+                    "center_shift_ratio": assessment.center_shift_ratio,
+                    "rejection_reasons": list(assessment.rejection_reasons),
+                },
+            }
+
+    def _finalize_expired(
+        self, timestamp: float, force: bool = False
+    ) -> list[ReadyDamageEvent]:
+        ready: list[ReadyDamageEvent] = []
+        reported_to_remove = [
+            candidate_id
+            for candidate_id, candidate in self._candidates.items()
+            if candidate.reported
+            and timestamp - candidate.last_seen_at >= self.reported_track_cooldown_sec
+        ]
+        for candidate_id in reported_to_remove:
+            del self._candidates[candidate_id]
+        for candidate_id, candidate in self._candidates.items():
+            if candidate.reported:
+                continue
+            expired = timestamp - candidate.last_seen_at >= self.candidate_timeout_sec
+            if candidate.ready_emitted or (not force and not expired):
+                continue
+            if (
+                not candidate.confirmed
+                or candidate.best_score < self.minimum_event_confidence
+                or (
+                    self.require_verified_frame_for_event
+                    and not candidate.best_frame_quality_verified
+                )
+                or candidate.best_original is None
+                or candidate.best_analysis_roi is None
+            ):
+                if expired or force:
+                    candidate.ready_emitted = True
+                continue
+            candidate.ready_emitted = True
+            ready.append(
+                ReadyDamageEvent(
+                    candidate_id=candidate.candidate_id,
+                    original_image=candidate.best_original,
+                    analysis_roi=candidate.best_analysis_roi,
+                    observation_count=len(candidate.observation_times),
+                    best_score=candidate.best_score,
+                    location=candidate.best_location,
+                    metadata=dict(candidate.best_roi_metadata),
+                )
+            )
+        # Rejected or unconfirmed expired candidates have no event that needs
+        # acknowledgement. This includes confirmed damage tracks that never
+        # obtained a related tactile-block ROI.
+        for candidate_id in [
+            key
+            for key, candidate in self._candidates.items()
+            if candidate.ready_emitted
+            and (
+                not candidate.confirmed
+                or candidate.best_score < self.minimum_event_confidence
+                or (
+                    self.require_verified_frame_for_event
+                    and not candidate.best_frame_quality_verified
+                )
+                or candidate.best_original is None
+                or candidate.best_analysis_roi is None
+            )
+        ]:
+            del self._candidates[candidate_id]
+        return ready
+
+
+def image_quality(frame: np.ndarray, bbox: BBox, confidence: float) -> float:
+    """Legacy scalar score retained for compatibility with existing callers."""
+    crop = crop_bbox(frame, bbox)
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    sharpness = min(float(cv2.Laplacian(gray, cv2.CV_64F).var()) / 500.0, 1.0)
+    x1, y1, x2, y2 = _clip_bbox(bbox, frame.shape[1], frame.shape[0])
+    area_ratio = ((x2 - x1) * (y2 - y1)) / float(frame.shape[0] * frame.shape[1])
+    size_score = min(area_ratio / 0.08, 1.0)
+    margin = 3.0
+    complete = float(
+        x1 > margin
+        and y1 > margin
+        and x2 < frame.shape[1] - margin
+        and y2 < frame.shape[0] - margin
+    )
+    return 0.35 * confidence + 0.30 * sharpness + 0.20 * size_score + 0.15 * complete
+
+
+def select_analysis_roi(
+    *,
+    damage_bbox: BBox,
+    tactile_boxes: list[BBox],
+    frame_shape: tuple[int, ...],
+    tactile_margin_ratio: float = 0.0,
+    fallback_scale: float = 1.5,
+    relation_iou: float = 0.01,
+) -> RoiSelection:
+    """Select tactile detections related to damage without assuming one box per block."""
+    related = [
+        bbox
+        for bbox in tactile_boxes
+        if _boxes_related(damage_bbox, bbox, relation_iou)
+    ]
+    if related:
+        selected = max(
+            related,
+            key=lambda bbox: _tactile_match_score(damage_bbox, bbox),
+        )
+        roi_bbox = _expand_bbox_by_ratio(selected, tactile_margin_ratio)
+        return RoiSelection(
+            bbox=_clip_bbox(roi_bbox, frame_shape[1], frame_shape[0]),
+            roi_source="tactile_block",
+            analysis_unit_hint="single_tactile_block",
+            tactile_detection_count=len(related),
+            roi_fallback_used=False,
+        )
+    return RoiSelection(
+        bbox=_clip_bbox(
+            _scale_bbox(damage_bbox, fallback_scale), frame_shape[1], frame_shape[0]
+        ),
+        roi_source="damage_fallback",
+        analysis_unit_hint="unknown",
+        tactile_detection_count=0,
+        roi_fallback_used=True,
+    )
+
+
+def assess_frame_quality(
+    *,
+    frame: np.ndarray,
+    roi_selection: RoiSelection,
+    damage_bbox: BBox,
+    confidence: float,
+    previous_center: tuple[float, float] | None,
+    previous_area: float | None,
+    frame_edge_margin_px: int,
+    minimum_roi_width_px: int,
+    minimum_roi_height_px: int,
+    minimum_roi_area_px: int,
+    minimum_sharpness: float,
+    stable_area_change_ratio: float,
+    stable_center_shift_ratio: float,
+) -> FrameQualityAssessment:
+    crop = crop_bbox(frame, roi_selection.bbox)
+    x1, y1, x2, y2 = roi_selection.bbox
+    width = max(0, int(round(x2 - x1)))
+    height = max(0, int(round(y2 - y1)))
+    area = width * height
+    sharpness = 0.0
+    if crop.size:
+        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
+    touches_edge = (
+        x1 <= frame_edge_margin_px
+        or y1 <= frame_edge_margin_px
+        or x2 >= frame.shape[1] - frame_edge_margin_px
+        or y2 >= frame.shape[0] - frame_edge_margin_px
+    )
+    reasons: list[str] = []
+    if roi_selection.roi_fallback_used:
+        reasons.append("TACTILE_RELATION_UNAVAILABLE")
+    if touches_edge:
+        reasons.append("ROI_TOUCHES_FRAME_EDGE")
+    if width < minimum_roi_width_px or height < minimum_roi_height_px:
+        reasons.append("ROI_DIMENSION_TOO_SMALL")
+    if area < minimum_roi_area_px:
+        reasons.append("ROI_AREA_TOO_SMALL")
+    if sharpness < minimum_sharpness:
+        reasons.append("ROI_NOT_SHARP")
+    if crop.size == 0:
+        reasons.append("ROI_CROP_EMPTY")
+    if not _boxes_related(damage_bbox, roi_selection.bbox, 0.0):
+        reasons.append("DAMAGE_TACTILE_RELATION_INVALID")
+
+    center = _bbox_center(roi_selection.bbox)
+    diagonal = max(float(np.hypot(frame.shape[1], frame.shape[0])), 1.0)
+    area_change = None
+    center_shift = None
+    stable = False
+    if previous_center is not None and previous_area is not None and previous_area > 0:
+        area_change = abs(area - previous_area) / previous_area
+        center_shift = float(np.hypot(center[0] - previous_center[0], center[1] - previous_center[1])) / diagonal
+        stable = (
+            area_change <= stable_area_change_ratio
+            and center_shift <= stable_center_shift_ratio
+        )
+
+    sharpness_score = min(sharpness / max(minimum_sharpness * 5.0, 1.0), 1.0)
+    size_score = min(area / max(frame.shape[0] * frame.shape[1] * 0.08, 1.0), 1.0)
+    stability_score = 1.0 if stable else 0.0
+    score = 0.35 * confidence + 0.25 * sharpness_score + 0.20 * size_score + 0.20 * stability_score
+    return FrameQualityAssessment(
+        score=score,
+        hard_gate_passed=not reasons,
+        stable=stable,
+        sharpness=sharpness,
+        roi_width=width,
+        roi_height=height,
+        roi_area=area,
+        area_change_ratio=None if area_change is None else round(area_change, 6),
+        center_shift_ratio=None if center_shift is None else round(center_shift, 6),
+        rejection_reasons=tuple(reasons),
+    )
+
+
+def _bbox_center(bbox: BBox) -> tuple[float, float]:
+    x1, y1, x2, y2 = bbox
+    return ((x1 + x2) / 2.0, (y1 + y2) / 2.0)
+
+
+def _tracking_bbox(evidence: DamageEvidence) -> BBox:
+    selection = evidence.roi_selection
+    if selection is not None and not selection.roi_fallback_used:
+        return selection.bbox
+    return evidence.bbox
+
+
+def _shift_bbox(bbox: BBox, dx: float, dy: float) -> BBox:
+    x1, y1, x2, y2 = bbox
+    return (x1 + dx, y1 + dy, x2 + dx, y2 + dy)
+
+
+def expanded_crop(frame: np.ndarray, bbox: BBox, scale: float = 1.5) -> np.ndarray:
+    return crop_bbox(frame, _scale_bbox(bbox, scale))
+
+
+def crop_bbox(frame: np.ndarray, bbox: BBox) -> np.ndarray:
+    clipped = _clip_bbox(bbox, frame.shape[1], frame.shape[0])
+    cx1, cy1, cx2, cy2 = (int(round(value)) for value in clipped)
+    return frame[cy1:cy2, cx1:cx2].copy()
+
+
+def _scale_bbox(bbox: BBox, scale: float) -> BBox:
+    x1, y1, x2, y2 = bbox
+    center_x = (x1 + x2) / 2.0
+    center_y = (y1 + y2) / 2.0
+    width = max(x2 - x1, 1.0) * scale
+    height = max(y2 - y1, 1.0) * scale
+    return (
+        center_x - width / 2,
+        center_y - height / 2,
+        center_x + width / 2,
+        center_y + height / 2,
+    )
+
+
+def _expand_bbox_by_ratio(bbox: BBox, margin_ratio: float) -> BBox:
+    x1, y1, x2, y2 = bbox
+    margin_x = max(x2 - x1, 1.0) * margin_ratio
+    margin_y = max(y2 - y1, 1.0) * margin_ratio
+    return (x1 - margin_x, y1 - margin_y, x2 + margin_x, y2 + margin_y)
+
+
+def _bbox_area(bbox: BBox) -> float:
+    return max(0.0, bbox[2] - bbox[0]) * max(0.0, bbox[3] - bbox[1])
+
+
+def _point_inside(point: tuple[float, float], bbox: BBox) -> bool:
+    return bbox[0] <= point[0] <= bbox[2] and bbox[1] <= point[1] <= bbox[3]
+
+
+def _boxes_related(damage_bbox: BBox, tactile_bbox: BBox, relation_iou: float) -> bool:
+    intersection = _intersection_area(damage_bbox, tactile_bbox)
+    return (
+        intersection > 0
+        or _iou(damage_bbox, tactile_bbox) >= relation_iou > 0
+        or _point_inside(_bbox_center(damage_bbox), tactile_bbox)
+        or _point_inside(_bbox_center(tactile_bbox), damage_bbox)
+    )
+
+
+def _tactile_match_score(damage_bbox: BBox, tactile_bbox: BBox) -> tuple[float, ...]:
+    """Rank related tactile boxes and prefer the single box owning the damage."""
+    intersection = _intersection_area(damage_bbox, tactile_bbox)
+    damage_area = max(_bbox_area(damage_bbox), 1.0)
+    tactile_area = max(_bbox_area(tactile_bbox), 1.0)
+    contains_damage_center = float(
+        _point_inside(_bbox_center(damage_bbox), tactile_bbox)
+    )
+    return (
+        contains_damage_center,
+        intersection / damage_area,
+        _iou(damage_bbox, tactile_bbox),
+        -_center_distance(damage_bbox, tactile_bbox),
+        -tactile_area,
+    )
+
+
+def _intersection_area(first: BBox, second: BBox) -> float:
+    return max(0.0, min(first[2], second[2]) - max(first[0], second[0])) * max(
+        0.0, min(first[3], second[3]) - max(first[1], second[1])
+    )
+
+
+def _clip_bbox(bbox: BBox, width: int, height: int) -> BBox:
+    x1, y1, x2, y2 = bbox
+    return (
+        max(0.0, min(float(width - 1), x1)),
+        max(0.0, min(float(height - 1), y1)),
+        max(1.0, min(float(width), x2)),
+        max(1.0, min(float(height), y2)),
+    )
+
+
+def _union_bbox(boxes: list[BBox]) -> BBox:
+    return (
+        min(box[0] for box in boxes),
+        min(box[1] for box in boxes),
+        max(box[2] for box in boxes),
+        max(box[3] for box in boxes),
+    )
+
+
+def _iou(first: BBox, second: BBox) -> float:
+    x1 = max(first[0], second[0])
+    y1 = max(first[1], second[1])
+    x2 = min(first[2], second[2])
+    y2 = min(first[3], second[3])
+    intersection = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+    first_area = max(0.0, first[2] - first[0]) * max(0.0, first[3] - first[1])
+    second_area = max(0.0, second[2] - second[0]) * max(0.0, second[3] - second[1])
+    union = first_area + second_area - intersection
+    return intersection / union if union > 0 else 0.0
+
+
+def _center_distance(first: BBox, second: BBox) -> float:
+    first_center = ((first[0] + first[2]) / 2, (first[1] + first[3]) / 2)
+    second_center = ((second[0] + second[2]) / 2, (second[1] + second[3]) / 2)
+    return float(np.hypot(first_center[0] - second_center[0], first_center[1] - second_center[1]))
