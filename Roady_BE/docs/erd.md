@@ -1,10 +1,8 @@
 # Roady 백엔드 ERD
 
-이 ERD는 Roady의 파손 탐지, 관리자 검토, 보수 요청/배정/완료까지의 백엔드 저장 구조를 기준으로 한다. 관리자 검토 단계의 상태와 처리 우선순위는 `damages.current_status`, `damages.processing_priority`에 직접 저장한다. 현재 보수 담당자와 완료 보고 정보는 `damages`에 저장하고, 보수 요청·수정·완료·취소 이력은 `repair_request_histories`에 누적한다.
 
 ![Roady 백엔드 구현 ERD](erd.png)
 
-원본 벡터 이미지: [erd.svg](erd.svg)
 
 ## 1. 테이블 목록
 
