@@ -8,6 +8,7 @@ from typing import Any, Protocol, Sequence
 
 import numpy as np
 
+from .policy import load_severity_policy
 from .schemas import (
     AggregationDetail,
     AnalysisDetail,
@@ -30,6 +31,16 @@ DEFAULT_MODERATE_MAX_PIXELS = 50_000
 DEFAULT_MAX_SCORE_PIXELS = 300_000
 
 MISSING_LARGE_THRESHOLD_PERCENT = 15.0
+
+_DAMAGE_TYPE_POLICY = load_severity_policy()["damage_types"]
+DAMAGE_TYPE_SELECTION_WEIGHTS = {
+    damage_type: float(settings["weight"])
+    for damage_type, settings in _DAMAGE_TYPE_POLICY.items()
+}
+DAMAGE_TYPE_RESPONSE_NAMES = {
+    "crack": "CRACK",
+    "wear": "WEAR",
+}
 
 SEVERITY_LABELS = {
     "normal": "정상 추정",
@@ -344,38 +355,68 @@ class DamageAnalysisService:
     def _damage_type(payload: dict[str, Any]) -> str | None:
         if str(payload.get("schema_version", "1.0")) != "2.0":
             return None
-        summary = payload.get("summary", {})
-        dominant = summary.get("dominant_damage_type")
-        if dominant == "crack":
-            return "CRACK"
-        if dominant == "wear":
-            return "WEAR"
-        if dominant != "missing":
+
+        candidates: list[tuple[float, str, float | None]] = []
+        for unit in payload.get("units", []):
+            for damage_type, details in unit.get("damage_types", {}).items():
+                if (
+                    damage_type not in DAMAGE_TYPE_SELECTION_WEIGHTS
+                    or details.get("detected") is not True
+                ):
+                    continue
+
+                confidence = DamageAnalysisService._bounded_damage_type_value(
+                    details.get("confidence"),
+                    maximum=1.0,
+                    field_name=f"{damage_type}.confidence",
+                )
+                ratio_percent = DamageAnalysisService._bounded_damage_type_value(
+                    details.get("ratio_percent"),
+                    maximum=100.0,
+                    field_name=f"{damage_type}.ratio_percent",
+                    preserve_none=True,
+                )
+                selection_score = (
+                    DAMAGE_TYPE_SELECTION_WEIGHTS[damage_type]
+                    + (confidence or 0.0) * 0.1
+                    + ((ratio_percent or 0.0) / 100.0) * 0.01
+                )
+                candidates.append((selection_score, damage_type, ratio_percent))
+
+        if not candidates:
             return None
 
-        worst_unit_id = summary.get("worst_unit_id")
-        unit = next(
-            (
-                item
-                for item in payload.get("units", [])
-                if item.get("local_unit_id") == worst_unit_id
-            ),
-            None,
+        _, selected_type, ratio = max(
+            candidates,
+            key=lambda candidate: candidate[0],
         )
-        if unit is None:
-            return None
-        ratio = (
-            unit.get("damage_types", {})
-            .get("missing", {})
-            .get("ratio_percent")
-        )
+        if selected_type in DAMAGE_TYPE_RESPONSE_NAMES:
+            return DAMAGE_TYPE_RESPONSE_NAMES[selected_type]
+
         if ratio is None:
             return "LARGE_MISSING"
         return (
             "LARGE_MISSING"
-            if float(ratio) >= MISSING_LARGE_THRESHOLD_PERCENT
+            if ratio >= MISSING_LARGE_THRESHOLD_PERCENT
             else "SMALL_MISSING"
         )
+
+    @staticmethod
+    def _bounded_damage_type_value(
+        value: Any,
+        *,
+        maximum: float,
+        field_name: str,
+        preserve_none: bool = False,
+    ) -> float | None:
+        if value is None:
+            return None if preserve_none else 0.0
+        try:
+            return max(0.0, min(float(value), maximum))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError(
+                f"Invalid damage type value for {field_name}: {value}"
+            ) from exc
 
     @staticmethod
     def _review_reasons(summary: dict[str, Any]) -> list[ReviewReason]:
