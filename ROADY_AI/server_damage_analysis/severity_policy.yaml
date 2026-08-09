@@ -7,10 +7,10 @@ damage_types:
     weight: 1.0
     minimum_severity: moderate
   crack:
-    weight: 3.0
+    weight: 40.0
     minimum_severity: minor
   wear:
-    weight: 2.0
+    weight: 40.0
     minimum_severity: normal
 
 ratio_thresholds:

@@ -119,6 +119,29 @@ def test_service_scores_unknown_missing_from_damage_pixels():
 
 
 @pytest.mark.parametrize(
+    ("tactile_pixels", "missing_pixels", "expected_type"),
+    [
+        (189_516, 9_845, "SMALL_MISSING"),
+        (188_467, 85_555, "LARGE_MISSING"),
+    ],
+)
+def test_service_falls_back_to_tactile_and_missing_pixel_ratio(
+    tactile_pixels: int,
+    missing_pixels: int,
+    expected_type: str,
+):
+    payload_value = v2_unknown_missing_payload()
+    unit = payload_value["units"][0]
+    unit["tactile"] = {"confidence": 0.9, "pixels": tactile_pixels}
+    unit["damage_types"]["missing"]["pixels"] = missing_pixels
+    service = make_service(FakeAnalyzer([payload_value]))
+
+    response = service.analyze_images([input_image("unknown-missing-ratio.jpg")])
+
+    assert response.damage_type == expected_type
+
+
+@pytest.mark.parametrize(
     ("dominant", "ratio_percent", "expected_type"),
     [
         ("missing", 14.99, "SMALL_MISSING"),
@@ -141,48 +164,42 @@ def test_service_maps_v2_dominant_damage_type(
 
 
 @pytest.mark.parametrize(
-    ("additional_type", "expected_type"),
+    ("missing_pixels", "wear_pixels", "expected_type"),
     [
-        ("wear", "WEAR"),
-        ("crack", "CRACK"),
+        (15_750, 666, "WEAR"),
+        (85_555, 574, "LARGE_MISSING"),
+        (28_399, 379, "LARGE_MISSING"),
     ],
 )
-def test_service_prioritizes_crack_and_wear_over_missing(
-    additional_type: str,
+def test_service_selects_type_by_weighted_pixels(
+    missing_pixels: int,
+    wear_pixels: int,
     expected_type: str,
 ):
     payload_value = v2_payload("missing", 90.0, confidence=1.0)
-    payload_value["units"].append(
-        {
-            "local_unit_id": "block_2",
-            "damage_types": {
-                "missing": {"detected": False, "confidence": None, "ratio_percent": 0.0},
-                "crack": {
-                    "detected": additional_type == "crack",
-                    "confidence": 0.01,
-                    "ratio_percent": 0.01,
-                },
-                "wear": {
-                    "detected": additional_type == "wear",
-                    "confidence": 0.01,
-                    "ratio_percent": 0.01,
-                },
-            },
-        }
-    )
+    damage_types = payload_value["units"][0]["damage_types"]
+    damage_types["missing"]["pixels"] = missing_pixels
+    damage_types["wear"] = {
+        "detected": True,
+        "confidence": 0.01,
+        "ratio_percent": 0.01,
+        "pixels": wear_pixels,
+    }
     service = make_service(FakeAnalyzer([payload_value]))
 
-    response = service.analyze_images([input_image("multiple-damage-types.jpg")])
+    response = service.analyze_images([input_image("weighted-damage-types.jpg")])
 
     assert response.damage_type == expected_type
 
 
-def test_service_prioritizes_crack_over_wear():
+def test_service_selects_larger_weighted_pixels_between_crack_and_wear():
     payload_value = v2_payload("wear", 90.0, confidence=1.0)
+    payload_value["units"][0]["damage_types"]["wear"]["pixels"] = 900
     payload_value["units"][0]["damage_types"]["crack"] = {
         "detected": True,
         "confidence": 0.01,
         "ratio_percent": 0.01,
+        "pixels": 1_000,
     }
     service = make_service(FakeAnalyzer([payload_value]))
 
@@ -378,6 +395,7 @@ def v2_payload(
             "detected": name == dominant,
             "confidence": confidence if name == dominant else None,
             "ratio_percent": ratio_percent if name == dominant else 0.0,
+            "pixels": max(1, round(ratio_percent * 10)) if name == dominant else 0,
         }
         for name in ("missing", "crack", "wear")
     }
