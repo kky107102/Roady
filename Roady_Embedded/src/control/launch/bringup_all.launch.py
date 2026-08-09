@@ -41,6 +41,16 @@ def generate_launch_description():
     obstacle_min_box_height_ratio = LaunchConfiguration(
         'obstacle_min_box_height_ratio'
     )
+    obstacle_min_box_width_ratio = LaunchConfiguration(
+        'obstacle_min_box_width_ratio'
+    )
+    start_location = LaunchConfiguration('start_location')
+    time_based_speed_mps = LaunchConfiguration('time_based_speed_mps')
+    start_telemetry = LaunchConfiguration('start_telemetry')
+    mqtt_broker_host = LaunchConfiguration('mqtt_broker_host')
+    mqtt_broker_port = LaunchConfiguration('mqtt_broker_port')
+    mqtt_username = LaunchConfiguration('mqtt_username')
+    mqtt_password = LaunchConfiguration('mqtt_password')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -94,13 +104,13 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'damage_process_every_n_frames',
-            default_value='3',
-            description='Run damage inference every N tactile-camera frames',
+            default_value='2',
+            description='Run damage inference every 2 frames (up to 15 FPS)',
         ),
         DeclareLaunchArgument('start_line_tracking', default_value='true'),
         DeclareLaunchArgument('start_drive', default_value='true'),
         DeclareLaunchArgument('start_image_upload', default_value='true'),
-        DeclareLaunchArgument('upload_enabled', default_value='false'),
+        DeclareLaunchArgument('upload_enabled', default_value='true'),
         DeclareLaunchArgument(
             'upload_base_url',
             default_value='https://i15a404.p.ssafy.io',
@@ -113,6 +123,55 @@ def generate_launch_description():
         DeclareLaunchArgument('obstacle_publish_annotated', default_value='false'),
         DeclareLaunchArgument('obstacle_min_ground_y_ratio', default_value='0.0'),
         DeclareLaunchArgument('obstacle_min_box_height_ratio', default_value='0.0'),
+        DeclareLaunchArgument(
+            'obstacle_min_box_width_ratio',
+            default_value='0.04',
+            description='Reject obstacle boxes narrower than this frame-width ratio',
+        ),
+        DeclareLaunchArgument(
+            'start_location',
+            default_value='true',
+            description='Publish demo location for damage events',
+        ),
+        DeclareLaunchArgument(
+            'time_based_speed_mps',
+            default_value='0.10',
+            description='Estimated physical speed while cmd_vel requests motion',
+        ),
+        DeclareLaunchArgument(
+            'start_telemetry',
+            default_value='true',
+            description='Publish time-based location and telemetry over MQTT',
+        ),
+        DeclareLaunchArgument(
+            'mqtt_broker_host',
+            default_value='i15a404.p.ssafy.io',
+        ),
+        DeclareLaunchArgument('mqtt_broker_port', default_value='1883'),
+        DeclareLaunchArgument('mqtt_username', default_value=''),
+        DeclareLaunchArgument('mqtt_password', default_value=''),
+
+        Node(
+            package='hardware',
+            executable='gps_location_node',
+            name='gps_location',
+            condition=IfCondition(start_location),
+            output='screen',
+            parameters=[{
+                'location_mode': 'indoor',
+                'virtual_latitude': 37.501361,
+                'virtual_longitude': 127.039500,
+                'latitude_offset_per_meter': -0.00003 / 0.36,
+                'longitude_offset_per_meter': -0.0001 / 0.36,
+                'use_time_based_distance': True,
+                'estimated_speed_mps': ParameterValue(
+                    time_based_speed_mps,
+                    value_type=float,
+                ),
+                'nominal_drive_command': 0.40,
+                'cmd_vel_topic': '/cmd_vel',
+            }],
+        ),
 
         # Tactile camera/tracing, motor, and main controller.
         IncludeLaunchDescription(
@@ -131,6 +190,7 @@ def generate_launch_description():
                 'damage_process_every_n_frames': damage_process_every_n_frames,
                 'start_line_tracking': start_line_tracking,
                 'start_drive': start_drive,
+                'wait_for_upload': upload_enabled,
             }.items(),
         ),
 
@@ -165,6 +225,7 @@ def generate_launch_description():
                 'publish_annotated': obstacle_publish_annotated,
                 'min_ground_y_ratio': obstacle_min_ground_y_ratio,
                 'min_box_height_ratio': obstacle_min_box_height_ratio,
+                'min_box_width_ratio': obstacle_min_box_width_ratio,
             }],
         ),
         Node(
@@ -225,6 +286,26 @@ def generate_launch_description():
                 'base_url': upload_base_url,
                 'access_token': upload_access_token,
                 'storage_dir': 'data/damage_events',
+            }],
+        ),
+        Node(
+            package='communication',
+            executable='telemetry_node',
+            name='telemetry_node',
+            condition=IfCondition(start_telemetry),
+            output='screen',
+            parameters=[{
+                'robot_id': 1,
+                'broker_host': mqtt_broker_host,
+                'broker_port': ParameterValue(
+                    mqtt_broker_port,
+                    value_type=int,
+                ),
+                'mqtt_username': mqtt_username,
+                'mqtt_password': mqtt_password,
+                'publish_interval_sec': 5.0,
+                'mock_latitude': 37.501361,
+                'mock_longitude': 127.039500,
             }],
         ),
     ])

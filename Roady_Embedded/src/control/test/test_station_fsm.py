@@ -27,7 +27,7 @@ def make_controller():
     controller.steering_sign = -1.0
     controller.max_steer = 0.75
     controller.station_end_navy_pixels = 1000
-    controller.station_end_confirm_frames = 30
+    controller.station_end_confirm_frames = 10
     controller.station_end_count = 0
     controller.finished_reason = None
     controller.get_logger = lambda: LoggerStub()
@@ -58,12 +58,12 @@ def test_station_steering_is_proportional_and_limited():
     assert controller.calculate_station_steering() == -0.75
 
 
-def test_thirty_low_navy_frames_finish_station_return():
+def test_ten_low_navy_frames_finish_station_return():
     controller = make_controller()
     controller.maneuver_phase = 'STATION_APPROACH'
 
-    for _ in range(30):
+    for _ in range(10):
         controller.full_frame_navy_count_callback(Message(900))
 
-    assert controller.station_end_count == 30
+    assert controller.station_end_count == 10
     assert controller.finished_reason is not None

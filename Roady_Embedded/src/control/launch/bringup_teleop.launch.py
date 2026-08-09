@@ -58,7 +58,11 @@ def generate_launch_description():
             'station_target_samples': 5,
             'station_steering_kp': 0.004,
             'station_end_navy_pixels': 1000,
-            'station_end_confirm_frames': 30,
+            'station_end_confirm_frames': 10,
+            'wait_for_upload': ParameterValue(
+                LaunchConfiguration('wait_for_upload'), value_type=bool
+            ),
+            'upload_wait_timeout_sec': 60.0,
         }],
         remappings=[
             ('/obstacle_warning', LaunchConfiguration('obstacle_stop_topic')),
@@ -82,6 +86,11 @@ def generate_launch_description():
             description=(
                 'Shut down the complete launch when main control exits'
             ),
+        ),
+        DeclareLaunchArgument(
+            'wait_for_upload',
+            default_value='false',
+            description='Wait for arrival-triggered damage upload before shutdown',
         ),
         DeclareLaunchArgument(
             'enable_drive_recording',
@@ -110,8 +119,8 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'damage_process_every_n_frames',
-            default_value='3',
-            description='Run damage inference every N tactile-camera frames',
+            default_value='2',
+            description='Run damage inference every 2 frames (up to 15 FPS)',
         ),
         DeclareLaunchArgument(
             'start_line_tracking',
@@ -188,11 +197,11 @@ def generate_launch_description():
                 'detect_model_path': LaunchConfiguration('damage_model_path'),
                 'inference_device': '0',
                 'inference_image_size': 768,
-                'detection_threshold': 0.15,
+                'detection_threshold': 0.225,
                 'require_tactile_roi_for_event': True,
                 'require_verified_frame_for_event': True,
-                'minimum_event_confidence': 0.25,
-                'group_by_tactile_unit': False,
+                'minimum_event_confidence': 0.375,
+                'group_by_tactile_unit': True,
                 'stable_observation_count': 2,
                 'process_every_n_frames': ParameterValue(
                     LaunchConfiguration('damage_process_every_n_frames'),
@@ -200,12 +209,12 @@ def generate_launch_description():
                 ),
                 'publish_annotated': False,
                 'detection_only_mode': False,
-                'confirm_count': 2,
+                'confirm_count': 3,
                 'confirm_window_sec': 2.0,
-                'min_confirm_duration_sec': 0.1,
+                'min_confirm_duration_sec': 0.2,
                 'min_observation_interval_sec': 0.1,
                 'candidate_timeout_sec': 1.2,
-                'reported_track_cooldown_sec': 5.0,
+                'reported_track_cooldown_sec': 10.0,
             }],
         ),
         # # 5. 라이다 장애물 탐지 노드

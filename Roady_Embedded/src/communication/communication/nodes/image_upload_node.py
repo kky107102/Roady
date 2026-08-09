@@ -36,6 +36,11 @@ class ImageUploadNode(Node):
             self._on_arrival,
             arrival_qos,
         )
+        self._upload_complete_publisher = self.create_publisher(
+            Bool,
+            "/damage/upload_complete",
+            arrival_qos,
+        )
 
         interval = float(self.get_parameter("upload_interval_sec").value)
         self._timer = self.create_timer(max(interval, 1.0), self._upload_pending_events)
@@ -62,6 +67,8 @@ class ImageUploadNode(Node):
         ):
             return
 
+        uploaded_count = 0
+        failed_count = 0
         for event_path in self._repository.list_pending_events():
             event = self._repository.load_event_file(event_path)
 
@@ -74,6 +81,7 @@ class ImageUploadNode(Node):
                 or not all(path.exists() for path in upload_image_paths)
             ):
                 self.get_logger().warn(f"Skipping event without image: {event_path}")
+                failed_count += 1
                 continue
 
             try:
@@ -87,10 +95,17 @@ class ImageUploadNode(Node):
                 )
             except Exception as exc:
                 self.get_logger().warn(f"Failed to upload {event_path.name}: {exc}")
+                failed_count += 1
                 continue
 
             self._repository.delete_event(event_path)
+            uploaded_count += 1
             self.get_logger().info(f"Uploaded damage event: {event['eventId']}")
+
+        self.get_logger().info(
+            f"Arrival upload finished: uploaded={uploaded_count}, failed={failed_count}"
+        )
+        self._upload_complete_publisher.publish(Bool(data=True))
 
 
 def main(args=None):

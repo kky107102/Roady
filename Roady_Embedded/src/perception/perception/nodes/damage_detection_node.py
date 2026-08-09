@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import array
 import hashlib
+import json
 import time
 from pathlib import Path
 
@@ -25,6 +26,7 @@ class DamageDetectionNode(Node):
 
         self.declare_parameter("image_topic", "/camera/wide/image_raw")
         self.declare_parameter("event_topic", "/damage/events")
+        self.declare_parameter("detection_topic", "/damage/detections")
         self.declare_parameter("annotated_topic", "/damage/annotated")
         self.declare_parameter("publish_annotated", True)
         self.declare_parameter("detection_only_mode", False)
@@ -68,8 +70,8 @@ class DamageDetectionNode(Node):
             "benchmark_history", "reports/tactile_damage_pipeline_history.csv"
         )
         self.declare_parameter("benchmark_log_interval_sec", 5.0)
-        self.declare_parameter("base_latitude", 37.5665)
-        self.declare_parameter("base_longitude", 126.9780)
+        self.declare_parameter("base_latitude", 37.501361)
+        self.declare_parameter("base_longitude", 127.039500)
         self.declare_parameter("robot_id", 1)
         self.declare_parameter(
             "description", "로디 {robot_id}호 점자블록 파손 감지"
@@ -235,6 +237,11 @@ class DamageDetectionNode(Node):
             qos_profile_sensor_data,
         )
         self._event_publisher = self.create_publisher(String, event_topic, 10)
+        self._detection_publisher = self.create_publisher(
+            String,
+            str(self.get_parameter("detection_topic").value),
+            10,
+        )
         self._annotated_publisher = self.create_publisher(
             Image,
             str(self.get_parameter("annotated_topic").value),
@@ -270,6 +277,7 @@ class DamageDetectionNode(Node):
                     location=(location.latitude, location.longitude),
                 )
                 detections = list(self._pipeline.last_detections)
+            self._publish_detections(detections)
             self._stage_timings_ms["detection_tracking"].append(
                 (time.perf_counter() - stage_started) * 1000.0
             )
@@ -316,6 +324,21 @@ class DamageDetectionNode(Node):
         temperature = jetson_temperature_c()
         self._recorder.add(camera_to_complete_ms, temperature, damage_count)
         self._log_or_finish_benchmark(callback_total_ms, temperature)
+
+    def _publish_detections(self, detections) -> None:
+        """Publish damage boxes for the live tactile-camera overlay."""
+        payload = {
+            "detections": [
+                {
+                    "label": detection.label,
+                    "confidence": float(detection.confidence),
+                    "xyxy": [float(value) for value in detection.xyxy],
+                }
+                for detection in detections
+                if detection.label == "damage_candidate"
+            ]
+        }
+        self._detection_publisher.publish(String(data=json.dumps(payload)))
 
     def _log_or_finish_benchmark(
         self, callback_total_ms: float, temperature: float | None
@@ -367,9 +390,9 @@ class DamageDetectionNode(Node):
         try:
             event = self._repository.save_event(
                 images=[ready.original_image, ready.analysis_roi],
-                # Keep the full frame locally for debugging, but upload only
-                # the selected single-tactile-block ROI for server segmentation.
-                upload_image_indices=[1],
+                # Keep both images locally for debugging, but upload the
+                # original full camera frame to the server.
+                upload_image_indices=[0],
                 location=location,
                 robot_id=robot_id,
                 description=description,

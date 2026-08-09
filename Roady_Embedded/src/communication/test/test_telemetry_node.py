@@ -39,10 +39,10 @@ def test_each_payload_changes_both_coordinates_and_keeps_battery_at_90():
     first = mock.next_payload()
     second = mock.next_payload()
 
-    assert first["latitude"] == 37.5013961
-    assert first["longitude"] == 127.0394712
-    assert second["latitude"] == 37.5013661
-    assert second["longitude"] == 127.0393712
+    assert first["latitude"] == 37.501361
+    assert first["longitude"] == 127.039500
+    assert second["latitude"] == 37.501331
+    assert second["longitude"] == 127.0394
     assert first["batteryLevel"] == second["batteryLevel"] == 90
 
 

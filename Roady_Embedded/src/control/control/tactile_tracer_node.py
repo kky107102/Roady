@@ -103,16 +103,15 @@ class TactileTracerNode(Node):
         if frame is None:
             return
 
-        damage_annotated_frame = frame.copy()
-        self.draw_damage_overlay(damage_annotated_frame)
-        self.damage_annotated_pub.publish(
-            self.bgr_to_image_message(damage_annotated_frame, msg)
-        )
-
         block_type, offset, _, leftmost_x, debug_frame = (
             self.analyze_tactile_block(frame)
         )
         self.draw_damage_overlay(debug_frame)
+        # Publish the same combined line-tracking + damage overlay shown in
+        # the monitor so drive recordings contain the complete visualization.
+        self.damage_annotated_pub.publish(
+            self.bgr_to_image_message(debug_frame, msg)
+        )
 
         # 1. 블록 타입 발행 (STRAIGHT / CORNER / UNKNOWN)
         type_msg = String()
@@ -163,6 +162,7 @@ class TactileTracerNode(Node):
                 for detection in detections
                 if (
                     isinstance(detection, dict)
+                    and detection.get('label') == 'damage_candidate'
                     and len(detection.get('xyxy', [])) == 4
                 )
             ]
@@ -196,7 +196,7 @@ class TactileTracerNode(Node):
             cv2.rectangle(debug_frame, (x1, y1), (x2, y2), (0, 0, 255), 3)
             cv2.putText(
                 debug_frame,
-                f'DAMAGE {confidence:.2f}',
+                f'damage_candidate {confidence:.2f}',
                 (x1, max(24, y1 - 8)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,

@@ -10,8 +10,8 @@ class MockTelemetry:
 
     def __init__(
         self,
-        latitude: float = 37.5013961,
-        longitude: float = 127.0394712,
+        latitude: float = 37.501361,
+        longitude: float = 127.039500,
         latitude_step: float = -0.00003,
         longitude_step: float = -0.0001,
     ) -> None:

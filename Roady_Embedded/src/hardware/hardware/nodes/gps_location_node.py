@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import math
+import time
+
+from geometry_msgs.msg import Twist
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import (
@@ -31,12 +35,17 @@ class GpsLocationNode(Node):
         self.declare_parameter("location_mode", "indoor")
         self.declare_parameter("port", "/dev/ttyTHS1")
         self.declare_parameter("baudrate", 115200)
-        self.declare_parameter("virtual_latitude", 37.5013961)
-        self.declare_parameter("virtual_longitude", 127.0394712)
-        # Preserve the measured 0.367 m/pulse and convert cumulative distance
-        # proportionally to the requested demo-map coordinate offsets.
-        self.declare_parameter("latitude_offset_per_meter", -0.00003 / 0.367)
-        self.declare_parameter("longitude_offset_per_meter", -0.0001 / 0.367)
+        self.declare_parameter("virtual_latitude", 37.501361)
+        self.declare_parameter("virtual_longitude", 127.039500)
+        # Demo-map calibration: one 0.36 m wheel revolution moves the marker by
+        # (-0.00003, -0.0001). This can be driven by Hall distance or by the
+        # time-based /cmd_vel fallback used when the Hall sensor is unavailable.
+        self.declare_parameter("latitude_offset_per_meter", -0.00003 / 0.36)
+        self.declare_parameter("longitude_offset_per_meter", -0.0001 / 0.36)
+        self.declare_parameter("use_time_based_distance", False)
+        self.declare_parameter("estimated_speed_mps", 0.10)
+        self.declare_parameter("nominal_drive_command", 0.40)
+        self.declare_parameter("cmd_vel_topic", "/cmd_vel")
         self.declare_parameter("gps_timeout_sec", 3.0)
         self.declare_parameter("publish_hz", 5.0)
 
@@ -76,12 +85,46 @@ class GpsLocationNode(Node):
         self._fallback_publisher = self.create_publisher(
             Bool, "/location/using_fallback", 10
         )
-        self._distance_subscription = self.create_subscription(
-            Float64,
-            "/wheel/distance_m",
-            self._on_distance,
-            WHEEL_DISTANCE_QOS,
+        self._use_time_based_distance = bool(
+            self.get_parameter("use_time_based_distance").value
         )
+        self._estimated_speed_mps = float(
+            self.get_parameter("estimated_speed_mps").value
+        )
+        self._nominal_drive_command = abs(
+            float(self.get_parameter("nominal_drive_command").value)
+        )
+        if (
+            not math.isfinite(self._estimated_speed_mps)
+            or self._estimated_speed_mps < 0.0
+        ):
+            raise ValueError("estimated_speed_mps must be finite and non-negative")
+        if (
+            not math.isfinite(self._nominal_drive_command)
+            or self._nominal_drive_command <= 0.0
+        ):
+            raise ValueError("nominal_drive_command must be finite and positive")
+        self._command_linear_x = 0.0
+        self._time_distance_m = 0.0
+        self._last_distance_update = time.monotonic()
+        self._distance_subscription = None
+        self._cmd_vel_subscription = None
+        self._distance_timer = None
+        if self._use_time_based_distance:
+            self._cmd_vel_subscription = self.create_subscription(
+                Twist,
+                str(self.get_parameter("cmd_vel_topic").value),
+                self._on_cmd_vel,
+                10,
+            )
+            self._distance_timer = self.create_timer(0.05, self._update_time_distance)
+        else:
+            self._distance_subscription = self.create_subscription(
+                Float64,
+                "/wheel/distance_m",
+                self._on_distance,
+                WHEEL_DISTANCE_QOS,
+            )
         self._read_timer = (
             self.create_timer(0.01, self._read_gps) if use_gps else None
         )
@@ -90,7 +133,8 @@ class GpsLocationNode(Node):
         self.get_logger().info(
             f"Location ready: mode={self._location_mode}, "
             f"GPS={'enabled' if use_gps else 'disabled'}, "
-            "wheel offset=distance-proportional"
+            f"distance_source={'time/cmd_vel' if self._use_time_based_distance else 'hall'}, "
+            f"estimated_speed={self._estimated_speed_mps:.2f}m/s"
         )
 
     def _read_gps(self) -> None:
@@ -111,13 +155,31 @@ class GpsLocationNode(Node):
         except ValueError as exc:
             self.get_logger().warn(f"Ignored invalid wheel distance: {exc}")
 
+    def _on_cmd_vel(self, message: Twist) -> None:
+        self._command_linear_x = (
+            float(message.linear.x) if math.isfinite(message.linear.x) else 0.0
+        )
+
+    def _update_time_distance(self) -> None:
+        now = time.monotonic()
+        elapsed = min(max(0.0, now - self._last_distance_update), 0.5)
+        self._last_distance_update = now
+        command_ratio = min(
+            1.0, abs(self._command_linear_x) / self._nominal_drive_command
+        )
+        self._time_distance_m += elapsed * self._estimated_speed_mps * command_ratio
+        self._estimator.update_distance(self._time_distance_m)
+
     def _publish_location(self) -> None:
         location = self._estimator.location()
         using_wheel = location.source == "wheel"
 
         message = NavSatFix()
         message.header.stamp = self.get_clock().now().to_msg()
-        message.header.frame_id = location.source
+        message.header.frame_id = (
+            "time" if self._use_time_based_distance and location.source == "wheel"
+            else location.source
+        )
         message.status.status = (
             NavSatStatus.STATUS_NO_FIX if using_wheel else NavSatStatus.STATUS_FIX
         )

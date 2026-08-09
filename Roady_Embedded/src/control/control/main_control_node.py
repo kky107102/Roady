@@ -52,6 +52,12 @@ class MainControlNode(Node):
         self.finished_pub = self.create_publisher(
             Bool, '/driving/finished', finished_qos
         )
+        self.create_subscription(
+            Bool,
+            '/damage/upload_complete',
+            self.upload_complete_callback,
+            finished_qos,
+        )
 
         self.declare_parameter('drive_speed', 0.4)
         self.declare_parameter('reverse_speed', 0.4)
@@ -76,7 +82,9 @@ class MainControlNode(Node):
         self.declare_parameter('station_target_samples', 5)
         self.declare_parameter('station_steering_kp', 0.004)
         self.declare_parameter('station_end_navy_pixels', 1000)
-        self.declare_parameter('station_end_confirm_frames', 30)
+        self.declare_parameter('station_end_confirm_frames', 10)
+        self.declare_parameter('wait_for_upload', False)
+        self.declare_parameter('upload_wait_timeout_sec', 60.0)
 
         self.drive_speed = min(1.0, abs(float(self.get_parameter('drive_speed').value)))
         self.reverse_speed = min(1.0, abs(float(self.get_parameter('reverse_speed').value)))
@@ -354,10 +362,32 @@ class MainControlNode(Node):
         finished.data = True
         self.finished_pub.publish(finished)
         self.shutdown_requested = True
+        if bool(self.get_parameter('wait_for_upload').value):
+            timeout = max(
+                1.0,
+                float(self.get_parameter('upload_wait_timeout_sec').value),
+            )
+            self.shutdown_timer = self.create_timer(
+                timeout, self._shutdown_after_finish
+            )
+            self.get_logger().info(
+                f'파손 이미지 업로드 완료를 최대 {timeout:.0f}초 기다립니다.'
+            )
+        else:
+            self.shutdown_timer = self.create_timer(
+                0.2, self._shutdown_after_finish
+            )
+        self.get_logger().warn(reason)
+
+    def upload_complete_callback(self, msg):
+        if not msg.data or not self.shutdown_requested:
+            return
+        if self.shutdown_timer is not None:
+            self.shutdown_timer.cancel()
+        self.get_logger().info('파손 이미지 업로드 절차가 완료되었습니다.')
         self.shutdown_timer = self.create_timer(
             0.2, self._shutdown_after_finish
         )
-        self.get_logger().warn(reason)
 
     def _shutdown_after_finish(self):
         """Allow the finish and stop messages to leave before exiting."""

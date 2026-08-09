@@ -37,6 +37,7 @@ class ObstacleDetectionNode(Node):
         self.declare_parameter("roi_bottom_ratio", 0.70)
         self.declare_parameter("min_ground_y_ratio", 0.0)
         self.declare_parameter("min_box_height_ratio", 0.0)
+        self.declare_parameter("min_box_width_ratio", 0.0)
         self.declare_parameter("benchmark_duration_sec", 0.0)
         self.declare_parameter("benchmark_report", "reports/obstacle_benchmark.json")
         self.declare_parameter("benchmark_label", "unnamed")
@@ -67,8 +68,13 @@ class ObstacleDetectionNode(Node):
         self._min_box_height_ratio = float(
             self.get_parameter("min_box_height_ratio").value
         )
+        self._min_box_width_ratio = float(
+            self.get_parameter("min_box_width_ratio").value
+        )
         validate_near_field_ratios(
-            self._min_ground_y_ratio, self._min_box_height_ratio
+            self._min_ground_y_ratio,
+            self._min_box_height_ratio,
+            self._min_box_width_ratio,
         )
         self._last_log = time.monotonic()
         self._recorder = BenchmarkRecorder(
@@ -85,6 +91,7 @@ class ObstacleDetectionNode(Node):
             "roi_ratios": self._roi_ratios,
             "min_ground_y_ratio": self._min_ground_y_ratio,
             "min_box_height_ratio": self._min_box_height_ratio,
+            "min_box_width_ratio": self._min_box_width_ratio,
         }
 
         qos = QoSProfile(
@@ -107,7 +114,8 @@ class ObstacleDetectionNode(Node):
             f"Lower-limb model={model_path}, input={self._image_topic}, "
             f"roi={self._roi_ratios}, "
             f"near_field_gate=(ground_y={self._min_ground_y_ratio}, "
-            f"box_height={self._min_box_height_ratio})"
+            f"box_height={self._min_box_height_ratio}, "
+            f"box_width={self._min_box_width_ratio})"
         )
 
     def _on_image(self, msg: Image) -> None:
@@ -124,6 +132,8 @@ class ObstacleDetectionNode(Node):
                 image.shape[0],
                 self._min_ground_y_ratio,
                 self._min_box_height_ratio,
+                image_width=image.shape[1],
+                min_box_width_ratio=self._min_box_width_ratio,
             )
         except Exception as exc:
             self.get_logger().error(f"Inference failed: {exc}")
@@ -216,7 +226,7 @@ class ObstacleDetectionNode(Node):
             cv2.rectangle(annotated, (x1, y1), (x2, y2), (140, 140, 140), 1)
             cv2.putText(
                 annotated,
-                f"far {detection.confidence:.2f}",
+                f"ignored {detection.confidence:.2f}",
                 (x1, max(20, y1 - 7)),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.5,
@@ -309,12 +319,16 @@ def validate_roi_ratios(ratios: tuple[float, float, float, float]) -> None:
 
 
 def validate_near_field_ratios(
-    min_ground_y_ratio: float, min_box_height_ratio: float
+    min_ground_y_ratio: float,
+    min_box_height_ratio: float,
+    min_box_width_ratio: float = 0.0,
 ) -> None:
     if not 0.0 <= min_ground_y_ratio <= 1.0:
         raise ValueError("min_ground_y_ratio must be within [0, 1]")
     if not 0.0 <= min_box_height_ratio <= 1.0:
         raise ValueError("min_box_height_ratio must be within [0, 1]")
+    if not 0.0 <= min_box_width_ratio <= 1.0:
+        raise ValueError("min_box_width_ratio must be within [0, 1]")
 
 
 def split_near_field(
@@ -322,6 +336,9 @@ def split_near_field(
     image_height: int,
     min_ground_y_ratio: float,
     min_box_height_ratio: float,
+    *,
+    image_width: int | None = None,
+    min_box_width_ratio: float = 0.0,
 ):
     """Split detections into near-field (actionable) and far-field (ignored).
 
@@ -329,20 +346,35 @@ def split_near_field(
     rows, so a detection whose bottom edge sits above the gate line is too far
     away to matter. Box height is a fallback for occluded ground contact.
     """
-    validate_near_field_ratios(min_ground_y_ratio, min_box_height_ratio)
-    if min_ground_y_ratio <= 0.0 and min_box_height_ratio <= 0.0:
+    validate_near_field_ratios(
+        min_ground_y_ratio, min_box_height_ratio, min_box_width_ratio
+    )
+    if min_box_width_ratio > 0.0 and (image_width is None or image_width <= 0):
+        raise ValueError("image_width must be positive when width filtering is enabled")
+    if (
+        min_ground_y_ratio <= 0.0
+        and min_box_height_ratio <= 0.0
+        and min_box_width_ratio <= 0.0
+    ):
         return list(detections), []
 
     gate_y = min_ground_y_ratio * image_height
     min_height = min_box_height_ratio * image_height
+    min_width = min_box_width_ratio * (image_width or 0)
     near, far = [], []
     for detection in detections:
-        _, y1, _, y2 = detection.xyxy
+        x1, y1, x2, y2 = detection.xyxy
+        if min_box_width_ratio > 0.0 and (x2 - x1) < min_width:
+            far.append(detection)
+            continue
         # Only enabled gates vote, and either one alone is enough to keep the
         # detection -- a disabled gate must not act as an always-true term.
-        is_near = (min_ground_y_ratio > 0.0 and y2 >= gate_y) or (
-            min_box_height_ratio > 0.0 and (y2 - y1) >= min_height
+        range_gate_disabled = (
+            min_ground_y_ratio <= 0.0 and min_box_height_ratio <= 0.0
         )
+        is_near = range_gate_disabled or (
+            min_ground_y_ratio > 0.0 and y2 >= gate_y
+        ) or (min_box_height_ratio > 0.0 and (y2 - y1) >= min_height)
         (near if is_near else far).append(detection)
     return near, far
 

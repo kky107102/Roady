@@ -79,3 +79,45 @@ def test_tall_box_survives_when_ground_contact_is_occluded():
 
     assert near == [tall_but_high]
     assert rejected == []
+
+
+def test_narrow_wheel_like_box_is_rejected_by_width():
+    wheel_like = LowerLimbDetection(
+        class_id=0,
+        label="foot",
+        confidence=0.87,
+        xyxy=(900.0, 500.0, 930.0, 590.0),
+    )
+
+    near, rejected = split_near_field(
+        [wheel_like],
+        720,
+        0.0,
+        0.0,
+        image_width=1280,
+        min_box_width_ratio=0.04,
+    )
+
+    assert near == []
+    assert rejected == [wheel_like]
+
+
+def test_realistic_foot_width_survives_width_filter():
+    foot = LowerLimbDetection(
+        class_id=0,
+        label="foot",
+        confidence=0.75,
+        xyxy=(850.0, 500.0, 920.0, 590.0),
+    )
+
+    near, rejected = split_near_field(
+        [foot],
+        720,
+        0.0,
+        0.0,
+        image_width=1280,
+        min_box_width_ratio=0.04,
+    )
+
+    assert near == [foot]
+    assert rejected == []
