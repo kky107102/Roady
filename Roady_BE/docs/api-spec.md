@@ -10,7 +10,7 @@
 - Swagger UI: `/swagger-ui/index.html`
 - OpenAPI JSON: `/v3/api-docs`
 
-이 문서는 현재 백엔드 코드에 구현된 API와 서버 요구사항 명세를 함께 기준으로 작성한다. 각 API는 `구현됨`, `설계안`, `후속 확장` 상태로 구분한다. 제출 기준의 실제 구현 범위는 `구현됨` 항목이며, `설계안`은 다음 구현 대상, `후속 확장`은 완료 보고서·행정문서처럼 저장 구조나 화면 요구사항이 추가 확정되어야 하는 기능이다.
+이 문서는 최종 제출 시점의 Spring Boot 백엔드와 FastAPI AI 서버에 실제 구현된 API만을 기준으로 작성한다.
 
 ### 1.1 전체 API 목록
 
@@ -37,9 +37,6 @@
 | 보수 관리 | `PATCH` | `/api/damages/{damageId}/repair-complete` | 구현됨 | 보수 완료 처리 |
 | 보수 관리 | `PATCH` | `/api/damages/{damageId}/repair-cancel` | 구현됨 | 보수 요청 취소 및 검토 완료 상태 복귀 |
 | 대시보드 | `GET` | `/api/dashboard/damages/summary` | 구현됨 | 파손 전체·미배정·상태별 건수 조회 |
-| 파손 | `GET` | `/api/damages/{damageId}/duplicates` | 설계안 | 동일/인접 위치 중복 후보 조회 |
-| 파손 | `POST` | `/api/damages/{damageId}/reviews` | 후속 확장 | 점검 담당자 검토 의견 등록 |
-| 파손 | `GET` | `/api/damages/{damageId}/reviews` | 후속 확장 | 점검 담당자 검토 의견 조회 |
 | 로봇 | `POST` | `/api/robots` | 구현됨 | 로봇 등록 |
 | 로봇 | `GET` | `/api/robots` | 구현됨 | 로봇 목록 및 현재 상태 조회 |
 | 로봇 | `GET` | `/api/robots/{robotId}` | 구현됨 | 로봇 상세 조회 |
@@ -58,37 +55,17 @@
 | 로봇 경로 | `GET` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 상세 조회 |
 | 로봇 경로 | `PUT` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 수정 |
 | 로봇 경로 | `DELETE` | `/api/robot-routes/{routeId}` | 구현됨 | 점검 경로 삭제 |
-| 로봇 경로 | `POST` | `/api/robot-routes/{routeId}/dispatch` | 설계안 | 점검 경로 로봇 전송 |
-| 로봇 경로 | `GET` | `/api/robot-routes/{routeId}/actual-path` | 설계안 | 실제 이동 경로 조회 |
 | AI 분석 | `POST` | `/api/damages/{damageId}/analysis-jobs` | 구현됨 | 저장된 파손 이미지 수동 재분석 작업 생성 |
 | AI 분석 | `GET` | `/api/damages/{damageId}/analysis-jobs` | 구현됨 | 파손별 AI 분석 작업 목록 조회 |
 | AI 분석 | `GET` | `/api/damage-ai-analysis-results/{analysisResultId}` | 구현됨 | AI 분석 결과 단건 조회 |
-| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 요청 |
-| AI 분석 | `GET` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 조회 |
-| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | 설계안 | AI 분석 재시도 |
-| AI 분석 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | 설계안 | AI 분석 결과 수정 |
-| AI 분석 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | 설계안 | AI 분석 결과 확정 |
-| 보수 배정 | `POST` | `/api/repair-assignments` | 설계안 | 보수 담당자와 예정일 배정, 파손 상태 변경, 요청 이력 저장 |
-| 보수 배정 | `GET` | `/api/repair-assignments` | 설계안 | 보수 배정 목록 조회 |
-| 보수 배정 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 배정 상세 조회 |
-| 보수 배정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | 설계안 | 보수 담당자, 예정일, 메모 수정 |
-| 보수 배정 | `PATCH` | `/api/repair-assignments/{assignmentId}/start` | 설계안 | 보수 작업 시작 처리 |
-| 보수 배정 | `PATCH` | `/api/repair-assignments/{assignmentId}/cancel` | 설계안 | 보수 요청 또는 예정 건 취소 처리 |
-| 보수 요청 이력 | `GET` | `/api/repair-assignments/{assignmentId}/request-histories` | 설계안 | 보수 요청/배정/취소 이력 조회 |
-| 보수 결과 | `POST` | `/api/repair-results` | 후속 확장 | 보수 결과 등록 |
-| 보수 결과 | `GET` | `/api/repair-results/{resultId}` | 후속 확장 | 보수 결과 상세 조회 |
-| 보수 결과 | `GET` | `/api/damages/{damageId}/repair-result` | 후속 확장 | 파손별 보수 결과 조회 |
+| AI 서버 내부 | `POST` | `/analyze` | 구현됨 | Spring 워커가 저장된 이미지를 전달하고 AI 분석 JSON 응답 수신 |
+| AI 서버 내부 | `GET` | `/health/live` | 구현됨 | FastAPI 프로세스 생존 확인 |
+| AI 서버 내부 | `GET` | `/health/ready` | 구현됨 | 모델 로딩 및 워밍업 완료 확인 |
+| AI 서버 내부 | `GET` | `/model-info` | 구현됨 | 현재 모델과 가중치 정보 조회 |
 | 통계 | `GET` | `/api/statistics/damages/time-series` | 구현됨 | 기간별 파손 통계 조회 |
 | 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 구현됨 | 보수 우선순위별 파손 통계 조회 |
 | 통계 | `GET` | `/api/statistics/damages/by-status` | 구현됨 | 처리 상태별 통계 조회 |
 | 통계 | `GET` | `/api/statistics/repair/completion-rate` | 구현됨 | 보수 완료율 조회 |
-| 통계 | `GET` | `/api/statistics/export` | 설계안 | 통계 CSV/Excel 다운로드 |
-| 행정문서 | `POST` | `/api/documents` | 설계안 | 행정문서 초안 생성 |
-| 행정문서 | `GET` | `/api/documents` | 설계안 | 행정문서 목록 조회 |
-| 행정문서 | `GET` | `/api/documents/{documentId}` | 설계안 | 행정문서 상세 조회 |
-| 행정문서 | `PATCH` | `/api/documents/{documentId}` | 설계안 | 행정문서 초안 수정 |
-| 행정문서 | `GET` | `/api/documents/{documentId}/download` | 설계안 | 행정문서 파일 다운로드 |
-| 감사 로그 | `GET` | `/api/audit-logs` | 설계안 | 주요 작업 이력 조회 |
 
 ## 2. API 구성 원칙
 
@@ -103,6 +80,7 @@
 | 로봇 관제 | `/api/robots` | 로봇, 상태 로그, 위치, 제어 명령 관리 |
 | 로봇 경로 | `/api/robot-routes` | 점검 경로 생성, 조회, 수정, 삭제 |
 | AI 분석 | `/api/damages/*/analysis-jobs`, `/api/damage-ai-analysis-results` | 비동기 AI 분석 작업 생성 및 결과 조회 |
+| AI 서버 내부 | `http://ai:8000` | Spring 워커 요청 처리, 모델 상태 및 정보 제공 |
 | 보수 관리 | `/api/damages/*/repair-*` | 보수 요청, 수정, 완료, 취소와 이력 저장 |
 | 통계 | `/api/statistics` | 기간·상태·보수 우선순위 통계와 완료율 조회 |
 
@@ -1078,63 +1056,9 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `400` | 존재하지 않는 파손 ID 또는 이미지 ID |
 | `401` | 인증 실패 |
 
-## 6. 요구사항 기반 전체 API 구성안
+## 6. 로봇 관제 API
 
-요구사항 명세 기준으로 서버 API는 다음 도메인으로 구성한다. 실제 구현 여부는 1.1의 상태 컬럼과 각 도메인 상세 표를 기준으로 판단한다.
-
-| 도메인 | 기본 경로 | 요구사항 |
-| --- | --- | --- |
-| 인증/권한 | `/api/auth`, `/api/users`, `/api/audit-logs` | FR-AUTH |
-| 로봇 관제 | `/api/robots` | FR-ROBOT |
-| 로봇 경로 | `/api/robot-routes` | FR-ROBOT |
-| 파손 데이터 | `/api/damages` | FR-DAMAGE, FR-MAP, FR-DETAIL |
-| AI 분석 | `/api/damages/{damageId}/analysis-jobs`, `/api/damage-ai-analysis-results` | FR-AI |
-| 처리 상태 | `/api/damages/{damageId}/review` | FR-STATUS |
-| 보수 요청/배정 | `/api/repair-assignments`, `/api/repair-assignments/{assignmentId}/request-histories` | FR-STATUS |
-| 보수 결과 | `/api/repair-results` | FR-STATUS 후속 확장 |
-| 통계 | `/api/statistics` | FR-STAT |
-| 행정문서 | `/api/documents` | FR-DOC |
-
-### 6.1 권한 매트릭스
-
-| 기능 | ADMIN | INSPECTOR | REPAIRER | VIEWER | ROBOT/DEVICE |
-| --- | --- | --- | --- | --- | --- |
-| 로그인/토큰 재발급 | 예 | 예 | 예 | 예 | 별도 장치 인증 필요 |
-| 사용자 관리 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
-| 로봇 등록/수정/삭제 | 예 | 아니오 | 아니오 | 아니오 | 아니오 |
-| 로봇 상태 로그 등록 | 예 | 예 | 아니오 | 아니오 | 추후 장치 인증 |
-| 로봇 제어 명령 | 예 | 예 | 아니오 | 아니오 | 추후 장치 인증 |
-| 로봇 관제 조회 | 예 | 예 | 아니오 | 조회 가능 | 아니오 |
-| 경로 생성/전송 | 예 | 예 | 아니오 | 아니오 | 수신 |
-| 파손 등록 | 예 | 예 | 아니오 | 아니오 | 인증 없이 `robotId`로 등록 가능 |
-| 파손 목록/상세 조회 | 예 | 예 | 예 | 조회 가능 | 아니오 |
-| AI 분석 요청/수정/확정 | 예 | 예 | 아니오 | 아니오 | 아니오 |
-| 관리자 검토 수정 | 예 | 예 | 예 | 예 | 아니오 |
-| 보수 배정 | 예 | 예 | 아니오 | 아니오 | 아니오 |
-| 보수 결과 등록 | 예 | 아니오 | 예 | 아니오 | 아니오 |
-| 통계 조회/다운로드 | 예 | 예 | 예 | 조회 가능 | 아니오 |
-| 행정문서 생성/수정/다운로드 | 예 | 예 | 예 | 아니오 | 아니오 |
-
-전용 장치 인증은 현재 코드에 구현되어 있지 않다. 현재 `POST /api/damages`는 인증 없이도 호출할 수 있고, 이때 multipart의 `robotId`가 필수다. 운영 배포에서는 해당 경로를 내부망으로 제한하고, 추후 `X-Device-Token` 또는 장치용 JWT를 적용한다.
-
-### 6.2 공통 검색 조건
-
-파손 목록, 대시보드 요약, 지도 마커 API는 동일한 검색 조건을 공유한다. 기간 조건은 서버에 파손 데이터가 등록된 `createdAt`을 기준으로 한다. 지도 마커 API는 현재 화면 범위를 나타내는 `south`, `north`, `west`, `east`를 추가로 요구한다.
-
-| Query | 타입 | 설명 |
-| --- | --- | --- |
-| `from` | string | 조회 시작 일시. ISO 8601 형식이며 해당 일시를 포함한다. |
-| `to` | string | 조회 종료 일시. ISO 8601 형식이며 해당 일시를 포함하지 않는다. |
-| `status` | string | 파손 처리 상태 |
-| `robotId` | number | 로봇 ID |
-| `assignedTo` | number | 처리 담당 사용자 ID. `damages.assigned_to`가 참조하는 `users.id` |
-| `regionCode` | string | 시군구 코드. `damages.region_code`와 정확히 일치하는 파손만 조회 |
-
-`page`, `size`, `keyword`는 목록 검색 API에서만 사용한다. `keyword`는 사건번호 또는 주소 키워드 검색에 사용한다. `severity`는 현재 데이터 모델에 없으므로 1차 대시보드 API의 검색 조건에서 제외한다.
-
-## 7. 로봇 관제 API 설계
-
-### 7.1 로봇 관리
+### 6.1 로봇 관리
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -1158,7 +1082,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `createdAt` | string | 생성 일시 |
 | `updatedAt` | string | 수정 일시 |
 
-### 7.2 로봇 상태 로그
+### 6.2 로봇 상태 로그
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -1166,8 +1090,6 @@ curl -X POST "http://localhost:8080/api/damages" \
 | 최근 상태 조회 | `GET` | `/api/robots/{robotId}/status-logs/latest` | `ADMIN`, `INSPECTOR`, `VIEWER` | 지도 표시용 최신 상태를 조회한다. |
 | 상태 로그 목록 조회 | `GET` | `/api/robots/{robotId}/status-logs` | `ADMIN`, `INSPECTOR` | 최근 위치, 배터리 상태, 오류 이력을 조회한다. |
 | Redis 최신 위치 조회 | `GET` | `/api/robots/{robotId}/location/latest` | `ADMIN`, `INSPECTOR`, `VIEWER` | MQTT 수신 후 Redis에 저장된 최신 telemetry를 조회한다. |
-
-장치 인증은 아직 구현하지 않는다. 로봇 또는 IoT 장치가 직접 상태 로그를 전송하는 방식은 추후 `X-Device-Token` 또는 장치용 JWT 기반으로 별도 설계한다.
 
 #### CreateRobotStatusLogRequest
 
@@ -1214,7 +1136,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 | `recordedAt` | string | 장치가 상태를 기록한 일시 |
 | `receivedAt` | string | 서버가 MQTT 메시지를 수신한 일시 |
 
-### 7.3 로봇 제어 명령
+### 6.3 로봇 제어 명령
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -1275,7 +1197,7 @@ curl -X POST "http://localhost:8080/api/damages" \
 
 허용 상태 전이는 `PENDING -> IN_PROGRESS`, `PENDING -> CANCELED`, `IN_PROGRESS -> SUCCEEDED`, `IN_PROGRESS -> FAILED`, `IN_PROGRESS -> CANCELED`이다.
 
-### 7.4 로봇 MQTT 및 WebSocket 연동
+### 6.4 로봇 MQTT 및 WebSocket 연동
 
 MQTT 브로커 연결은 `MQTT_ENABLED`, `MQTT_BROKER_IP`, `MQTT_BROKER_PORT` 환경변수로 설정한다. 메시지 QoS는 `1`이며 명령 메시지는 retained 메시지로 저장하지 않는다.
 
@@ -1333,7 +1255,7 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 
 로봇이 보낼 수 있는 ACK 상태는 `IN_PROGRESS`, `SUCCEEDED`, `FAILED`다. 토픽의 `robotId`와 Payload의 `commandId`가 가리키는 DB 명령이 일치해야 한다. QoS 1 중복 전달로 현재 상태와 동일한 ACK가 다시 들어오면 추가 DB 갱신 없이 성공 처리한다.
 
-## 8. 로봇 경로 API 설계
+## 7. 로봇 경로 API
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -1342,8 +1264,6 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 | 경로 상세 조회 | `GET` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR`, `VIEWER` | 경로와 경로점 목록을 조회한다. |
 | 경로 수정 | `PUT` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR` | 경로명, 경로점, 상태를 수정한다. |
 | 경로 삭제 | `DELETE` | `/api/robot-routes/{routeId}` | `ADMIN`, `INSPECTOR` | 전송 전 또는 미사용 경로를 삭제한다. |
-| 경로 로봇 전송 | `POST` | `/api/robot-routes/{routeId}/dispatch` | `ADMIN`, `INSPECTOR` | 생성된 경로를 로봇에 전송한다. |
-| 실제 이동 경로 조회 | `GET` | `/api/robot-routes/{routeId}/actual-path` | `ADMIN`, `INSPECTOR`, `VIEWER` | 상태 로그 기반 실제 이동 좌표를 조회한다. |
 
 #### CreateRobotRouteRequest
 
@@ -1424,9 +1344,9 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 
 경로점은 최소 2개 이상이어야 하며, `START`와 `DESTINATION`은 각각 정확히 1개씩 포함되어야 한다. 경로 삭제는 `CREATED` 상태에서만 가능하다.
 
-## 9. 파손 데이터 및 대시보드 API
+## 8. 파손 데이터 및 대시보드 API
 
-대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 목록 검색은 사건번호·주소 키워드와 시군구 코드 필터를 지원한다. AI 심각도, 중복 및 지연 판정은 9.4의 후속 확장 범위로 구분한다.
+대시보드 구성을 위한 목록 검색, 요약 집계, 지도 마커 조회 기능은 구현 완료되었다. 목록 검색은 사건번호·주소 키워드와 시군구 코드 필터를 지원한다.
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -1437,7 +1357,7 @@ STOMP 연결 endpoint는 `/ws`다. 발행 데이터는 `robotId`, 좌표, 배터
 | 파손 상세 조회 | `GET` | `/api/damages/{damageId}` | `ADMIN`, `INSPECTOR`, `REPAIRER`, `VIEWER` | 파손 기본 정보, 현재 상태, 관리자 처리 우선순위, 첨부 이미지 메타데이터를 조회한다. |
 | 파손 이미지 조회 | `GET` | `/api/damages/{damageId}/images/{imageId}/content` | 로그인 사용자 | 이미지 바이너리를 조회한다. |
 
-### 9.1 파손 목록 검색
+### 8.1 파손 목록 검색
 
 #### 요청
 
@@ -1536,7 +1456,7 @@ AI 분석 필드는 `analysisStatus`가 `SUCCESS`인 결과 중 `createdAt DESC,
 
 `severity`, `duplicateSuspected`, `delayed`는 현재 목록 응답에 포함하지 않는다. `severity` 대신 AI 분석 결과에 저장된 `damageScore`를 파손 정도로 사용한다.
 
-### 9.2 대시보드 파손 요약
+### 8.2 대시보드 파손 요약
 
 목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo`, `regionCode` 조건을 사용한다. `page`, `size`, `keyword`는 받지 않는다.
 
@@ -1572,7 +1492,7 @@ GET /api/dashboard/damages/summary?from=2026-07-01T00:00:00&to=2026-08-01T00:00:
 
 `status` 조건이 전달되면 `total`, `unassigned`, `statusCounts` 모두 해당 상태로 필터링된 결과를 반환한다.
 
-### 9.3 지도 마커 조회
+### 8.3 지도 마커 조회
 
 목록 API와 같은 `from`, `to`, `status`, `robotId`, `assignedTo`, `regionCode` 조건을 사용한다. `page`, `size`, `keyword`는 받지 않으며, 현재 지도 화면 범위를 나타내는 `south`, `north`, `west`, `east`는 필수다. 위도 또는 경도가 없거나 화면 범위 밖에 있는 파손은 결과에서 제외한다.
 
@@ -1604,22 +1524,13 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 | `longitude` | number | 경도 |
 | `currentStatus` | string | 현재 파손 처리 상태 |
 
-### 9.4 후속 확장 범위
-
-중복 후보, 검토 의견, 주소 및 행정구역 검색, AI 분석 기반 심각도 검색, 처리 지연 여부는 1차 대시보드 API 범위에서 제외한다. 각 기능에 필요한 데이터 모델과 판정 규칙을 먼저 정의한 뒤 별도 API로 추가한다.
-
-## 10. AI 분석 API
+## 9. AI 분석 API
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
 | AI 분석 작업 생성 | `POST` | `/api/damages/{damageId}/analysis-jobs` | 로그인 사용자 | 저장된 파손 이미지를 수동으로 재분석 큐에 등록한다. 최초 분석은 파손 등록 시 자동 생성된다. |
 | 파손별 AI 분석 작업 목록 조회 | `GET` | `/api/damages/{damageId}/analysis-jobs` | 로그인 사용자 | 특정 파손의 AI 분석 작업과 결과 목록을 조회한다. |
 | AI 분석 결과 단건 조회 | `GET` | `/api/damage-ai-analysis-results/{analysisResultId}` | 로그인 사용자 | AI 분석 결과 한 건을 조회한다. |
-| AI 분석 요청 | `POST` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 동기식 또는 대표 분석 요청 API. 후속 설계안 |
-| 대표 AI 분석 결과 조회 | `GET` | `/api/damages/{damageId}/ai-analysis` | 로그인 사용자 | 최신 또는 확정 AI 분석 결과 조회. 후속 설계안 |
-| AI 분석 재시도 | `POST` | `/api/damages/{damageId}/ai-analysis/retry` | `ADMIN`, `INSPECTOR` | 실패한 분석을 재시도한다. 후속 설계안 |
-| AI 분석 결과 수정 | `PATCH` | `/api/damages/{damageId}/ai-analysis` | `ADMIN`, `INSPECTOR` | 담당자가 AI 분석 결과를 수정한다. 후속 설계안 |
-| AI 분석 결과 확정 | `POST` | `/api/damages/{damageId}/ai-analysis/confirm` | `ADMIN`, `INSPECTOR` | 검토 완료 처리한다. 후속 설계안 |
 
 #### AiAnalysisResponse
 
@@ -1659,7 +1570,7 @@ GET /api/damages/map-markers?south=37.45&north=37.62&west=126.80&east=127.10&fro
 }
 ```
 
-### 10.1 비동기 이미지 분석 처리 흐름
+### 9.1 비동기 이미지 분석 처리 흐름
 
 이미지 분석 작업의 큐와 상태는 Spring이 관리한다. AI 서버는 Redis와 RDB에 직접 연결하지 않고, Spring 워커가 전달한 요청 한 건을 동기 방식으로 처리한다.
 
@@ -1677,7 +1588,7 @@ POST /api/damages
 
 `POST /api/damages`가 성공하면 이미지 저장과 AI 분석 작업 등록이 모두 완료되며 응답의 `currentStatus`는 `AI_ANALYZING`이다. `POST /api/damages/{damageId}/analysis-jobs`는 운영자가 수동 재분석을 요청할 때 사용한다.
 
-### 10.2 내부 AI 서버 이미지 분석 API
+### 9.2 내부 AI 서버 이미지 분석 API
 
 Spring 워커 전용 내부 API다. 프론트엔드와 로봇은 이 API를 직접 호출하지 않는다. Docker Compose 환경에서 Spring은 `http://ai:8000/analyze`를 사용한다.
 
@@ -1695,10 +1606,10 @@ Spring 워커 전용 내부 API다. 프론트엔드와 로봇은 이 API를 직�
 | --- | --- | --- | --- | --- |
 | `damageId` | string | 예 | 양의 정수 형식 | Spring 파손 ID |
 | `images` | file[] | 예 | 1~50개, 파일당 최대 20MB, 요청 전체 최대 200MB | 저장된 파손 이미지 목록 |
-| `analysisMetadata` | JSON string | 아니오 | 이미지 한 장은 객체, 여러 장은 이미지와 개수가 같은 배열 | ROI 및 Edge 분석 메타데이터 |
-| `latitude` | string | 아니오 | 빈 문자열 허용 | 촬영 위도. v2 분석에는 사용하지 않음 |
-| `longitude` | string | 아니오 | 빈 문자열 허용 | 촬영 경도. v2 분석에는 사용하지 않음 |
-| `capturedAt` | string | 아니오 | 빈 문자열 허용 | 촬영 일시. v2 분석에는 사용하지 않음 |
+| `analysisMetadata` | JSON string | 아니오 | 이미지 한 장은 객체, 여러 장은 이미지와 개수가 같은 배열 | FastAPI가 지원하는 ROI 및 Edge 분석 메타데이터. 현재 Spring 클라이언트는 전송하지 않음 |
+| `latitude` | string | 아니오 | 빈 문자열 허용 | 촬영 위도. 현재 모델 판정에는 사용하지 않음 |
+| `longitude` | string | 아니오 | 빈 문자열 허용 | 촬영 경도. 현재 모델 판정에는 사용하지 않음 |
+| `capturedAt` | string | 아니오 | 빈 문자열 허용 | 촬영 일시. 현재 모델 판정에는 사용하지 않음 |
 
 ```bash
 curl -X POST "http://localhost:8000/analyze" \
@@ -1706,11 +1617,12 @@ curl -X POST "http://localhost:8000/analyze" \
   -F "latitude=37.5665000" \
   -F "longitude=126.9780000" \
   -F "capturedAt=2026-08-06T13:50:00" \
-  -F 'analysisMetadata={"originalImage":"original.jpg","analysisRoi":"damage-roi.jpg","roiSource":"tactile_block","roiFallbackUsed":false,"frameQualityVerified":true,"edgeDamageCandidateDetected":true}' \
   -F "images=@damage-roi.jpg"
 ```
 
-`analysisMetadata`는 camelCase와 snake_case를 모두 허용한다. 주요 필드는 `originalImage`,
+현재 `AiImageAnalysisClient`가 보내는 필드는 `damageId`, `images`, `latitude`, `longitude`,
+`capturedAt`이다. `analysisMetadata`는 FastAPI에서 선택적으로 지원하며 Spring은 전송하지 않는다.
+해당 필드는 camelCase와 snake_case를 모두 허용한다. 주요 필드는 `originalImage`,
 `analysisRoi`, `roiSource`, `roiFallbackUsed`, `frameQualityVerified`,
 `edgeDamageCandidateDetected`다. 생략하면 기존 Spring 요청과 호환되지만 품질 미검증 ROI로
 분석되어 검토 사유가 추가될 수 있다.
@@ -1730,14 +1642,15 @@ curl -X POST "http://localhost:8000/analyze" \
   "analysis_detail": {
     "schema_version": "2.0",
     "model": {
-      "name": "yolo26s_seg_multiclass_v2_best",
-      "weights": "yolo26s_seg_multiclass_v2_best.pt",
-      "weights_sha256": "fc4446630f2f16cbb6cffa7308bf026633d3f99d1b1e71a5353d033267c5cd07",
+      "name": "yolo26s_seg_multiclass_v4_best",
+      "weights": "yolo26s_seg_multiclass_v4_best.pt",
+      "weights_sha256": "540678b42c4d50fb47cca8c1a6692e983767a912d32e7fb38a61f9c086682f63",
       "classes": {
         "0": "tactile_block",
         "1": "missing",
         "2": "crack",
-        "3": "wear"
+        "3": "wear",
+        "4": "obstruction"
       }
     },
     "aggregation": {
@@ -1813,7 +1726,7 @@ curl -X POST "http://localhost:8000/analyze" \
 
 | 필드 | 타입 | 설명 |
 | --- | --- | --- |
-| `damaged` | boolean, null | v2 `summary.damage_detected`. 판단 자체가 불가능하면 `null` |
+| `damaged` | boolean, null | 스키마 2.0의 `summary.damage_detected`. 판단 자체가 불가능하면 `null` |
 | `damage_score` | number, null | 대표 이미지의 통합 파손 마스크 픽셀 수를 0~100으로 변환한 점수 |
 | `damage_type` | string, null | `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` |
 | `repair_required` | boolean, null | `damaged=true`이면 `true`, `damaged=false`이면 `false`. 파손 판단 자체가 불가능한 경우만 `null` |
@@ -1873,7 +1786,7 @@ curl -X POST "http://localhost:8000/analyze" \
 점자블록 미탐지나 모델·Edge 판정 불일치는 HTTP 오류가 아니다. `200 OK`와 함께
 `review_required=true`, 구조화된 `review_reasons`로 반환한다.
 
-### 10.3 내부 AI 서버 상태 API
+### 9.3 내부 AI 서버 상태 API
 
 | Method | URL | 정상 응답 | 설명 |
 | --- | --- | --- | --- |
@@ -1881,9 +1794,9 @@ curl -X POST "http://localhost:8000/analyze" \
 | `GET` | `/health/ready` | `200 {"status":"ready"}` | 모델 검증, 로딩, 워밍업 완료 확인 |
 | `GET` | `/model-info` | `200` | 모델명, 가중치, SHA-256, 클래스, device, imgsz 확인 |
 
-## 11. 처리 상태 및 보수 API 설계
+## 10. 처리 상태 및 보수 API
 
-### 11.1 처리 상태
+### 10.1 처리 상태
 
 | 상태 | 설명 |
 | --- | --- |
@@ -1936,7 +1849,7 @@ REPAIR_IN_PROGRESS -> REQUESTED
 | `reviewDamageType` | string, null | 관리자 판정 파손 유형 |
 | `reviewNote` | string, null | 관리자 판정 비고 |
 
-### 11.2 보수 요청 및 배정
+### 10.2 보수 요청 및 배정
 
 | 기능 | Method | URL | 상태 | 권한 | 설명 |
 | --- | --- | --- | --- | --- | --- |
@@ -1944,16 +1857,6 @@ REPAIR_IN_PROGRESS -> REQUESTED
 | 보수 요청서 수정 | `PATCH` | `/api/damages/{damageId}/repair-request` | 구현됨 | `ADMIN`, `INSPECTOR` | 보수 진행 중 상태를 유지하면서 요청서 필드를 수정하고 수정 이력을 저장한다. |
 | 보수 완료 처리 | `PATCH` | `/api/damages/{damageId}/repair-complete` | 구현됨 | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 보수 완료(`REPAIR_COMPLETED`)로 변경하고 완료 일자와 메모를 저장한다. |
 | 보수 요청 취소 | `PATCH` | `/api/damages/{damageId}/repair-cancel` | 구현됨 | `ADMIN`, `INSPECTOR` | 보수 진행 중(`REPAIR_IN_PROGRESS`) 파손을 검토 완료(`REQUESTED`)로 되돌리고 취소 이력을 저장해 재요청 가능하게 한다. |
-| 보수 요청/배정 등록 | `POST` | `/api/repair-assignments` | 설계안 | `ADMIN`, `INSPECTOR` | 파손 건에 보수 담당자를 배정하고 상태를 `REPAIR_IN_PROGRESS`로 변경하며 보수 요청 이력을 저장한다. |
-| 보수 배정 목록 조회 | `GET` | `/api/repair-assignments` | 설계안 | `ADMIN`, `INSPECTOR`, `REPAIRER` | 담당자, 기간, 상태 기준으로 배정 목록을 조회한다. |
-| 보수 배정 상세 조회 | `GET` | `/api/repair-assignments/{assignmentId}` | 설계안 | `ADMIN`, `INSPECTOR`, `REPAIRER` | 배정 상세 정보를 조회한다. |
-| 보수 배정 수정 | `PATCH` | `/api/repair-assignments/{assignmentId}` | 설계안 | `ADMIN`, `INSPECTOR` | 담당자, 예정일, 메모를 수정한다. |
-| 보수 작업 시작 | `PATCH` | `/api/repair-assignments/{assignmentId}/start` | 설계안 | `ADMIN`, `REPAIRER` | 배정된 보수 건의 파손 상태를 `REPAIR_IN_PROGRESS`로 변경한다. |
-| 보수 요청 취소 | `PATCH` | `/api/repair-assignments/{assignmentId}/cancel` | 설계안 | `ADMIN`, `INSPECTOR` | 보수 요청 또는 예정 건의 파손 상태를 `CANCELED`로 변경하고 취소 이력을 저장한다. |
-| 보수 요청 이력 조회 | `GET` | `/api/repair-assignments/{assignmentId}/request-histories` | 설계안 | `ADMIN`, `INSPECTOR`, `REPAIRER` | 보수 요청/배정/취소 시 저장된 이력을 조회한다. |
-
-현재 구현은 `/api/damages/{damageId}/repair-*` API를 사용해 `damages`와 `repair_request_histories`에 저장한다. `/api/repair-assignments` API와 `repair_assignments` 테이블은 후속 설계안이며 현재 구현 및 ERD 범위에는 포함하지 않는다.
-
 #### CreateDamageRepairRequest
 
 검토 완료 파손을 보수 진행 상태로 전환하면서 보수 요청 정보를 저장한다.
@@ -2015,113 +1918,7 @@ PATCH /api/damages/{damageId}/repair-complete: REPAIR_IN_PROGRESS -> REPAIR_COMP
 PATCH /api/damages/{damageId}/repair-cancel: REPAIR_IN_PROGRESS -> REQUESTED
 ```
 
-#### CreateRepairAssignmentRequest (설계안)
-
-```json
-{
-  "damageId": 1,
-  "repairerId": 5,
-  "scheduledDate": "2026-07-30",
-  "note": "보행량이 적은 오전 시간대 작업 권장"
-}
-```
-
-| 필드 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| `damageId` | number | 예 | `REQUESTED` 상태인 파손 ID |
-| `repairerId` | number | 예 | 배정할 보수 담당자 ID |
-| `scheduledDate` | string | 아니오 | 보수 예정일. `YYYY-MM-DD` |
-| `note` | string | 아니오 | 보수 요청 또는 배정 메모 |
-
-처리 규칙은 다음과 같다.
-
-```text
-damages.current_status: REQUESTED -> REPAIR_IN_PROGRESS
-damages.assigned_to: repairerId로 갱신
-repair_assignments: 보수 배정 정보 저장
-repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, note 저장
-```
-
-처리 결과는 `RepairAssignmentResponse`를 반환한다.
-
-```json
-{
-  "id": 10,
-  "damageId": 1,
-  "repairerId": 5,
-  "assignedBy": 2,
-  "scheduledDate": "2026-07-30",
-  "note": "보행량이 적은 오전 시간대 작업 권장",
-  "damageStatus": "REPAIR_IN_PROGRESS",
-  "createdAt": "2026-07-29T10:00:00",
-  "updatedAt": "2026-07-29T10:00:00"
-}
-```
-
-#### RepairRequestHistoryResponse (설계안)
-
-```json
-[
-  {
-    "id": 1,
-    "damageId": 1,
-    "repairAssignmentId": 10,
-    "requestedBy": 2,
-    "repairerId": 5,
-    "beforeStatus": "REQUESTED",
-    "afterStatus": "REPAIR_IN_PROGRESS",
-    "note": "보행량이 적은 오전 시간대 작업 권장",
-    "requestedAt": "2026-07-29T10:00:00"
-  }
-]
-```
-
-#### UpdateRepairAssignmentRequest (설계안)
-
-```json
-{
-  "repairerId": 6,
-  "scheduledDate": "2026-07-31",
-  "note": "담당자 일정 변경"
-}
-```
-
-`repairerId`, `scheduledDate`, `note`는 필요한 필드만 전달할 수 있다. 담당자가 변경되면 `damages.assigned_to`도 함께 갱신한다.
-
-#### StartRepairAssignmentRequest (설계안)
-
-보수 작업 시작 API는 별도 Body 없이 호출한다. 성공 시 `damages.current_status`를 `REPAIR_IN_PROGRESS`로 변경하고 `RepairAssignmentResponse`를 반환한다.
-
-#### CancelRepairAssignmentRequest (설계안)
-
-```json
-{
-  "reason": "현장 확인 결과 보수 불필요"
-}
-```
-
-취소는 `REQUESTED` 또는 `REPAIR_IN_PROGRESS` 상태에서 허용한다. 성공 시 `damages.current_status`를 `CANCELED`로 변경하고, `repair_request_histories.note`에 취소 사유를 저장한다.
-
-### 11.3 보수 결과 후속 확장
-
-| 기능 | Method | URL | 권한 | 설명 |
-| --- | --- | --- | --- | --- |
-| 보수 결과 등록 | `POST` | `/api/repair-results` | `ADMIN`, `REPAIRER` | 보수 완료 이미지와 결과 내용을 등록한다. |
-| 보수 결과 조회 | `GET` | `/api/repair-results/{resultId}` | 로그인 사용자 | 보수 결과 상세를 조회한다. |
-| 파손별 보수 결과 조회 | `GET` | `/api/damages/{damageId}/repair-result` | 로그인 사용자 | 특정 파손의 보수 결과를 조회한다. |
-
-#### CreateRepairResultRequest
-
-`multipart/form-data`를 사용한다.
-
-| 필드 | 타입 | 필수 | 설명 |
-| --- | --- | --- | --- |
-| `damageId` | number | 예 | 파손 ID |
-| `resultContent` | string | 예 | 보수 결과 내용 |
-| `completedAt` | string | 예 | 완료 일시 |
-| `images` | file[] | 아니오 | 보수 완료 이미지 |
-
-## 12. 통계 API 설계
+## 11. 통계 API
 
 | 기능 | Method | URL | 권한 | 설명 |
 | --- | --- | --- | --- | --- |
@@ -2130,9 +1927,9 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
 | 보수 우선순위별 통계 | `GET` | `/api/statistics/damages/by-repair-priority` | 로그인 사용자 | 최신 성공 AI 분석 결과의 보수 우선순위별 건수를 조회한다. |
 | 보수 완료율 조회 | `GET` | `/api/statistics/repair/completion-rate` | 로그인 사용자 | 전체 파손 대비 보수 완료율을 조회한다. |
 
-파손 데이터에는 시군구 코드를 저장하지만, 지역별 통계 API는 아직 제공하지 않는다. 별도 `severity` 대신 AI 분석 결과의 `repairPriority`를 사용한다. 통계 다운로드는 조회 API 구현 이후 별도 작업으로 확장한다.
+별도 `severity` 대신 AI 분석 결과의 `repairPriority`를 사용한다.
 
-### 12.1 공통 조회 조건
+### 11.1 공통 조회 조건
 
 | Query | 타입 | 필수 | 설명 |
 | --- | --- | --- | --- |
@@ -2141,7 +1938,7 @@ repair_request_histories: beforeStatus, afterStatus, requestedBy, repairerId, no
 
 집계 대상은 `from <= createdAt < to`를 만족하는 파손이다.
 
-### 12.2 기간별 통계
+### 11.2 기간별 통계
 
 `unit`은 필수이며 `DAY`, `WEEK`, `MONTH`, `YEAR` 중 하나다. `WEEK`는 월요일을 시작일로 사용한다. 조회 범위 내 데이터가 없는 기간도 건수 `0`, 완료율 `0.00`으로 반환한다.
 
@@ -2169,7 +1966,7 @@ GET /api/statistics/damages/time-series?from=2026-07-01T00:00:00&to=2026-08-01T0
 
 `repairCompletedCount`는 현재 상태가 `REPAIR_COMPLETED`인 파손 수다. `repairCompletionRate`는 같은 기간의 `repairCompletedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다.
 
-### 12.3 처리 상태별 통계
+### 11.3 처리 상태별 통계
 
 #### 요청
 
@@ -2196,7 +1993,7 @@ GET /api/statistics/damages/by-status?from=2026-07-01T00:00:00&to=2026-08-01T00:
 
 정의된 모든 처리 상태를 포함하며 데이터가 없는 상태의 값은 `0`이다.
 
-### 12.4 보수 우선순위별 통계
+### 11.4 보수 우선순위별 통계
 
 #### 요청
 
@@ -2222,7 +2019,7 @@ GET /api/statistics/damages/by-repair-priority?from=2026-07-01T00:00:00&to=2026-
 
 각 파손에 연결된 `SUCCESS` 분석 결과 중 `createdAt DESC, id DESC` 기준 최신 한 건을 사용한다. 성공한 분석 결과가 없거나 우선순위 값이 정의되지 않은 파손은 `unclassifiedCount`에 포함한다. 대시보드 긴급/고위험 건수는 `counts.URGENT`를 사용한다.
 
-### 12.5 보수 완료율
+### 11.5 보수 완료율
 
 #### 요청
 
@@ -2241,74 +2038,4 @@ GET /api/statistics/repair/completion-rate?from=2026-07-01T00:00:00&to=2026-08-0
 }
 ```
 
-`completedCount`는 현재 상태가 `REPAIR_COMPLETED`, `canceledCount`는 `CANCELED`인 파손 수다. `completionRate`는 `completedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다. 보수 결과 도메인이 구현되면 완료 시점 기반 통계로 확장한다.
-
-## 13. 행정문서 API 설계
-
-| 기능 | Method | URL | 권한 | 설명 |
-| --- | --- | --- | --- | --- |
-| 문서 초안 생성 | `POST` | `/api/documents` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 선택한 파손 데이터로 문서 초안을 생성한다. |
-| 문서 목록 조회 | `GET` | `/api/documents` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 이전에 생성한 문서 목록을 조회한다. |
-| 문서 상세 조회 | `GET` | `/api/documents/{documentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 문서 내용과 연결 파손 데이터를 조회한다. |
-| 문서 초안 수정 | `PATCH` | `/api/documents/{documentId}` | `ADMIN`, `INSPECTOR`, `REPAIRER` | 생성된 초안 내용을 수정한다. |
-| 문서 다운로드 | `GET` | `/api/documents/{documentId}/download` | `ADMIN`, `INSPECTOR`, `REPAIRER` | PDF 또는 HWP 형식으로 다운로드한다. |
-
-#### CreateDocumentRequest
-
-```json
-{
-  "documentType": "REPAIR_REQUEST",
-  "damageIds": [1, 2, 3],
-  "title": "서초구 점자블록 보수 요청서",
-  "departmentName": "도로관리과",
-  "managerName": "홍길동"
-}
-```
-
-#### DocumentResponse
-
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `id` | number | 문서 ID |
-| `documentType` | string | `INSPECTION_REPORT`, `REPAIR_REQUEST`, `REPAIR_COMPLETION_REPORT` |
-| `title` | string | 문서 제목 |
-| `content` | string | 초안 내용 |
-| `draft` | boolean | 검토 필요 초안 여부 |
-| `createdBy` | number | 생성자 ID |
-| `createdAt` | string | 생성 일시 |
-| `updatedAt` | string | 수정 일시 |
-
-## 14. 감사 로그 API 설계
-
-FR-AUTH-19, FR-AUTH-20 요구사항을 위해 주요 작업 이력을 별도 API로 조회할 수 있게 한다.
-
-| 기능 | Method | URL | 권한 | 설명 |
-| --- | --- | --- | --- | --- |
-| 감사 로그 조회 | `GET` | `/api/audit-logs` | `ADMIN` | 로그인, 로그아웃, 사용자 관리, 상태 변경, 문서 생성 등 주요 작업 기록을 조회한다. |
-
-#### AuditLogResponse
-
-| 필드 | 타입 | 설명 |
-| --- | --- | --- |
-| `id` | number | 로그 ID |
-| `actorId` | number | 수행 사용자 ID |
-| `action` | string | 작업 유형 |
-| `targetType` | string | 대상 도메인 |
-| `targetId` | number | 대상 ID |
-| `success` | boolean | 성공 여부 |
-| `message` | string | 상세 메시지 |
-| `createdAt` | string | 기록 일시 |
-
-## 15. 구현 우선순위
-
-요구사항의 필수 항목과 현재 구현 상태를 기준으로 다음 순서로 구현하는 것을 권장한다.
-
-| 순서 | 범위 | 이유 |
-| --- | --- | --- |
-| 1 | 인증/사용자 관리 보완 | 모든 API의 권한 기반이 된다. |
-| 2 | 파손 데이터 검색/상세 확장 | 현재 구현된 핵심 도메인이며 지도/AI/상태 관리의 기준 데이터다. |
-| 3 | 로봇 상태 로그와 지도 마커 | 로봇 관제와 지도 표시 요구사항의 최소 기능이다. |
-| 4 | AI 분석 결과 저장/수정/확정 | 파손 정도, 보수 필요성, 우선순위 판단에 필요하다. |
-| 5 | 보수 관리 확장 | 파손 접수 이후 보수 배정, 완료 보고서, 첨부 이미지까지 업무 흐름을 확장한다. |
-| 6 | 통계와 문서 생성 | 누적 데이터 기반의 관리 기능이다. |
-| 7 | 감사 로그 | 운영 추적성과 보안 요구사항을 보완한다. |
+`completedCount`는 현재 상태가 `REPAIR_COMPLETED`, `canceledCount`는 `CANCELED`인 파손 수다. `completionRate`는 `completedCount / totalCount * 100`이며 소수점 둘째 자리까지 반환한다.
