@@ -8,6 +8,7 @@ from typing import Any, Protocol, Sequence
 
 import numpy as np
 
+from .policy import load_severity_policy
 from .schemas import (
     AggregationDetail,
     AnalysisDetail,
@@ -30,6 +31,16 @@ DEFAULT_MODERATE_MAX_PIXELS = 50_000
 DEFAULT_MAX_SCORE_PIXELS = 300_000
 
 MISSING_LARGE_THRESHOLD_PERCENT = 15.0
+
+_DAMAGE_TYPE_POLICY = load_severity_policy()["damage_types"]
+DAMAGE_TYPE_SELECTION_WEIGHTS = {
+    damage_type: float(settings["weight"])
+    for damage_type, settings in _DAMAGE_TYPE_POLICY.items()
+}
+DAMAGE_TYPE_RESPONSE_NAMES = {
+    "crack": "CRACK",
+    "wear": "WEAR",
+}
 
 SEVERITY_LABELS = {
     "normal": "정상 추정",
@@ -344,38 +355,124 @@ class DamageAnalysisService:
     def _damage_type(payload: dict[str, Any]) -> str | None:
         if str(payload.get("schema_version", "1.0")) != "2.0":
             return None
-        summary = payload.get("summary", {})
-        dominant = summary.get("dominant_damage_type")
-        if dominant == "crack":
-            return "CRACK"
-        if dominant == "wear":
-            return "WEAR"
-        if dominant != "missing":
+
+        detected_types: dict[str, dict[str, Any]] = {}
+        for unit in payload.get("units", []):
+            for damage_type, details in unit.get("damage_types", {}).items():
+                if (
+                    damage_type not in DAMAGE_TYPE_SELECTION_WEIGHTS
+                    or details.get("detected") is not True
+                ):
+                    continue
+
+                ratio_percent = DamageAnalysisService._bounded_damage_type_value(
+                    details.get("ratio_percent"),
+                    maximum=100.0,
+                    field_name=f"{damage_type}.ratio_percent",
+                    preserve_none=True,
+                )
+                pixels = DamageAnalysisService._damage_type_pixels(
+                    details.get("pixels"),
+                    damage_type=damage_type,
+                )
+                aggregate = detected_types.setdefault(
+                    damage_type,
+                    {
+                        "pixels": 0,
+                        "ratios": [],
+                        "ratio_not_estimable": False,
+                        "tactile_pixels": 0,
+                    },
+                )
+                aggregate["pixels"] += pixels
+                if ratio_percent is not None:
+                    aggregate["ratios"].append(ratio_percent)
+                else:
+                    aggregate["ratio_not_estimable"] = True
+                if damage_type == "missing":
+                    aggregate["tactile_pixels"] += (
+                        DamageAnalysisService._damage_type_pixels(
+                            unit.get("tactile", {}).get("pixels"),
+                            damage_type="tactile",
+                        )
+                    )
+
+        candidates: list[tuple[float, float, str, float | None]] = []
+        for damage_type, aggregate in detected_types.items():
+            weight = DAMAGE_TYPE_SELECTION_WEIGHTS[damage_type]
+            selection_score = aggregate["pixels"] * weight
+            ratios = aggregate["ratios"]
+            ratio = max(ratios) if ratios else None
+            if damage_type == "missing" and aggregate["ratio_not_estimable"]:
+                ratio = DamageAnalysisService._fallback_missing_ratio_percent(
+                    missing_pixels=aggregate["pixels"],
+                    tactile_pixels=aggregate["tactile_pixels"],
+                )
+            candidates.append(
+                (
+                    selection_score,
+                    weight,
+                    damage_type,
+                    ratio,
+                )
+            )
+
+        if not candidates:
             return None
 
-        worst_unit_id = summary.get("worst_unit_id")
-        unit = next(
-            (
-                item
-                for item in payload.get("units", [])
-                if item.get("local_unit_id") == worst_unit_id
-            ),
-            None,
+        _, _, selected_type, ratio = max(
+            candidates,
+            key=lambda candidate: (candidate[0], candidate[1]),
         )
-        if unit is None:
-            return None
-        ratio = (
-            unit.get("damage_types", {})
-            .get("missing", {})
-            .get("ratio_percent")
-        )
+        if selected_type in DAMAGE_TYPE_RESPONSE_NAMES:
+            return DAMAGE_TYPE_RESPONSE_NAMES[selected_type]
+
         if ratio is None:
             return "LARGE_MISSING"
         return (
             "LARGE_MISSING"
-            if float(ratio) >= MISSING_LARGE_THRESHOLD_PERCENT
+            if ratio >= MISSING_LARGE_THRESHOLD_PERCENT
             else "SMALL_MISSING"
         )
+
+    @staticmethod
+    def _fallback_missing_ratio_percent(
+        *,
+        missing_pixels: int,
+        tactile_pixels: int,
+    ) -> float | None:
+        total_pixels = missing_pixels + tactile_pixels
+        if total_pixels <= 0:
+            return None
+        return round(missing_pixels / total_pixels * 100.0, 4)
+
+    @staticmethod
+    def _damage_type_pixels(value: Any, *, damage_type: str) -> int:
+        if value is None:
+            return 0
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError(
+                f"Invalid damage type pixel count for {damage_type}: {value}"
+            ) from exc
+
+    @staticmethod
+    def _bounded_damage_type_value(
+        value: Any,
+        *,
+        maximum: float,
+        field_name: str,
+        preserve_none: bool = False,
+    ) -> float | None:
+        if value is None:
+            return None if preserve_none else 0.0
+        try:
+            return max(0.0, min(float(value), maximum))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise RuntimeError(
+                f"Invalid damage type value for {field_name}: {value}"
+            ) from exc
 
     @staticmethod
     def _review_reasons(summary: dict[str, Any]) -> list[ReviewReason]:

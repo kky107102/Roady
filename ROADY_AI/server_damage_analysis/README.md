@@ -151,7 +151,12 @@ Spring은 최상위 요약 필드를 구조화된 컬럼으로 파싱하고 응�
 `crack`, `wear` 중 하나라도 유효하게 탐지되면 `true`입니다. 모델 클래스 계약이
 유효하지 않아 판단할 수 없으면 `damaged=null`입니다. 최상위 `damage_type`은 대표 유형을
 `SMALL_MISSING`, `LARGE_MISSING`, `CRACK`, `WEAR` 중 하나로 변환합니다. 결손 크기를 계산할 수
-없으면 보수적으로 `LARGE_MISSING`을 사용합니다.
+없으면 `missing / (tactile + missing) × 100`으로 fallback 비율을 계산하며, 이 값도 계산할 수
+없을 때만 보수적으로 `LARGE_MISSING`을 사용합니다. 여러 유형이 탐지되면 유형별 탐지 픽셀에
+`CRACK(40.0)`, `WEAR(40.0)`, `MISSING(1.0)` 가중치를 곱하고 가장 큰 값을 대표 유형으로
+선정합니다. confidence는 대표 유형 선정에 사용하지 않습니다. 이 가중치는 대표 유형
+선정에만 사용하며 `damage_score`와 `repair_priority`에는 영향을 주지 않습니다. 전체 유형별 탐지 결과는
+`analysis_detail.units[].damage_types`에 그대로 보존합니다.
 
 `damaged=true`이면 보류 상태가 되지 않도록 `repair_required=true`와 비어 있지 않은
 `repair_priority`를 반환합니다. 보수 우선순위는 픽셀 기반 `damage_score`에 따라 1~30은
