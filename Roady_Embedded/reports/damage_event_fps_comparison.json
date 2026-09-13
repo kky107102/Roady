@@ -1,0 +1,149 @@
+{
+  "videos": 5,
+  "total_duration_sec": 640.9666666666667,
+  "fixed_conditions": {
+    "source_fps": 30,
+    "estimated_operating_speed_mps": 0.1,
+    "detection_threshold": 0.225,
+    "confirm_count": 3,
+    "confirm_window_sec": 2.0,
+    "min_confirm_duration_sec": 0.2,
+    "min_observation_interval_sec": 0.1,
+    "candidate_timeout_sec": 1.2,
+    "reported_track_cooldown_sec": 10.0,
+    "minimum_event_confidence": 0.375
+  },
+  "independent_model_test_metrics": {
+    "dataset": "edge_yolo26n_detect_review_ft_v3",
+    "field_test_images": 100,
+    "damage_candidate_precision": 0.846,
+    "damage_candidate_recall": 0.769,
+    "damage_candidate_f2": 0.783,
+    "damage_candidate_map50": 0.854,
+    "damage_candidate_map50_95": 0.615,
+    "note": "These are image-level model metrics, not FPS-specific metrics."
+  },
+  "results": [
+    {
+      "inference_fps": 5,
+      "process_every_n_frames": 6,
+      "processed_frames": 3207,
+      "processed_frame_ratio_vs_15fps": 0.3335,
+      "tracked_events": 32,
+      "events_per_video": [7, 6, 6, 7, 6],
+      "mean_observations_per_event": 9.46875,
+      "min_observations_per_event": 4,
+      "max_observations_per_event": 11
+    },
+    {
+      "inference_fps": 10,
+      "process_every_n_frames": 3,
+      "processed_frames": 6411,
+      "processed_frame_ratio_vs_15fps": 0.6667,
+      "tracked_events": 32,
+      "events_per_video": [7, 6, 6, 7, 6],
+      "mean_observations_per_event": 11.3125,
+      "min_observations_per_event": 3,
+      "max_observations_per_event": 17
+    },
+    {
+      "inference_fps": 15,
+      "process_every_n_frames": 2,
+      "processed_frames": 9616,
+      "processed_frame_ratio_vs_15fps": 1.0,
+      "tracked_events": 34,
+      "events_per_video": [8, 6, 6, 7, 7],
+      "mean_observations_per_event": 12.794117647058824,
+      "min_observations_per_event": 5,
+      "max_observations_per_event": 16
+    },
+    {
+      "inference_fps": 30,
+      "scope": "20260808_163235.mp4 full-run video only",
+      "process_every_n_frames": 1,
+      "processed_frames": 4687,
+      "tracked_events": 8,
+      "true_damage_events": 7,
+      "station_false_positive_events": 1,
+      "event_recall": 1.0,
+      "event_precision": 0.875,
+      "duplicate_damage_events": 0,
+      "mean_observations_per_event": 12.625,
+      "min_observations_per_event": 8,
+      "max_observations_per_event": 16
+    }
+  ],
+  "recommendation": {
+    "inference_fps": 5,
+    "reason": "The full-run timeline shows seven true damage events and no station event at 5 FPS. It preserves 100% event recall with zero false-positive and duplicate events while processing 66.7% fewer frames than 15 FPS.",
+    "priority": "Preserve all true damage events first, then minimize processing."
+  },
+  "cross_drive_5_vs_15fps": {
+    "videos": 5,
+    "events_5fps": 32,
+    "events_15fps": 34,
+    "matched_true_damage_passages": 32,
+    "additional_15fps_events": {
+      "known_station_false_positive": 1,
+      "duplicate_track_for_same_damage": 1
+    },
+    "duplicate_track_evidence": {
+      "video": "drive_record_20260808_1114.mp4",
+      "overlapping_track_1_sec": [5.0, 12.4],
+      "overlapping_track_2_sec": [7.9, 25.5],
+      "manual_review": "Both tracks cover the same visible damaged tactile block."
+    }
+  },
+  "event_level_evaluation": {
+    "video": "20260808_163235.mp4",
+    "inference_fps": 15,
+    "ground_truth_damage_events": 7,
+    "generated_track_events": 8,
+    "true_positive_damage_events": 7,
+    "false_negative_damage_events": 0,
+    "false_positive_station_events": 1,
+    "duplicate_damage_events": 0,
+    "event_recall": 1.0,
+    "event_precision_including_station": 0.875,
+    "damage_event_count_match_rate_excluding_known_station": 1.0,
+    "assumption": "The user confirmed all detected damage blocks except the final station are true damage, with seven true damage blocks in total."
+  },
+  "full_run_fps_event_evaluation": [
+    {
+      "inference_fps": 5,
+      "generated_track_events": 7,
+      "known_station_false_positive": 0,
+      "true_damage_events": 7,
+      "false_negative_damage_events": 0,
+      "event_recall": 1.0,
+      "event_precision": 1.0,
+      "duplicate_damage_events": 0
+    },
+    {
+      "inference_fps": 10,
+      "generated_track_events": 7,
+      "classification_status": "Event count is seven; event timelines were not captured in the original run, so station attribution is not asserted.",
+      "duplicate_damage_events": 0
+    },
+    {
+      "inference_fps": 15,
+      "generated_track_events": 8,
+      "known_station_false_positive": 1,
+      "true_damage_events": 7,
+      "false_negative_damage_events": 0,
+      "event_recall": 1.0,
+      "duplicate_damage_events": 0
+    },
+    {
+      "inference_fps": 30,
+      "generated_track_events": 8,
+      "known_station_false_positive": 1,
+      "true_damage_events": 7,
+      "false_negative_damage_events": 0,
+      "event_recall": 1.0,
+      "event_precision": 0.875,
+      "duplicate_damage_events": 0
+    }
+  ],
+  "interpretation_limit": "Event-level ground truth is available for the 15 FPS full-run video only. The other videos and FPS settings still cannot be treated as FPS-specific accuracy or recall measurements."
+}

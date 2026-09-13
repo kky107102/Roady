@@ -1,0 +1,138 @@
+{
+  "method": {
+    "model": "C:\\Users\\SSAFY\\S15P11A404\\Roady_Embedded\\artifacts\\tactile_damage_candidate\\v4\\tactile_damage_candidate_yolo26n_best.onnx",
+    "process_every_n_frames": 3,
+    "image_size": 768,
+    "baseline": "one event per processed frame containing >=1 damage_candidate",
+    "operating_speed_mps": 0.1,
+    "detection_threshold": 0.225,
+    "confirm_count": 3,
+    "confirm_window_sec": 2.0,
+    "min_confirm_duration_sec": 0.2,
+    "min_observation_interval_sec": 0.1,
+    "candidate_timeout_sec": 1.2,
+    "reported_track_cooldown_sec": 10.0,
+    "minimum_event_confidence": 0.375,
+    "group_by_tactile_unit": true,
+    "improved": "DamageEventPipeline deployment parameters from bringup launch"
+  },
+  "videos": [
+    {
+      "video": "20260808_163235.mp4",
+      "duration_sec": 156.23333333333332,
+      "fps": 30.0,
+      "total_frames": 4687,
+      "processed_frames": 1563,
+      "damage_detection_boxes": 3421,
+      "damage_detected_frames": 1183,
+      "tactile_detected_frames": 1088,
+      "naive_frame_events": 1183,
+      "tracked_events": 7,
+      "duplicate_reduction_pct": 99.40828402366864,
+      "observations_per_tracked_event": [
+        10,
+        13,
+        8,
+        10,
+        9,
+        12,
+        13
+      ]
+    },
+    {
+      "video": "drive_record_20260808_1049.mp4",
+      "duration_sec": 139.0,
+      "fps": 30.0,
+      "total_frames": 4170,
+      "processed_frames": 1390,
+      "damage_detection_boxes": 1600,
+      "damage_detected_frames": 710,
+      "tactile_detected_frames": 929,
+      "naive_frame_events": 710,
+      "tracked_events": 6,
+      "duplicate_reduction_pct": 99.15492957746478,
+      "observations_per_tracked_event": [
+        13,
+        13,
+        10,
+        12,
+        5,
+        12
+      ]
+    },
+    {
+      "video": "drive_record_20260808_1055.mp4",
+      "duration_sec": 98.7,
+      "fps": 30.0,
+      "total_frames": 2961,
+      "processed_frames": 987,
+      "damage_detection_boxes": 1686,
+      "damage_detected_frames": 730,
+      "tactile_detected_frames": 808,
+      "naive_frame_events": 730,
+      "tracked_events": 6,
+      "duplicate_reduction_pct": 99.17808219178082,
+      "observations_per_tracked_event": [
+        3,
+        12,
+        17,
+        10,
+        12,
+        13
+      ]
+    },
+    {
+      "video": "drive_record_20260808_1105.mp4",
+      "duration_sec": 139.26666666666668,
+      "fps": 30.0,
+      "total_frames": 4178,
+      "processed_frames": 1393,
+      "damage_detection_boxes": 2502,
+      "damage_detected_frames": 1300,
+      "tactile_detected_frames": 1232,
+      "naive_frame_events": 1300,
+      "tracked_events": 7,
+      "duplicate_reduction_pct": 99.46153846153847,
+      "observations_per_tracked_event": [
+        9,
+        6,
+        13,
+        17,
+        10,
+        12,
+        12
+      ]
+    },
+    {
+      "video": "drive_record_20260808_1114.mp4",
+      "duration_sec": 107.76666666666667,
+      "fps": 30.0,
+      "total_frames": 3233,
+      "processed_frames": 1078,
+      "damage_detection_boxes": 1980,
+      "damage_detected_frames": 842,
+      "tactile_detected_frames": 857,
+      "naive_frame_events": 842,
+      "tracked_events": 6,
+      "duplicate_reduction_pct": 99.2874109263658,
+      "observations_per_tracked_event": [
+        4,
+        12,
+        17,
+        17,
+        13,
+        13
+      ]
+    }
+  ],
+  "totals": {
+    "duration_sec": 640.9666666666667,
+    "processed_frames": 6411,
+    "damage_detection_boxes": 11189,
+    "damage_detected_frames": 4765,
+    "naive_frame_events": 4765,
+    "tracked_events": 32,
+    "duplicate_reduction_pct": 99.32843651626443
+  },
+  "wall_time_sec": 1173.8831812000026
+}
